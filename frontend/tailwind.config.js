@@ -30,7 +30,8 @@ export default {
           700: '#404040',
           800: '#262626',
           900: '#171717',
-        }
+        },
+        border: '#e5e5e5'
       },
       backdropBlur: {
         xs: '2px',
