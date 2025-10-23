@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
+import { Pool } from 'pg';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -14,7 +14,9 @@ import userRoutes from './routes/users';
 dotenv.config();
 
 const app = express();
-const prisma = new PrismaClient();
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 const PORT = process.env.PORT || 3001;
 
 // Middleware
@@ -65,13 +67,13 @@ app.use('*', (req, res) => {
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('Shutting down gracefully...');
-  await prisma.$disconnect();
+  await pool.end();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   console.log('Shutting down gracefully...');
-  await prisma.$disconnect();
+  await pool.end();
   process.exit(0);
 });
 
