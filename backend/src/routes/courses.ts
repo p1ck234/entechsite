@@ -1,17 +1,19 @@
 import express from 'express';
 import { body, validationResult, query } from 'express-validator';
-import { PrismaClient } from '@prisma/client';
+import { Pool } from 'pg';
 import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 // Get all courses
 router.get('/', authenticateToken, [
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
   query('search').optional().isString()
-], async (req, res) => {
+], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -23,38 +25,41 @@ router.get('/', authenticateToken, [
     const search = req.query.search as string;
     const skip = (page - 1) * limit;
 
-    const where: any = {
-      isActive: true
-    };
+    let whereClause = 'WHERE is_active = true';
+    const params: any[] = [];
+    let paramCount = 0;
 
     if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } }
-      ];
+      paramCount++;
+      whereClause += ` AND (title ILIKE $${paramCount} OR description ILIKE $${paramCount})`;
+      params.push(`%${search}%`);
     }
 
-    const [courses, total] = await Promise.all([
-      prisma.course.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          progress: {
-            where: { userId: req.user?.id },
-            select: { progress: true, completed: true }
-          }
-        }
-      }),
-      prisma.course.count({ where })
+    const [coursesResult, totalResult] = await Promise.all([
+      pool.query(
+        `SELECT * FROM courses ${whereClause} ORDER BY created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
+        [...params, limit, skip]
+      ),
+      pool.query(`SELECT COUNT(*) FROM courses ${whereClause}`, params)
     ]);
 
-    // Add user progress to each course
-    const coursesWithProgress = courses.map(course => ({
-      ...course,
-      userProgress: course.progress[0] || { progress: 0, completed: false }
-    }));
+    const courses = coursesResult.rows;
+    const total = parseInt(totalResult.rows[0].count);
+
+    // Get user progress for each course
+    const coursesWithProgress = await Promise.all(
+      courses.map(async (course: any) => {
+        const progressResult = await pool.query(
+          'SELECT progress, completed FROM course_progress WHERE user_id = $1 AND course_id = $2',
+          [req.user.id, course.id]
+        );
+        
+        return {
+          ...course,
+          userProgress: progressResult.rows[0] || { progress: 0, completed: false }
+        };
+      })
+    );
 
     res.json({
       courses: coursesWithProgress,
@@ -72,27 +77,27 @@ router.get('/', authenticateToken, [
 });
 
 // Get course by ID
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', authenticateToken, async (req: any, res: any) => {
   try {
     const { id } = req.params;
 
-    const course = await prisma.course.findUnique({
-      where: { id },
-      include: {
-        progress: {
-          where: { userId: req.user?.id },
-          select: { progress: true, completed: true, startedAt: true, completedAt: true }
-        }
-      }
-    });
+    const courseResult = await pool.query('SELECT * FROM courses WHERE id = $1', [id]);
 
-    if (!course) {
+    if (courseResult.rows.length === 0) {
       return res.status(404).json({ message: 'Course not found' });
     }
 
+    const course = courseResult.rows[0];
+
+    // Get user progress
+    const progressResult = await pool.query(
+      'SELECT progress, completed, started_at, completed_at FROM course_progress WHERE user_id = $1 AND course_id = $2',
+      [req.user.id, id]
+    );
+
     const courseWithProgress = {
       ...course,
-      userProgress: course.progress[0] || { progress: 0, completed: false, startedAt: null, completedAt: null }
+      userProgress: progressResult.rows[0] || { progress: 0, completed: false, started_at: null, completed_at: null }
     };
 
     res.json(courseWithProgress);
@@ -108,7 +113,7 @@ router.post('/', authenticateToken, [
   body('description').optional().isString(),
   body('googleDriveUrl').isURL(),
   body('duration').optional().isInt({ min: 1 })
-], async (req, res) => {
+], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -121,18 +126,14 @@ router.post('/', authenticateToken, [
 
     const { title, description, googleDriveUrl, duration } = req.body;
 
-    const course = await prisma.course.create({
-      data: {
-        title,
-        description,
-        googleDriveUrl,
-        duration
-      }
-    });
+    const result = await pool.query(
+      'INSERT INTO courses (title, description, google_drive_url, duration) VALUES ($1, $2, $3, $4) RETURNING *',
+      [title, description, googleDriveUrl, duration]
+    );
 
     res.status(201).json({
       message: 'Course created successfully',
-      course
+      course: result.rows[0]
     });
   } catch (error) {
     console.error('Create course error:', error);
@@ -147,7 +148,7 @@ router.put('/:id', authenticateToken, [
   body('googleDriveUrl').optional().isURL(),
   body('duration').optional().isInt({ min: 1 }),
   body('isActive').optional().isBoolean()
-], async (req, res) => {
+], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -161,22 +162,40 @@ router.put('/:id', authenticateToken, [
     const { id } = req.params;
     const updateData = req.body;
 
-    const course = await prisma.course.findUnique({
-      where: { id }
-    });
+    const course = await pool.query('SELECT id FROM courses WHERE id = $1', [id]);
 
-    if (!course) {
+    if (course.rows.length === 0) {
       return res.status(404).json({ message: 'Course not found' });
     }
 
-    const updatedCourse = await prisma.course.update({
-      where: { id },
-      data: updateData
+    // Build update query dynamically
+    const updateFields: string[] = [];
+    const values: any[] = [];
+    let paramCount = 0;
+
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] !== undefined) {
+        paramCount++;
+        const dbKey = key === 'googleDriveUrl' ? 'google_drive_url' : 
+                     key === 'isActive' ? 'is_active' : key;
+        updateFields.push(`${dbKey} = $${paramCount}`);
+        values.push(updateData[key]);
+      }
     });
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ message: 'No fields to update' });
+    }
+
+    values.push(id);
+    const result = await pool.query(
+      `UPDATE courses SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount + 1} RETURNING *`,
+      values
+    );
 
     res.json({
       message: 'Course updated successfully',
-      course: updatedCourse
+      course: result.rows[0]
     });
   } catch (error) {
     console.error('Update course error:', error);
@@ -185,7 +204,7 @@ router.put('/:id', authenticateToken, [
 });
 
 // Delete course (Admin only)
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', authenticateToken, async (req: any, res: any) => {
   try {
     if (req.user?.role !== 'ADMIN') {
       return res.status(403).json({ message: 'Admin access required' });
@@ -193,18 +212,13 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
     const { id } = req.params;
 
-    const course = await prisma.course.findUnique({
-      where: { id }
-    });
+    const course = await pool.query('SELECT id FROM courses WHERE id = $1', [id]);
 
-    if (!course) {
+    if (course.rows.length === 0) {
       return res.status(404).json({ message: 'Course not found' });
     }
 
-    await prisma.course.update({
-      where: { id },
-      data: { isActive: false }
-    });
+    await pool.query('UPDATE courses SET is_active = false WHERE id = $1', [id]);
 
     res.json({ message: 'Course deactivated successfully' });
   } catch (error) {
@@ -217,7 +231,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 router.post('/:id/progress', authenticateToken, [
   body('progress').isInt({ min: 0, max: 100 }),
   body('completed').optional().isBoolean()
-], async (req, res) => {
+], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -226,42 +240,28 @@ router.post('/:id/progress', authenticateToken, [
 
     const { id } = req.params;
     const { progress, completed = false } = req.body;
-    const userId = req.user!.id;
+    const userId = req.user.id;
 
     // Check if course exists
-    const course = await prisma.course.findUnique({
-      where: { id }
-    });
+    const course = await pool.query('SELECT id FROM courses WHERE id = $1', [id]);
 
-    if (!course) {
+    if (course.rows.length === 0) {
       return res.status(404).json({ message: 'Course not found' });
     }
 
     // Upsert progress
-    const courseProgress = await prisma.courseProgress.upsert({
-      where: {
-        userId_courseId: {
-          userId,
-          courseId: id
-        }
-      },
-      update: {
-        progress,
-        completed,
-        completedAt: completed ? new Date() : null
-      },
-      create: {
-        userId,
-        courseId: id,
-        progress,
-        completed,
-        completedAt: completed ? new Date() : null
-      }
-    });
+    const result = await pool.query(
+      `INSERT INTO course_progress (user_id, course_id, progress, completed, completed_at)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (user_id, course_id)
+       DO UPDATE SET progress = $3, completed = $4, completed_at = $5
+       RETURNING *`,
+      [userId, id, progress, completed, completed ? new Date() : null]
+    );
 
     res.json({
       message: 'Progress updated successfully',
-      progress: courseProgress
+      progress: result.rows[0]
     });
   } catch (error) {
     console.error('Update progress error:', error);
@@ -270,27 +270,20 @@ router.post('/:id/progress', authenticateToken, [
 });
 
 // Get user's course progress
-router.get('/progress/user', authenticateToken, async (req, res) => {
+router.get('/progress/user', authenticateToken, async (req: any, res: any) => {
   try {
-    const userId = req.user!.id;
+    const userId = req.user.id;
 
-    const userProgress = await prisma.courseProgress.findMany({
-      where: { userId },
-      include: {
-        course: {
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            duration: true,
-            googleDriveUrl: true
-          }
-        }
-      },
-      orderBy: { updatedAt: 'desc' }
-    });
+    const result = await pool.query(
+      `SELECT cp.*, c.title, c.description, c.duration, c.google_drive_url
+       FROM course_progress cp
+       JOIN courses c ON cp.course_id = c.id
+       WHERE cp.user_id = $1
+       ORDER BY cp.updated_at DESC`,
+      [userId]
+    );
 
-    res.json({ progress: userProgress });
+    res.json({ progress: result.rows });
   } catch (error) {
     console.error('Get user progress error:', error);
     res.status(500).json({ message: 'Internal server error' });
