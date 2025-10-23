@@ -29,9 +29,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      console.log('Unauthorized access, redirecting to login');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      // Use replace to avoid back button issues
+      window.location.replace('/login');
     }
     return Promise.reject(error);
   }

@@ -13,10 +13,16 @@ import {
 } from 'lucide-react';
 
 const Layout: React.FC = () => {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Redirect to login if not authenticated
+  if (!isAuthenticated) {
+    navigate('/login', { replace: true });
+    return null;
+  }
 
   const navigation = [
     { name: 'Главная', href: '/dashboard', icon: Home },

@@ -17,7 +17,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return <LoadingSpinner />;
   }
 
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
 };
 
 const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -53,6 +57,9 @@ const AppRoutes: React.FC = () => {
         <Route path="courses" element={<Courses />} />
         <Route path="profile" element={<Profile />} />
       </Route>
+      
+      {/* Catch all route - redirect to login if not authenticated */}
+      <Route path="*" element={!isAuthenticated ? <Navigate to="/login" replace /> : <Navigate to="/dashboard" replace />} />
     </Routes>
   );
 };
