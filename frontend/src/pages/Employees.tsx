@@ -152,9 +152,9 @@ const Employees: React.FC = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-semibold text-pastel-800 truncate">
-                    {employee.firstName} {employee.lastName}
+                    {employee.firstName} {employee.lastName} {employee.middleName}
                   </h3>
-                  <p className="text-pastel-600 text-sm mb-2">{employee.position}</p>
+                  <p className="text-pastel-600 text-sm mb-1">{employee.position}</p>
                   <p className="text-pastel-500 text-xs mb-3">{employee.department}</p>
                   
                   <div className="space-y-2">

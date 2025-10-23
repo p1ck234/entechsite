@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AuthResponse, User, Employee, Course, CourseProgress, EmployeesResponse, CoursesResponse } from '../types';
+import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -126,6 +126,39 @@ export const coursesAPI = {
 
   getUserProgress: async (): Promise<{ progress: CourseProgress[] }> => {
     const response = await api.get('/courses/progress/user');
+    return response.data;
+  },
+};
+
+// Lessons API
+export const lessonsAPI = {
+  getLessons: async (courseId: string): Promise<{ lessons: Lesson[] }> => {
+    const response = await api.get(`/lessons/course/${courseId}`);
+    return response.data;
+  },
+
+  getLesson: async (id: string): Promise<Lesson> => {
+    const response = await api.get(`/lessons/${id}`);
+    return response.data;
+  },
+
+  createLesson: async (lesson: Omit<Lesson, 'id' | 'createdAt' | 'updatedAt' | 'userProgress'>): Promise<{ message: string; lesson: Lesson }> => {
+    const response = await api.post('/lessons', lesson);
+    return response.data;
+  },
+
+  updateLesson: async (id: string, lesson: Partial<Lesson>): Promise<{ message: string; lesson: Lesson }> => {
+    const response = await api.put(`/lessons/${id}`, lesson);
+    return response.data;
+  },
+
+  deleteLesson: async (id: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/lessons/${id}`);
+    return response.data;
+  },
+
+  updateProgress: async (lessonId: string, completed: boolean): Promise<{ message: string; progress: any }> => {
+    const response = await api.post(`/lessons/${lessonId}/progress`, { completed });
     return response.data;
   },
 };

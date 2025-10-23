@@ -53,6 +53,33 @@ async function initDatabase() {
     `);
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS lessons (
+        id SERIAL PRIMARY KEY,
+        course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        google_drive_url VARCHAR(500),
+        duration INTEGER,
+        order_index INTEGER DEFAULT 0,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lesson_progress (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        lesson_id INTEGER NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+        completed BOOLEAN DEFAULT false,
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        completed_at TIMESTAMP,
+        UNIQUE(user_id, lesson_id)
+      );
+    `);
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS course_progress (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -69,6 +96,9 @@ async function initDatabase() {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department);');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_employees_active ON employees(is_active);');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_lessons_course ON lessons(course_id);');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_lessons_order ON lessons(course_id, order_index);');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_lesson_progress_user ON lesson_progress(user_id);');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_course_progress_user ON course_progress(user_id);');
 
     console.log('✅ База данных успешно инициализирована!');

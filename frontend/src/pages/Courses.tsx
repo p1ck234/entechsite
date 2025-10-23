@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { coursesAPI } from '../api/client';
-import { Course, CoursesResponse } from '../types';
-import { Search, Plus, Edit, Trash2, ExternalLink, Play, CheckCircle, Clock } from 'lucide-react';
+import { coursesAPI, lessonsAPI } from '../api/client';
+import { Course, CoursesResponse, Lesson } from '../types';
+import { Search, Plus, Edit, Trash2, ExternalLink, Play, CheckCircle, Clock, BookOpen, List } from 'lucide-react';
 import CourseModal from '../components/CourseModal';
+import LessonModal from '../components/LessonModal';
 
 const Courses: React.FC = () => {
   const { isAdmin } = useAuth();
@@ -14,6 +15,10 @@ const Courses: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [showLessonModal, setShowLessonModal] = useState(false);
+  const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
 
   const fetchCourses = async () => {
     try {
@@ -69,6 +74,66 @@ const Courses: React.FC = () => {
     setShowModal(false);
     setEditingCourse(null);
     fetchCourses();
+  };
+
+  const handleLessonModalClose = () => {
+    setShowLessonModal(false);
+    setEditingLesson(null);
+    if (selectedCourse) {
+      fetchLessons(selectedCourse.id);
+    }
+  };
+
+  const fetchLessons = async (courseId: string) => {
+    try {
+      const response = await lessonsAPI.getLessons(courseId);
+      setLessons(response.lessons);
+    } catch (error) {
+      console.error('Error fetching lessons:', error);
+    }
+  };
+
+  const handleViewLessons = (course: Course) => {
+    setSelectedCourse(course);
+    fetchLessons(course.id);
+  };
+
+  const handleAddLesson = (course: Course) => {
+    setSelectedCourse(course);
+    setEditingLesson(null);
+    setShowLessonModal(true);
+  };
+
+  const handleEditLesson = (lesson: Lesson) => {
+    setEditingLesson(lesson);
+    setShowLessonModal(true);
+  };
+
+  const handleDeleteLesson = async (id: string) => {
+    if (!isAdmin) return;
+    
+    if (window.confirm('Вы уверены, что хотите удалить этот урок?')) {
+      try {
+        await lessonsAPI.deleteLesson(id);
+        if (selectedCourse) {
+          fetchLessons(selectedCourse.id);
+        }
+      } catch (error) {
+        console.error('Error deleting lesson:', error);
+      }
+    }
+  };
+
+  const handleLessonProgress = async (lessonId: string, completed: boolean) => {
+    try {
+      await lessonsAPI.updateProgress(lessonId, completed);
+      if (selectedCourse) {
+        fetchLessons(selectedCourse.id);
+        fetchCourses(); // Обновить прогресс курса
+      }
+    } catch (error) {
+      console.error('Error updating lesson progress:', error);
+    }
   };
 
   const handleProgressUpdate = async (courseId: string, progress: number, completed?: boolean) => {
@@ -136,12 +201,127 @@ const Courses: React.FC = () => {
         </form>
       </div>
 
-      {/* Courses Grid */}
+      {/* Back to courses button if viewing lessons */}
+      {selectedCourse && (
+        <div className="mb-6">
+          <button
+            onClick={() => setSelectedCourse(null)}
+            className="btn-secondary flex items-center space-x-2"
+          >
+            <BookOpen className="w-5 h-5" />
+            <span>Назад к курсам</span>
+          </button>
+        </div>
+      )}
+
+      {/* Courses or Lessons Grid */}
       {loading ? (
         <div className="flex items-center justify-center h-64">
           <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin"></div>
         </div>
+      ) : selectedCourse ? (
+        // Lessons view
+        <div className="space-y-6">
+          <div className="glass-card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-2xl font-bold text-pastel-800">{selectedCourse.title}</h2>
+                <p className="text-pastel-600">{selectedCourse.description}</p>
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={() => handleAddLesson(selectedCourse)}
+                  className="btn-primary flex items-center space-x-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span>Добавить урок</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {lessons.map((lesson) => (
+              <div key={lesson.id} className="card p-6 hover:scale-105 transition-transform">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-pastel-800 mb-2 line-clamp-2">
+                      {lesson.title}
+                    </h3>
+                    {lesson.description && (
+                      <p className="text-pastel-600 text-sm mb-3 line-clamp-3">
+                        {lesson.description}
+                      </p>
+                    )}
+                  </div>
+                  <div className="ml-2">
+                    {lesson.userProgress?.completed ? (
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    ) : (
+                      <Clock className="w-5 h-5 text-yellow-500" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Lesson Info */}
+                <div className="space-y-2 mb-4">
+                  {lesson.duration && (
+                    <div className="flex items-center text-sm text-pastel-600">
+                      <Clock className="w-4 h-4 mr-2" />
+                      <span>{Math.round(lesson.duration / 60)} мин</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-between">
+                  {lesson.googleDriveUrl && (
+                    <a
+                      href={lesson.googleDriveUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-primary flex items-center space-x-2 text-sm"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span>Открыть</span>
+                    </a>
+                  )}
+
+                  {!isAdmin && (
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleLessonProgress(lesson.id, true)}
+                        className="p-2 text-pastel-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Завершить урок"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+
+                  {isAdmin && (
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleEditLesson(lesson)}
+                        className="p-2 text-pastel-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteLesson(lesson.id)}
+                        className="p-2 text-pastel-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : (
+        // Courses view
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {courses.map((course) => (
             <div key={course.id} className="card p-6 hover:scale-105 transition-transform">
@@ -191,15 +371,24 @@ const Courses: React.FC = () => {
 
               {/* Actions */}
               <div className="flex items-center justify-between">
-                <a
-                  href={course.googleDriveUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-primary flex items-center space-x-2 text-sm"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>Открыть</span>
-                </a>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handleViewLessons(course)}
+                    className="btn-secondary flex items-center space-x-2 text-sm"
+                  >
+                    <List className="w-4 h-4" />
+                    <span>Уроки</span>
+                  </button>
+                  <a
+                    href={course.googleDriveUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary flex items-center space-x-2 text-sm"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    <span>Открыть</span>
+                  </a>
+                </div>
 
                 {!isAdmin && course.userProgress && (
                   <div className="flex space-x-2">
@@ -270,6 +459,15 @@ const Courses: React.FC = () => {
         <CourseModal
           course={editingCourse}
           onClose={handleModalClose}
+        />
+      )}
+
+      {/* Lesson Modal */}
+      {showLessonModal && selectedCourse && (
+        <LessonModal
+          lesson={editingLesson}
+          courseId={selectedCourse.id}
+          onClose={handleLessonModalClose}
         />
       )}
     </div>
