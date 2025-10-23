@@ -1,0 +1,76 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Employee {
+  id          String  @id @default(cuid())
+  firstName   String
+  lastName    String
+  middleName  String?
+  position    String
+  department  String
+  email       String  @unique
+  phone       String
+  telegram    String?
+  photo       String?
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("employees")
+}
+
+model Course {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  googleDriveUrl String
+  duration    Int? // in minutes
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  progress    CourseProgress[]
+
+  @@map("courses")
+}
+
+model CourseProgress {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String
+  progress  Int      @default(0) // percentage 0-100
+  completed Boolean  @default(false)
+  startedAt DateTime @default(now())
+  completedAt DateTime?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@map("course_progress")
+}
