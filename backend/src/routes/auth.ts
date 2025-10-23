@@ -14,7 +14,7 @@ router.post('/register', [
   body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 6 }),
   body('role').optional().isIn(['ADMIN', 'USER'])
-], async (req, res) => {
+], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -63,7 +63,7 @@ router.post('/register', [
 router.post('/login', [
   body('email').isEmail().normalizeEmail(),
   body('password').notEmpty()
-], async (req, res) => {
+], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -131,9 +131,9 @@ router.get('/me', async (req, res) => {
 
     const user = result.rows[0];
 
-    res.json({ user });
+    return res.json({ user });
   } catch (error) {
-    res.status(401).json({ message: 'Invalid or expired token' });
+    return res.status(401).json({ message: 'Invalid or expired token' });
   }
 });
 

@@ -38,7 +38,7 @@ export const authenticateToken = async (
     }
 
     req.user = result.rows[0];
-    next();
+    return next();
   } catch (error) {
     return res.status(403).json({ message: 'Invalid or expired token' });
   }
@@ -48,5 +48,5 @@ export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction
   if (req.user?.role !== 'ADMIN') {
     return res.status(403).json({ message: 'Admin access required' });
   }
-  next();
+  return next();
 };
