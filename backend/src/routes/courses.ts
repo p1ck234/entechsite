@@ -272,25 +272,21 @@ router.post('/:id/progress', authenticateToken, [
 // Get user's course progress
 router.get('/progress/user', authenticateToken, async (req: any, res: any) => {
   try {
-    console.log('Getting user progress for user:', req.user);
     const userId = req.user?.id;
 
     if (!userId) {
-      console.log('User not authenticated');
       return res.status(401).json({ message: 'User not authenticated' });
     }
 
-    console.log('Querying progress for user ID:', userId);
     const result = await pool.query(
       `SELECT cp.*, c.title, c.description, c.duration, c.google_drive_url
        FROM course_progress cp
        JOIN courses c ON cp.course_id = c.id
        WHERE cp.user_id = $1
-       ORDER BY cp.updated_at DESC`,
+       ORDER BY cp.started_at DESC`,
       [userId]
     );
 
-    console.log('Progress result:', result.rows);
     res.json({ progress: result.rows });
   } catch (error) {
     console.error('Get user progress error:', error);
