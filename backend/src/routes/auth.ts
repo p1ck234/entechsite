@@ -2,10 +2,12 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
-import { PrismaClient } from '@prisma/client';
+import { Pool } from 'pg';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 // Register
 router.post('/register', [
@@ -22,11 +24,9 @@ router.post('/register', [
     const { email, password, role = 'USER' } = req.body;
 
     // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
-    });
+    const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
 
-    if (existingUser) {
+    if (existingUser.rows.length > 0) {
       return res.status(400).json({ message: 'User already exists' });
     }
 
@@ -34,19 +34,12 @@ router.post('/register', [
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Create user
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        role: role as 'ADMIN' | 'USER'
-      },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        createdAt: true
-      }
-    });
+    const result = await pool.query(
+      'INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING id, email, role, created_at',
+      [email, hashedPassword, role || 'USER']
+    );
+
+    const user = result.rows[0];
 
     // Generate JWT
     const token = jwt.sign(
@@ -80,13 +73,13 @@ router.post('/login', [
     const { email, password } = req.body;
 
     // Find user
-    const user = await prisma.user.findUnique({
-      where: { email }
-    });
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
 
-    if (!user) {
+    if (result.rows.length === 0) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
+
+    const user = result.rows[0];
 
     // Check password
     const isValidPassword = await bcrypt.compare(password, user.password);
@@ -127,19 +120,16 @@ router.get('/me', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        createdAt: true
-      }
-    });
+    const result = await pool.query(
+      'SELECT id, email, role, created_at FROM users WHERE id = $1',
+      [decoded.userId]
+    );
 
-    if (!user) {
+    if (result.rows.length === 0) {
       return res.status(401).json({ message: 'Invalid token' });
     }
+
+    const user = result.rows[0];
 
     res.json({ user });
   } catch (error) {

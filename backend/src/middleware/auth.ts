@@ -1,8 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { Pool } from 'pg';
 
-const prisma = new PrismaClient();
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 export interface AuthRequest extends Request {
   user?: {
@@ -26,16 +28,16 @@ export const authenticateToken = async (
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: { id: true, email: true, role: true }
-    });
+    const result = await pool.query(
+      'SELECT id, email, role FROM users WHERE id = $1',
+      [decoded.userId]
+    );
 
-    if (!user) {
+    if (result.rows.length === 0) {
       return res.status(401).json({ message: 'Invalid token' });
     }
 
-    req.user = user;
+    req.user = result.rows[0];
     next();
   } catch (error) {
     return res.status(403).json({ message: 'Invalid or expired token' });
