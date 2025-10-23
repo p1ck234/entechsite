@@ -38,6 +38,24 @@ export interface Course {
   };
 }
 
+export interface Lesson {
+  id: string;
+  courseId: string;
+  title: string;
+  description?: string;
+  googleDriveUrl?: string;
+  duration?: number;
+  orderIndex: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  userProgress?: {
+    completed: boolean;
+    startedAt?: string;
+    completedAt?: string;
+  };
+}
+
 export interface CourseProgress {
   id: string;
   userId: string;

@@ -9,6 +9,7 @@ import { Pool } from 'pg';
 import authRoutes from './routes/auth';
 import employeeRoutes from './routes/employees';
 import courseRoutes from './routes/courses';
+import lessonRoutes from './routes/lessons';
 import userRoutes from './routes/users';
 
 dotenv.config();
@@ -43,6 +44,7 @@ app.use(limiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/courses', courseRoutes);
+app.use('/api/lessons', lessonRoutes);
 app.use('/api/users', userRoutes);
 
 // Health check
