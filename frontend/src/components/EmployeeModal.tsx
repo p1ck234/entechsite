@@ -24,7 +24,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
   const [error, setError] = useState('');
 
   const departments = [
-    'IT', 'HR', 'Финансы', 'Маркетинг', 'Продажи', 'Поддержка'
+    'IT-Отдел', 'Отдел продаж', 'Отдел финансистов', 'Отдел стройки', 'Отдел производства', 'Отдел управления и планирование'
   ];
 
   useEffect(() => {

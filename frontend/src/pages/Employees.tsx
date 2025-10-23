@@ -17,7 +17,7 @@ const Employees: React.FC = () => {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
 
   const departments = [
-    'IT', 'HR', 'Финансы', 'Маркетинг', 'Продажи', 'Поддержка'
+    'IT-Отдел', 'Отдел продаж', 'Отдел финансистов', 'Отдел стройки', 'Отдел производства', 'Отдел управления и планирование'
   ];
 
   const fetchEmployees = async () => {
