@@ -137,12 +137,42 @@ export const coursesAPI = {
     search?: string;
   }): Promise<CoursesResponse> => {
     const response = await api.get('/courses', { params });
-    return response.data;
+    
+    // Transform snake_case to camelCase
+    const transformedCourses = response.data.courses.map((course: any) => ({
+      id: course.id,
+      title: course.title,
+      description: course.description,
+      googleDriveUrl: course.google_drive_url,
+      duration: course.duration,
+      isActive: course.is_active,
+      createdAt: course.created_at,
+      updatedAt: course.updated_at,
+      userProgress: course.userProgress
+    }));
+
+    return {
+      courses: transformedCourses,
+      pagination: response.data.pagination
+    };
   },
 
   getCourse: async (id: string): Promise<Course> => {
     const response = await api.get(`/courses/${id}`);
-    return response.data;
+    const course = response.data;
+    
+    // Transform snake_case to camelCase
+    return {
+      id: course.id,
+      title: course.title,
+      description: course.description,
+      googleDriveUrl: course.google_drive_url,
+      duration: course.duration,
+      isActive: course.is_active,
+      createdAt: course.created_at,
+      updatedAt: course.updated_at,
+      userProgress: course.userProgress
+    };
   },
 
   createCourse: async (course: Omit<Course, 'id' | 'createdAt' | 'updatedAt' | 'userProgress'>): Promise<{ message: string; course: Course }> => {
@@ -175,12 +205,45 @@ export const coursesAPI = {
 export const lessonsAPI = {
   getLessons: async (courseId: string): Promise<{ lessons: Lesson[] }> => {
     const response = await api.get(`/lessons/course/${courseId}`);
-    return response.data;
+    
+    // Transform snake_case to camelCase
+    const transformedLessons = response.data.lessons.map((lesson: any) => ({
+      id: lesson.id,
+      courseId: lesson.course_id,
+      title: lesson.title,
+      description: lesson.description,
+      googleDriveUrl: lesson.google_drive_url,
+      duration: lesson.duration,
+      orderIndex: lesson.order_index,
+      isActive: lesson.is_active,
+      createdAt: lesson.created_at,
+      updatedAt: lesson.updated_at,
+      userProgress: lesson.userProgress
+    }));
+
+    return {
+      lessons: transformedLessons
+    };
   },
 
   getLesson: async (id: string): Promise<Lesson> => {
     const response = await api.get(`/lessons/${id}`);
-    return response.data;
+    const lesson = response.data;
+    
+    // Transform snake_case to camelCase
+    return {
+      id: lesson.id,
+      courseId: lesson.course_id,
+      title: lesson.title,
+      description: lesson.description,
+      googleDriveUrl: lesson.google_drive_url,
+      duration: lesson.duration,
+      orderIndex: lesson.order_index,
+      isActive: lesson.is_active,
+      createdAt: lesson.created_at,
+      updatedAt: lesson.updated_at,
+      userProgress: lesson.userProgress
+    };
   },
 
   createLesson: async (lesson: Omit<Lesson, 'id' | 'createdAt' | 'updatedAt' | 'userProgress'>): Promise<{ message: string; lesson: Lesson }> => {

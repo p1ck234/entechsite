@@ -23,11 +23,11 @@ const LessonModal: React.FC<LessonModalProps> = ({ lesson, courseId, onClose }) 
   useEffect(() => {
     if (lesson) {
       setFormData({
-        title: lesson.title,
+        title: lesson.title || '',
         description: lesson.description || '',
         googleDriveUrl: lesson.googleDriveUrl || '',
         duration: lesson.duration?.toString() || '',
-        orderIndex: lesson.orderIndex,
+        orderIndex: lesson.orderIndex || 0,
       });
     } else {
       setFormData({
@@ -46,17 +46,25 @@ const LessonModal: React.FC<LessonModalProps> = ({ lesson, courseId, onClose }) 
     setError('');
 
     try {
-      const lessonData = {
-        ...formData,
-        courseId: parseInt(courseId),
-        duration: formData.duration ? parseInt(formData.duration) : undefined,
-        orderIndex: parseInt(formData.orderIndex.toString()),
-      };
-
       if (lesson) {
-        await lessonsAPI.updateLesson(lesson.id, lessonData);
+        // Update lesson - only send fields that can be updated
+        const updateData = {
+          title: formData.title,
+          description: formData.description,
+          googleDriveUrl: formData.googleDriveUrl,
+          duration: formData.duration ? parseInt(formData.duration) : undefined,
+          orderIndex: parseInt(formData.orderIndex.toString()) || 0,
+        };
+        await lessonsAPI.updateLesson(lesson.id, updateData);
       } else {
-        await lessonsAPI.createLesson(lessonData);
+        // Create lesson - include courseId
+        const createData = {
+          ...formData,
+          courseId: parseInt(courseId),
+          duration: formData.duration ? parseInt(formData.duration) : undefined,
+          orderIndex: parseInt(formData.orderIndex.toString()) || 0,
+        };
+        await lessonsAPI.createLesson(createData);
       }
       onClose();
     } catch (err: any) {

@@ -5,9 +5,11 @@ import { Course, CoursesResponse, Lesson } from '../types';
 import { Search, Plus, Edit, Trash2, ExternalLink, Play, CheckCircle, Clock, BookOpen, List } from 'lucide-react';
 import CourseModal from '../components/CourseModal';
 import LessonModal from '../components/LessonModal';
+import { useLocation } from 'react-router-dom';
 
 const Courses: React.FC = () => {
   const { isAdmin } = useAuth();
+  const location = useLocation();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -19,6 +21,16 @@ const Courses: React.FC = () => {
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+
+  // Reset selected course when navigating to courses page
+  useEffect(() => {
+    if (location.pathname === '/courses') {
+      setSelectedCourse(null);
+      setLessons([]);
+      // Refresh courses when returning to main view
+      fetchCourses();
+    }
+  }, [location.pathname]);
 
   const fetchCourses = async () => {
     try {
@@ -205,7 +217,11 @@ const Courses: React.FC = () => {
       {selectedCourse && (
         <div className="mb-6">
           <button
-            onClick={() => setSelectedCourse(null)}
+            onClick={() => {
+              setSelectedCourse(null);
+              setLessons([]);
+              fetchCourses();
+            }}
             className="btn-secondary flex items-center space-x-2"
           >
             <BookOpen className="w-5 h-5" />
@@ -224,14 +240,27 @@ const Courses: React.FC = () => {
         <div className="space-y-6">
           <div className="glass-card p-6">
             <div className="flex items-center justify-between mb-4">
-              <div>
+              <div className="flex-1">
                 <h2 className="text-2xl font-bold text-pastel-800">{selectedCourse.title}</h2>
                 <p className="text-pastel-600">{selectedCourse.description}</p>
+                {selectedCourse.googleDriveUrl && (
+                  <div className="mt-3">
+                    <a
+                      href={selectedCourse.googleDriveUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-primary inline-flex items-center space-x-2"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span>Открыть курс в Google Drive</span>
+                    </a>
+                  </div>
+                )}
               </div>
               {isAdmin && (
                 <button
                   onClick={() => handleAddLesson(selectedCourse)}
-                  className="btn-primary flex items-center space-x-2"
+                  className="btn-primary flex items-center space-x-2 ml-4"
                 >
                   <Plus className="w-5 h-5" />
                   <span>Добавить урок</span>
@@ -268,53 +297,69 @@ const Courses: React.FC = () => {
                   {lesson.duration && (
                     <div className="flex items-center text-sm text-pastel-600">
                       <Clock className="w-4 h-4 mr-2" />
-                      <span>{Math.round(lesson.duration / 60)} мин</span>
+                      <span>{lesson.duration} мин</span>
                     </div>
                   )}
                 </div>
 
                 {/* Actions */}
                 <div className="flex items-center justify-between">
-                  {lesson.googleDriveUrl && (
-                    <a
-                      href={lesson.googleDriveUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-primary flex items-center space-x-2 text-sm"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      <span>Открыть</span>
-                    </a>
-                  )}
-
-                  {!isAdmin && (
-                    <div className="flex space-x-2">
+                  <div className="flex space-x-2">
+                    {lesson.googleDriveUrl ? (
+                      <a
+                        href={lesson.googleDriveUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-primary flex items-center space-x-2 text-sm"
+                        title={`Открыть урок: ${lesson.googleDriveUrl}`}
+                      >
+                        <Play className="w-4 h-4" />
+                        <span>Начать урок</span>
+                      </a>
+                    ) : (
                       <button
-                        onClick={() => handleLessonProgress(lesson.id, true)}
-                        className="p-2 text-pastel-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                        title="Завершить урок"
+                        className="btn-primary flex items-center space-x-2 text-sm opacity-50 cursor-not-allowed"
+                        disabled
+                        title="Ссылка на урок не добавлена"
+                      >
+                        <Play className="w-4 h-4" />
+                        <span>Начать урок</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex space-x-2">
+                    {!isAdmin && (
+                      <button
+                        onClick={() => handleLessonProgress(lesson.id, !lesson.userProgress?.completed)}
+                        className={`p-2 rounded-lg transition-colors ${
+                          lesson.userProgress?.completed 
+                            ? 'text-green-600 bg-green-50 hover:text-red-600 hover:bg-red-50' 
+                            : 'text-pastel-600 hover:text-green-600 hover:bg-green-50'
+                        }`}
+                        title={lesson.userProgress?.completed ? "Отметить как не завершенный" : "Завершить урок"}
                       >
                         <CheckCircle className="w-4 h-4" />
                       </button>
-                    </div>
-                  )}
+                    )}
 
-                  {isAdmin && (
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleEditLesson(lesson)}
-                        className="p-2 text-pastel-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteLesson(lesson.id)}
-                        className="p-2 text-pastel-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
+                    {isAdmin && (
+                      <>
+                        <button
+                          onClick={() => handleEditLesson(lesson)}
+                          className="p-2 text-pastel-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteLesson(lesson.id)}
+                          className="p-2 text-pastel-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -364,7 +409,7 @@ const Courses: React.FC = () => {
                 {course.duration && (
                   <div className="flex items-center text-sm text-pastel-600">
                     <Clock className="w-4 h-4 mr-2" />
-                    <span>{Math.round(course.duration / 60)} мин</span>
+                    <span>{course.duration} мин</span>
                   </div>
                 )}
               </div>
@@ -379,30 +424,39 @@ const Courses: React.FC = () => {
                     <List className="w-4 h-4" />
                     <span>Уроки</span>
                   </button>
-                  <a
-                    href={course.googleDriveUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-primary flex items-center space-x-2 text-sm"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    <span>Открыть</span>
-                  </a>
+                  {course.googleDriveUrl ? (
+                    <a
+                      href={course.googleDriveUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-primary flex items-center space-x-2 text-sm"
+                      title={`Открыть курс: ${course.googleDriveUrl}`}
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span>Начать курс</span>
+                    </a>
+                  ) : (
+                    <button
+                      className="btn-primary flex items-center space-x-2 text-sm opacity-50 cursor-not-allowed"
+                      disabled
+                      title="Ссылка на курс не добавлена"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span>Начать курс</span>
+                    </button>
+                  )}
                 </div>
 
-                {!isAdmin && course.userProgress && (
+                {!isAdmin && (
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => handleProgressUpdate(course.id, 50)}
-                      className="p-2 text-pastel-600 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors"
-                      title="50%"
-                    >
-                      <Clock className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleProgressUpdate(course.id, 100, true)}
-                      className="p-2 text-pastel-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                      title="Завершить"
+                      onClick={() => handleProgressUpdate(course.id, course.userProgress?.completed ? 0 : 100, !course.userProgress?.completed)}
+                      className={`p-2 rounded-lg transition-colors ${
+                        course.userProgress?.completed 
+                          ? 'text-green-600 bg-green-50 hover:text-red-600 hover:bg-red-50' 
+                          : 'text-pastel-600 hover:text-green-600 hover:bg-green-50'
+                      }`}
+                      title={course.userProgress?.completed ? "Отметить как не завершенный" : "Завершить курс"}
                     >
                       <CheckCircle className="w-4 h-4" />
                     </button>
