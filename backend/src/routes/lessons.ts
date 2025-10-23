@@ -219,11 +219,13 @@ router.post('/:id/progress', authenticateToken, [
     const { completed } = req.body;
     const userId = req.user.id;
 
-    // Check if lesson exists
-    const lesson = await pool.query('SELECT id FROM lessons WHERE id = $1', [id]);
+    // Check if lesson exists and get course_id
+    const lesson = await pool.query('SELECT id, course_id FROM lessons WHERE id = $1', [id]);
     if (lesson.rows.length === 0) {
       return res.status(404).json({ message: 'Lesson not found' });
     }
+
+    const courseId = lesson.rows[0].course_id;
 
     // Upsert progress
     const result = await pool.query(
@@ -236,7 +238,7 @@ router.post('/:id/progress', authenticateToken, [
     );
 
     // Update course progress
-    await updateCourseProgress(userId, lesson.rows[0].course_id);
+    await updateCourseProgress(userId, courseId);
 
     res.json({
       message: 'Progress updated successfully',

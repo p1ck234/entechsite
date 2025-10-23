@@ -249,7 +249,7 @@ const Courses: React.FC = () => {
                       href={selectedCourse.googleDriveUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="btn-primary inline-flex items-center space-x-2"
+                      className="btn-secondary inline-flex items-center space-x-2"
                     >
                       <ExternalLink className="w-4 h-4" />
                       <span>Открыть курс в Google Drive</span>
@@ -419,32 +419,11 @@ const Courses: React.FC = () => {
                 <div className="flex space-x-2">
                   <button
                     onClick={() => handleViewLessons(course)}
-                    className="btn-secondary flex items-center space-x-2 text-sm"
+                    className="btn-primary flex items-center space-x-2 text-sm"
                   >
-                    <List className="w-4 h-4" />
-                    <span>Уроки</span>
+                    <Play className="w-4 h-4" />
+                    <span>Начать курс</span>
                   </button>
-                  {course.googleDriveUrl ? (
-                    <a
-                      href={course.googleDriveUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-primary flex items-center space-x-2 text-sm"
-                      title={`Открыть курс: ${course.googleDriveUrl}`}
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      <span>Начать курс</span>
-                    </a>
-                  ) : (
-                    <button
-                      className="btn-primary flex items-center space-x-2 text-sm opacity-50 cursor-not-allowed"
-                      disabled
-                      title="Ссылка на курс не добавлена"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      <span>Начать курс</span>
-                    </button>
-                  )}
                 </div>
 
                 {!isAdmin && (

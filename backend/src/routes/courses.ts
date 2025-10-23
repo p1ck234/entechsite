@@ -272,7 +272,11 @@ router.post('/:id/progress', authenticateToken, [
 // Get user's course progress
 router.get('/progress/user', authenticateToken, async (req: any, res: any) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
 
     const result = await pool.query(
       `SELECT cp.*, c.title, c.description, c.duration, c.google_drive_url
