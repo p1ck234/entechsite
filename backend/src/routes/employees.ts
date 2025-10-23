@@ -1,10 +1,12 @@
 import express from 'express';
 import { body, validationResult, query } from 'express-validator';
-import { PrismaClient } from '@prisma/client';
+import { Pool } from 'pg';
 import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 // Get all employees
 router.get('/', authenticateToken, [
@@ -12,7 +14,7 @@ router.get('/', authenticateToken, [
   query('limit').optional().isInt({ min: 1, max: 100 }),
   query('search').optional().isString(),
   query('department').optional().isString()
-], async (req, res) => {
+], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -25,32 +27,32 @@ router.get('/', authenticateToken, [
     const department = req.query.department as string;
     const skip = (page - 1) * limit;
 
-    const where: any = {
-      isActive: true
-    };
+    let whereClause = 'WHERE is_active = true';
+    const params: any[] = [];
+    let paramCount = 0;
 
     if (search) {
-      where.OR = [
-        { firstName: { contains: search, mode: 'insensitive' } },
-        { lastName: { contains: search, mode: 'insensitive' } },
-        { position: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } }
-      ];
+      paramCount++;
+      whereClause += ` AND (first_name ILIKE $${paramCount} OR last_name ILIKE $${paramCount} OR position ILIKE $${paramCount} OR email ILIKE $${paramCount})`;
+      params.push(`%${search}%`);
     }
 
     if (department) {
-      where.department = { contains: department, mode: 'insensitive' };
+      paramCount++;
+      whereClause += ` AND department ILIKE $${paramCount}`;
+      params.push(`%${department}%`);
     }
 
-    const [employees, total] = await Promise.all([
-      prisma.employee.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { firstName: 'asc' }
-      }),
-      prisma.employee.count({ where })
+    const [employeesResult, totalResult] = await Promise.all([
+      pool.query(
+        `SELECT * FROM employees ${whereClause} ORDER BY first_name ASC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
+        [...params, limit, skip]
+      ),
+      pool.query(`SELECT COUNT(*) FROM employees ${whereClause}`, params)
     ]);
+
+    const employees = employeesResult.rows;
+    const total = parseInt(totalResult.rows[0].count);
 
     res.json({
       employees,
@@ -68,19 +70,17 @@ router.get('/', authenticateToken, [
 });
 
 // Get employee by ID
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', authenticateToken, async (req: any, res: any) => {
   try {
     const { id } = req.params;
 
-    const employee = await prisma.employee.findUnique({
-      where: { id }
-    });
+    const result = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
 
-    if (!employee) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Employee not found' });
     }
 
-    res.json(employee);
+    res.json(result.rows[0]);
   } catch (error) {
     console.error('Get employee error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -97,7 +97,7 @@ router.post('/', authenticateToken, [
   body('phone').notEmpty().trim(),
   body('telegram').optional().isString(),
   body('photo').optional().isString()
-], async (req, res) => {
+], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -121,31 +121,21 @@ router.post('/', authenticateToken, [
     } = req.body;
 
     // Check if employee with email already exists
-    const existingEmployee = await prisma.employee.findUnique({
-      where: { email }
-    });
+    const existingEmployee = await pool.query('SELECT id FROM employees WHERE email = $1', [email]);
 
-    if (existingEmployee) {
+    if (existingEmployee.rows.length > 0) {
       return res.status(400).json({ message: 'Employee with this email already exists' });
     }
 
-    const employee = await prisma.employee.create({
-      data: {
-        firstName,
-        lastName,
-        middleName,
-        position,
-        department,
-        email,
-        phone,
-        telegram,
-        photo
-      }
-    });
+    const result = await pool.query(
+      `INSERT INTO employees (first_name, last_name, middle_name, position, department, email, phone, telegram, photo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [firstName, lastName, middleName, position, department, email, phone, telegram, photo]
+    );
 
     res.status(201).json({
       message: 'Employee created successfully',
-      employee
+      employee: result.rows[0]
     });
   } catch (error) {
     console.error('Create employee error:', error);
@@ -164,7 +154,7 @@ router.put('/:id', authenticateToken, [
   body('telegram').optional().isString(),
   body('photo').optional().isString(),
   body('isActive').optional().isBoolean()
-], async (req, res) => {
+], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -179,33 +169,51 @@ router.put('/:id', authenticateToken, [
     const updateData = req.body;
 
     // Check if employee exists
-    const existingEmployee = await prisma.employee.findUnique({
-      where: { id }
-    });
+    const existingEmployee = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
 
-    if (!existingEmployee) {
+    if (existingEmployee.rows.length === 0) {
       return res.status(404).json({ message: 'Employee not found' });
     }
 
     // If email is being updated, check for conflicts
-    if (updateData.email && updateData.email !== existingEmployee.email) {
-      const emailConflict = await prisma.employee.findUnique({
-        where: { email: updateData.email }
-      });
+    if (updateData.email && updateData.email !== existingEmployee.rows[0].email) {
+      const emailConflict = await pool.query('SELECT id FROM employees WHERE email = $1', [updateData.email]);
 
-      if (emailConflict) {
+      if (emailConflict.rows.length > 0) {
         return res.status(400).json({ message: 'Employee with this email already exists' });
       }
     }
 
-    const employee = await prisma.employee.update({
-      where: { id },
-      data: updateData
+    // Build update query dynamically
+    const updateFields: string[] = [];
+    const values: any[] = [];
+    let paramCount = 0;
+
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] !== undefined) {
+        paramCount++;
+        const dbKey = key === 'firstName' ? 'first_name' : 
+                     key === 'lastName' ? 'last_name' : 
+                     key === 'middleName' ? 'middle_name' : 
+                     key === 'isActive' ? 'is_active' : key;
+        updateFields.push(`${dbKey} = $${paramCount}`);
+        values.push(updateData[key]);
+      }
     });
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ message: 'No fields to update' });
+    }
+
+    values.push(id);
+    const result = await pool.query(
+      `UPDATE employees SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount + 1} RETURNING *`,
+      values
+    );
 
     res.json({
       message: 'Employee updated successfully',
-      employee
+      employee: result.rows[0]
     });
   } catch (error) {
     console.error('Update employee error:', error);
@@ -214,7 +222,7 @@ router.put('/:id', authenticateToken, [
 });
 
 // Delete employee (Admin only)
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', authenticateToken, async (req: any, res: any) => {
   try {
     if (req.user?.role !== 'ADMIN') {
       return res.status(403).json({ message: 'Admin access required' });
@@ -222,18 +230,13 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
     const { id } = req.params;
 
-    const employee = await prisma.employee.findUnique({
-      where: { id }
-    });
+    const employee = await pool.query('SELECT id FROM employees WHERE id = $1', [id]);
 
-    if (!employee) {
+    if (employee.rows.length === 0) {
       return res.status(404).json({ message: 'Employee not found' });
     }
 
-    await prisma.employee.update({
-      where: { id },
-      data: { isActive: false }
-    });
+    await pool.query('UPDATE employees SET is_active = false WHERE id = $1', [id]);
 
     res.json({ message: 'Employee deactivated successfully' });
   } catch (error) {
