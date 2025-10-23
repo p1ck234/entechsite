@@ -25,7 +25,7 @@ app.use(helmet());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? ['https://entech.p1ck23.ru', 'http://entech.p1ck23.ru'] 
-    : ['http://localhost:5173', 'https://entech.p1ck23.ru'],
+    : ['http://localhost:5173', 'http://localhost:3000', 'https://entech.p1ck23.ru'],
   credentials: true
 }));
 

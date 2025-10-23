@@ -2,7 +2,7 @@ import axios from 'axios';
 import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse } from '../types';
 import { SITE_CONFIG } from '../config/site';
 
-const API_BASE_URL = SITE_CONFIG.apiUrl;
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
