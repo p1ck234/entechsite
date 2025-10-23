@@ -169,7 +169,14 @@ const Employees: React.FC = () => {
                     {employee.telegram && (
                       <div className="flex items-center space-x-2 text-sm text-pastel-600">
                         <MessageCircle className="w-4 h-4" />
-                        <span>{employee.telegram}</span>
+                        <a
+                          href={`https://t.me/${employee.telegram.replace('@', '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary-600 hover:text-primary-700 hover:underline transition-colors"
+                        >
+                          {employee.telegram}
+                        </a>
                       </div>
                     )}
                   </div>
