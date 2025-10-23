@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse } from '../types';
+import { SITE_CONFIG } from '../config/site';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = SITE_CONFIG.apiUrl;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -66,12 +67,50 @@ export const employeesAPI = {
     department?: string;
   }): Promise<EmployeesResponse> => {
     const response = await api.get('/employees', { params });
-    return response.data;
+    
+    // Transform snake_case to camelCase
+    const transformedEmployees = response.data.employees.map((emp: any) => ({
+      id: emp.id,
+      firstName: emp.first_name,
+      lastName: emp.last_name,
+      middleName: emp.middle_name,
+      position: emp.position,
+      department: emp.department,
+      email: emp.email,
+      phone: emp.phone,
+      telegram: emp.telegram,
+      photo: emp.photo,
+      isActive: emp.is_active,
+      createdAt: emp.created_at,
+      updatedAt: emp.updated_at
+    }));
+
+    return {
+      employees: transformedEmployees,
+      pagination: response.data.pagination
+    };
   },
 
   getEmployee: async (id: string): Promise<Employee> => {
     const response = await api.get(`/employees/${id}`);
-    return response.data;
+    const emp = response.data;
+    
+    // Transform snake_case to camelCase
+    return {
+      id: emp.id,
+      firstName: emp.first_name,
+      lastName: emp.last_name,
+      middleName: emp.middle_name,
+      position: emp.position,
+      department: emp.department,
+      email: emp.email,
+      phone: emp.phone,
+      telegram: emp.telegram,
+      photo: emp.photo,
+      isActive: emp.is_active,
+      createdAt: emp.created_at,
+      updatedAt: emp.updated_at
+    };
   },
 
   createEmployee: async (employee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>): Promise<{ message: string; employee: Employee }> => {

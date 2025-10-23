@@ -58,6 +58,15 @@ const AppRoutes: React.FC = () => {
         <Route path="profile" element={<Profile />} />
       </Route>
       
+      {/* Direct dashboard route */}
+      <Route path="/dashboard" element={
+        <ProtectedRoute>
+          <Layout />
+        </ProtectedRoute>
+      }>
+        <Route index element={<Dashboard />} />
+      </Route>
+      
       {/* Catch all route - redirect to login if not authenticated */}
       <Route path="*" element={!isAuthenticated ? <Navigate to="/login" replace /> : <Navigate to="/dashboard" replace />} />
     </Routes>
