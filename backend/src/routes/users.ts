@@ -1,27 +1,22 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
-import { PrismaClient } from '@prisma/client';
+import { Pool } from 'pg';
 import { authenticateToken, requireAdmin } from '../middleware/auth';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 // Get all users (Admin only)
-router.get('/', authenticateToken, requireAdmin, async (req, res) => {
+router.get('/', authenticateToken, requireAdmin, async (req: any, res: any) => {
   try {
-    const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+    const result = await pool.query(
+      'SELECT id, email, role, created_at, updated_at FROM users ORDER BY created_at DESC'
+    );
 
-    res.json({ users });
+    res.json({ users: result.rows });
   } catch (error) {
     console.error('Get users error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -29,26 +24,20 @@ router.get('/', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 // Get user by ID (Admin only)
-router.get('/:id', authenticateToken, requireAdmin, async (req, res) => {
+router.get('/:id', authenticateToken, requireAdmin, async (req: any, res: any) => {
   try {
     const { id } = req.params;
 
-    const user = await prisma.user.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true
-      }
-    });
+    const result = await pool.query(
+      'SELECT id, email, role, created_at, updated_at FROM users WHERE id = $1',
+      [id]
+    );
 
-    if (!user) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json({ user });
+    res.json({ user: result.rows[0] });
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -58,7 +47,7 @@ router.get('/:id', authenticateToken, requireAdmin, async (req, res) => {
 // Update user role (Admin only)
 router.put('/:id/role', authenticateToken, requireAdmin, [
   body('role').isIn(['ADMIN', 'USER'])
-], async (req, res) => {
+], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -73,28 +62,20 @@ router.put('/:id/role', authenticateToken, requireAdmin, [
       return res.status(400).json({ message: 'Cannot change your own role' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id }
-    });
+    const user = await pool.query('SELECT id FROM users WHERE id = $1', [id]);
 
-    if (!user) {
+    if (user.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id },
-      data: { role },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        updatedAt: true
-      }
-    });
+    const result = await pool.query(
+      'UPDATE users SET role = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id, email, role, updated_at',
+      [role, id]
+    );
 
     res.json({
       message: 'User role updated successfully',
-      user: updatedUser
+      user: result.rows[0]
     });
   } catch (error) {
     console.error('Update user role error:', error);
@@ -106,7 +87,7 @@ router.put('/:id/role', authenticateToken, requireAdmin, [
 router.put('/change-password', authenticateToken, [
   body('currentPassword').notEmpty(),
   body('newPassword').isLength({ min: 6 })
-], async (req, res) => {
+], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -114,18 +95,16 @@ router.put('/change-password', authenticateToken, [
     }
 
     const { currentPassword, newPassword } = req.body;
-    const userId = req.user!.id;
+    const userId = req.user.id;
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId }
-    });
+    const result = await pool.query('SELECT password FROM users WHERE id = $1', [userId]);
 
-    if (!user) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
 
     // Verify current password
-    const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+    const isValidPassword = await bcrypt.compare(currentPassword, result.rows[0].password);
     if (!isValidPassword) {
       return res.status(400).json({ message: 'Current password is incorrect' });
     }
@@ -133,10 +112,10 @@ router.put('/change-password', authenticateToken, [
     // Hash new password
     const hashedNewPassword = await bcrypt.hash(newPassword, 12);
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { password: hashedNewPassword }
-    });
+    await pool.query(
+      'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [hashedNewPassword, userId]
+    );
 
     res.json({ message: 'Password changed successfully' });
   } catch (error) {
@@ -146,7 +125,7 @@ router.put('/change-password', authenticateToken, [
 });
 
 // Delete user (Admin only)
-router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
+router.delete('/:id', authenticateToken, requireAdmin, async (req: any, res: any) => {
   try {
     const { id } = req.params;
 
@@ -155,17 +134,13 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
       return res.status(400).json({ message: 'Cannot delete your own account' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id }
-    });
+    const user = await pool.query('SELECT id FROM users WHERE id = $1', [id]);
 
-    if (!user) {
+    if (user.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    await prisma.user.delete({
-      where: { id }
-    });
+    await pool.query('DELETE FROM users WHERE id = $1', [id]);
 
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
