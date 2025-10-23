@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { SITE_CONFIG } from '../config/site';
 import { 
   Users, 
   BookOpen, 
@@ -61,7 +62,7 @@ const Layout: React.FC = () => {
               <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">E</span>
               </div>
-              <span className="text-xl font-bold text-pastel-800">EnTech</span>
+              <span className="text-xl font-bold text-pastel-800">{SITE_CONFIG.name}</span>
             </div>
           </div>
 
@@ -143,7 +144,7 @@ const Layout: React.FC = () => {
             
             <div className="flex items-center space-x-4">
               <h1 className="text-2xl font-bold text-pastel-800">
-                {navigation.find(item => isActive(item.href))?.name || 'EnTech'}
+                {navigation.find(item => isActive(item.href))?.name || SITE_CONFIG.name}
               </h1>
             </div>
           </div>

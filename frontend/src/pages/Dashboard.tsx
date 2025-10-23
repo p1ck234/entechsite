@@ -42,6 +42,13 @@ const Dashboard: React.FC = () => {
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
+        // Set some default data to prevent blank screen
+        setStats({
+          totalEmployees: 0,
+          totalCourses: 0,
+          completedCourses: 0,
+          inProgressCourses: 0,
+        });
       } finally {
         setLoading(false);
       }
@@ -139,12 +146,12 @@ const Dashboard: React.FC = () => {
                 <div key={employee.id} className="flex items-center space-x-3 p-3 bg-white/50 rounded-lg">
                   <div className="w-10 h-10 bg-primary-500 rounded-full flex items-center justify-center">
                     <span className="text-white font-medium text-sm">
-                      {employee.firstName.charAt(0)}{employee.lastName.charAt(0)}
+                      {employee.firstName?.charAt(0) || '?'}{employee.lastName?.charAt(0) || '?'}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-pastel-800 truncate">
-                      {employee.firstName} {employee.lastName}
+                      {employee.firstName || 'Имя'} {employee.lastName || 'Фамилия'}
                     </p>
                     <p className="text-xs text-pastel-600 truncate">{employee.position}</p>
                   </div>
