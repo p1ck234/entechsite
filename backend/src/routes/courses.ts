@@ -5,7 +5,7 @@ import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
 
 // Get all courses
@@ -272,12 +272,15 @@ router.post('/:id/progress', authenticateToken, [
 // Get user's course progress
 router.get('/progress/user', authenticateToken, async (req: any, res: any) => {
   try {
+    console.log('Getting user progress for user:', req.user);
     const userId = req.user?.id;
 
     if (!userId) {
+      console.log('User not authenticated');
       return res.status(401).json({ message: 'User not authenticated' });
     }
 
+    console.log('Querying progress for user ID:', userId);
     const result = await pool.query(
       `SELECT cp.*, c.title, c.description, c.duration, c.google_drive_url
        FROM course_progress cp
@@ -287,6 +290,7 @@ router.get('/progress/user', authenticateToken, async (req: any, res: any) => {
       [userId]
     );
 
+    console.log('Progress result:', result.rows);
     res.json({ progress: result.rows });
   } catch (error) {
     console.error('Get user progress error:', error);

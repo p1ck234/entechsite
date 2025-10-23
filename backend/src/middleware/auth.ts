@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { Pool } from 'pg';
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
 
 export interface AuthRequest extends Request {
@@ -27,7 +27,8 @@ export const authenticateToken = async (
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    const jwtSecret = process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-change-this-in-production';
+    const decoded = jwt.verify(token, jwtSecret) as any;
     const result = await pool.query(
       'SELECT id, email, role FROM users WHERE id = $1',
       [decoded.userId]
@@ -40,6 +41,7 @@ export const authenticateToken = async (
     req.user = result.rows[0];
     return next();
   } catch (error) {
+    console.error('Auth error:', error);
     return res.status(403).json({ message: 'Invalid or expired token' });
   }
 };

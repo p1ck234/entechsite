@@ -5,7 +5,7 @@ import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
 
 // Get all employees

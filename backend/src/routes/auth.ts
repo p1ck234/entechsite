@@ -6,7 +6,7 @@ import { Pool } from 'pg';
 
 const router = express.Router();
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
 
 // Register
@@ -44,7 +44,7 @@ router.post('/register', [
     // Generate JWT
     const token = jwt.sign(
       { userId: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET!,
+      process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-change-this-in-production',
       { expiresIn: '7d' }
     );
 
@@ -90,7 +90,7 @@ router.post('/login', [
     // Generate JWT
     const token = jwt.sign(
       { userId: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET!,
+      process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-change-this-in-production',
       { expiresIn: '7d' }
     );
 
@@ -119,7 +119,7 @@ router.get('/me', async (req, res) => {
       return res.status(401).json({ message: 'Access token required' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-change-this-in-production') as any;
     const result = await pool.query(
       'SELECT id, email, role, created_at FROM users WHERE id = $1',
       [decoded.userId]
