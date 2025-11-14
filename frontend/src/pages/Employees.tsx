@@ -5,6 +5,7 @@ import { Employee, EmployeesResponse } from '../types';
 import { Search, Edit, Trash2, Phone, Mail, MessageCircle, UserPlus } from 'lucide-react';
 import EmployeeModal from '../components/EmployeeModal';
 import UserModal from '../components/UserModal';
+import ImageWithLoader from '../components/ImageWithLoader';
 
 const Employees: React.FC = () => {
   const { isAdmin } = useAuth();
@@ -134,16 +135,16 @@ const Employees: React.FC = () => {
           {employees.map((employee) => (
             <div key={employee.id} className="card p-6 hover:scale-105 transition-transform">
               <div className="flex items-start space-x-4">
-                <div className="w-16 h-16 bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <div className="w-16 h-16 bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
                   {employee.photo ? (
-                    <img
+                    <ImageWithLoader
                       src={employee.photo}
                       alt={`${employee.firstName} ${employee.lastName}`}
                       className="w-16 h-16 rounded-full object-cover"
                     />
                   ) : (
                     <span className="text-white font-bold text-lg">
-                      {employee.firstName.charAt(0)}{employee.lastName.charAt(0)}
+                      {employee.firstName?.charAt(0) || '?'}{employee.lastName?.charAt(0) || '?'}
                     </span>
                   )}
                 </div>

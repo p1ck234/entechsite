@@ -4,6 +4,7 @@ import { eventsAPI } from '../api/client';
 import { Event, EventsResponse } from '../types';
 import { ExternalLink, Plus, Edit, Trash2, Calendar } from 'lucide-react';
 import EventModal from '../components/EventModal';
+import ImageWithLoader from '../components/ImageWithLoader';
 
 const Life: React.FC = () => {
   const { isAdmin } = useAuth();
@@ -111,12 +112,12 @@ const Life: React.FC = () => {
                   <div className="grid grid-cols-2 gap-1 h-full">
                     {event.previewImages.slice(0, 4).map((image, index) => (
                       <div key={index} className="relative overflow-hidden">
-                        <img
+                        <ImageWithLoader
                           src={image}
                           alt={`${event.title} ${index + 1}`}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300x200?text=Image';
+                            // Fallback handled in component
                           }}
                         />
                       </div>

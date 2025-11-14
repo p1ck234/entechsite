@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { Event } from '../types';
 import { eventsAPI } from '../api/client';
+import ImageWithLoader from './ImageWithLoader';
 
 interface EventModalProps {
   event: Event | null;
@@ -208,19 +209,16 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose }) => {
               {formData.previewImages.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
                   {formData.previewImages.map((image, index) => (
-                    <div key={index} className="relative group">
-                      <img
+                    <div key={index} className="relative group h-24">
+                      <ImageWithLoader
                         src={image}
                         alt={`Preview ${index + 1}`}
-                        className="w-full h-24 object-cover rounded-lg"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150x100?text=Image';
-                        }}
+                        className="w-full h-full object-cover rounded-lg"
                       />
                       <button
                         type="button"
                         onClick={() => handleRemoveImage(index)}
-                        className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
