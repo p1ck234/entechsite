@@ -132,3 +132,20 @@ export interface CourseForm {
   googleDriveUrl: string;
   duration?: number;
 }
+
+export interface Event {
+  id: string;
+  title: string;
+  description?: string;
+  googleDriveUrl: string;
+  previewImages: string[];
+  eventDate?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventsResponse {
+  events: Event[];
+  pagination: PaginationInfo;
+}

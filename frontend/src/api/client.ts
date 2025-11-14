@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse } from '../types';
+import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse } from '../types';
 import { SITE_CONFIG } from '../config/site';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -285,6 +285,66 @@ export const usersAPI = {
     photo?: string;
   }): Promise<{ message: string; user: User; employee: Employee }> => {
     const response = await api.post('/users', userData);
+    return response.data;
+  },
+};
+
+// Events API
+export const eventsAPI = {
+  getEvents: async (params?: {
+    page?: number;
+    limit?: number;
+  }): Promise<EventsResponse> => {
+    const response = await api.get('/events', { params });
+    
+    // Transform snake_case to camelCase
+    const transformedEvents = response.data.events.map((event: any) => ({
+      id: event.id,
+      title: event.title,
+      description: event.description,
+      googleDriveUrl: event.google_drive_url,
+      previewImages: event.preview_images || [],
+      eventDate: event.event_date,
+      isActive: event.is_active,
+      createdAt: event.created_at,
+      updatedAt: event.updated_at
+    }));
+
+    return {
+      events: transformedEvents,
+      pagination: response.data.pagination
+    };
+  },
+
+  getEvent: async (id: string): Promise<Event> => {
+    const response = await api.get(`/events/${id}`);
+    const event = response.data;
+    
+    return {
+      id: event.id,
+      title: event.title,
+      description: event.description,
+      googleDriveUrl: event.google_drive_url,
+      previewImages: event.preview_images || [],
+      eventDate: event.event_date,
+      isActive: event.is_active,
+      createdAt: event.created_at,
+      updatedAt: event.updated_at
+    };
+  },
+
+  createEvent: async (event: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>): Promise<{ message: string; event: Event }> => {
+    const response = await api.post('/events', event);
+    return response.data;
+  },
+
+  updateEvent: async (id: string, event: Partial<Event>): Promise<{ message: string; event: Event }> => {
+    const response = await api.put(`/events/${id}`, event);
+    return response.data;
+  },
+
+  deleteEvent: async (id: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/events/${id}`);
     return response.data;
   },
 };

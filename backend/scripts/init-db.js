@@ -92,6 +92,20 @@ async function initDatabase() {
       );
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS events (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        google_drive_url VARCHAR(500) NOT NULL,
+        preview_images TEXT[], -- Array of image URLs
+        event_date DATE,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Создание индексов
     await pool.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department);');
@@ -100,6 +114,8 @@ async function initDatabase() {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_lessons_order ON lessons(course_id, order_index);');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_lesson_progress_user ON lesson_progress(user_id);');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_course_progress_user ON course_progress(user_id);');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_events_active ON events(is_active);');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date DESC);');
 
     console.log('✅ База данных успешно инициализирована!');
     
