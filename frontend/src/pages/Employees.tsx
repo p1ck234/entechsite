@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { employeesAPI } from '../api/client';
 import { Employee, EmployeesResponse } from '../types';
-import { Search, Edit, Trash2, Phone, Mail, MessageCircle, UserPlus } from 'lucide-react';
+import { Search, Edit, Trash2, Phone, Mail, MessageCircle, UserPlus, RotateCcw } from 'lucide-react';
 import EmployeeModal from '../components/EmployeeModal';
 import UserModal from '../components/UserModal';
 import ImageWithLoader from '../components/ImageWithLoader';
@@ -18,6 +18,7 @@ const Employees: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [showInactive, setShowInactive] = useState(false);
 
   const departments = [
     'IT-Отдел', 'Отдел продаж', 'Отдел финансистов', 'Отдел стройки', 'Отдел производства', 'Отдел управления и планирование'
@@ -31,6 +32,7 @@ const Employees: React.FC = () => {
         limit: 12,
         search: searchTerm || undefined,
         department: selectedDepartment || undefined,
+        showInactive: isAdmin && showInactive,
       });
       setEmployees(response.employees);
       setTotalPages(response.pagination.pages);
@@ -43,7 +45,7 @@ const Employees: React.FC = () => {
 
   useEffect(() => {
     fetchEmployees();
-  }, [currentPage, searchTerm, selectedDepartment]);
+  }, [currentPage, searchTerm, selectedDepartment, showInactive]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +62,19 @@ const Employees: React.FC = () => {
         fetchEmployees();
       } catch (error) {
         console.error('Error deleting employee:', error);
+      }
+    }
+  };
+
+  const handleRestore = async (id: string) => {
+    if (!isAdmin) return;
+    
+    if (window.confirm('Вы уверены, что хотите восстановить этого сотрудника?')) {
+      try {
+        await employeesAPI.updateEmployee(id, { isActive: true });
+        fetchEmployees();
+      } catch (error) {
+        console.error('Error restoring employee:', error);
       }
     }
   };
@@ -95,7 +110,37 @@ const Employees: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <div className="glass-card p-6">
+      <div className="glass-card p-6 space-y-4">
+        {isAdmin && (
+          <div className="flex items-center space-x-4 pb-4 border-b border-pastel-200">
+            <button
+              onClick={() => {
+                setShowInactive(false);
+                setCurrentPage(1);
+              }}
+              className={`px-4 py-2 rounded-lg transition-colors ${
+                !showInactive
+                  ? 'bg-primary-500 text-white'
+                  : 'bg-pastel-100 text-pastel-700 hover:bg-pastel-200'
+              }`}
+            >
+              Активные
+            </button>
+            <button
+              onClick={() => {
+                setShowInactive(true);
+                setCurrentPage(1);
+              }}
+              className={`px-4 py-2 rounded-lg transition-colors ${
+                showInactive
+                  ? 'bg-primary-500 text-white'
+                  : 'bg-pastel-100 text-pastel-700 hover:bg-pastel-200'
+              }`}
+            >
+              Удаленные
+            </button>
+          </div>
+        )}
         <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
@@ -133,7 +178,12 @@ const Employees: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {employees.map((employee) => (
-            <div key={employee.id} className="card p-6 hover:scale-105 transition-transform">
+            <div 
+              key={employee.id} 
+              className={`card p-6 hover:scale-105 transition-transform ${
+                !employee.isActive ? 'opacity-60 border-2 border-red-200' : ''
+              }`}
+            >
               <div className="flex items-start space-x-4">
                 <div className="w-16 h-16 bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
                   {employee.photo ? (
@@ -149,9 +199,16 @@ const Employees: React.FC = () => {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold text-pastel-800 truncate">
-                    {employee.firstName} {employee.lastName} {employee.middleName}
-                  </h3>
+                  <div className="flex items-center space-x-2 mb-1">
+                    <h3 className="text-lg font-semibold text-pastel-800 truncate">
+                      {employee.firstName} {employee.lastName} {employee.middleName}
+                    </h3>
+                    {!employee.isActive && (
+                      <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-semibold rounded">
+                        Удален
+                      </span>
+                    )}
+                  </div>
                   <p className="text-pastel-600 text-sm mb-1">{employee.position}</p>
                   <p className="text-pastel-500 text-xs mb-1">{employee.department}</p>
                   {employee.userRole === 'ADMIN' && (
@@ -192,18 +249,32 @@ const Employees: React.FC = () => {
               
               {isAdmin && (
                 <div className="flex justify-end space-x-2 mt-4 pt-4 border-t border-pastel-200">
-                  <button
-                    onClick={() => handleEdit(employee)}
-                    className="p-2 text-pastel-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(employee.id)}
-                    className="p-2 text-pastel-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {!employee.isActive ? (
+                    <button
+                      onClick={() => handleRestore(employee.id)}
+                      className="p-2 text-pastel-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                      title="Восстановить"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleEdit(employee)}
+                        className="p-2 text-pastel-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                        title="Редактировать"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(employee.id)}
+                        className="p-2 text-pastel-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Удалить"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>

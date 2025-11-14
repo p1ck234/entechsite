@@ -65,6 +65,7 @@ export const employeesAPI = {
     limit?: number;
     search?: string;
     department?: string;
+    showInactive?: boolean;
   }): Promise<EmployeesResponse> => {
     const response = await api.get('/employees', { params });
     

@@ -13,7 +13,8 @@ router.get('/', authenticateToken, [
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
   query('search').optional().isString(),
-  query('department').optional().isString()
+  query('department').optional().isString(),
+  query('showInactive').optional().isBoolean()
 ], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
@@ -25,9 +26,10 @@ router.get('/', authenticateToken, [
     const limit = parseInt(req.query.limit as string) || 20;
     const search = req.query.search as string;
     const department = req.query.department as string;
+    const showInactive = req.query.showInactive === 'true' && req.user?.role === 'ADMIN';
     const skip = (page - 1) * limit;
 
-    let whereClause = 'WHERE is_active = true';
+    let whereClause = showInactive ? 'WHERE is_active = false' : 'WHERE is_active = true';
     const params: any[] = [];
     let paramCount = 0;
 
