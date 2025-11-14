@@ -319,6 +319,11 @@ export const usersAPI = {
     const response = await api.post('/users', userData);
     return response.data;
   },
+
+  changeUserPassword: async (email: string, newPassword: string): Promise<{ message: string; email: string }> => {
+    const response = await api.put('/users/password-by-email', { email, newPassword });
+    return response.data;
+  },
 };
 
 // Events API

@@ -158,7 +158,44 @@ router.put('/:id/role', authenticateToken, requireAdmin, [
   }
 });
 
-// Change password
+// Admin change user password by email (Admin only)
+router.put('/password-by-email', authenticateToken, requireAdmin, [
+  body('email').isEmail().normalizeEmail(),
+  body('newPassword').isLength({ min: 6 })
+], async (req: any, res: any) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { email, newPassword } = req.body;
+
+    // Check if user exists
+    const user = await pool.query('SELECT id, email FROM users WHERE email = $1', [email]);
+    if (user.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    await pool.query(
+      'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE email = $2',
+      [hashedPassword, email]
+    );
+
+    res.json({ 
+      message: 'Password changed successfully',
+      email: email
+    });
+  } catch (error) {
+    console.error('Admin change password error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Change password (for current user)
 router.put('/change-password', authenticateToken, [
   body('currentPassword').notEmpty(),
   body('newPassword').isLength({ min: 6 })

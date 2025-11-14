@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { employeesAPI } from '../api/client';
 import { Employee, EmployeesResponse } from '../types';
-import { Search, Edit, Trash2, Phone, Mail, MessageCircle, UserPlus, RotateCcw } from 'lucide-react';
+import { Search, Edit, Trash2, Phone, Mail, MessageCircle, UserPlus, RotateCcw, Lock } from 'lucide-react';
 import EmployeeModal from '../components/EmployeeModal';
 import UserModal from '../components/UserModal';
+import ChangePasswordModal from '../components/ChangePasswordModal';
 import ImageWithLoader from '../components/ImageWithLoader';
 
 const Employees: React.FC = () => {
@@ -17,6 +18,8 @@ const Employees: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordEmployee, setPasswordEmployee] = useState<Employee | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showInactive, setShowInactive] = useState(false);
 
@@ -259,6 +262,18 @@ const Employees: React.FC = () => {
                     </button>
                   ) : (
                     <>
+                      {employee.userRole && (
+                        <button
+                          onClick={() => {
+                            setPasswordEmployee(employee);
+                            setShowPasswordModal(true);
+                          }}
+                          className="p-2 text-pastel-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Изменить пароль"
+                        >
+                          <Lock className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleEdit(employee)}
                         className="p-2 text-pastel-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
@@ -319,6 +334,21 @@ const Employees: React.FC = () => {
           onClose={() => {
             setShowUserModal(false);
             fetchEmployees();
+          }}
+        />
+      )}
+
+      {/* Change Password Modal */}
+      {showPasswordModal && passwordEmployee && (
+        <ChangePasswordModal
+          employeeEmail={passwordEmployee.email}
+          employeeName={`${passwordEmployee.firstName} ${passwordEmployee.lastName}`}
+          onClose={() => {
+            setShowPasswordModal(false);
+            setPasswordEmployee(null);
+          }}
+          onSuccess={() => {
+            // Optionally show success message or refresh data
           }}
         />
       )}
