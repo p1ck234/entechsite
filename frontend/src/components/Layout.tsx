@@ -6,11 +6,12 @@ import {
   Users, 
   BookOpen, 
   Home, 
-  User, 
+  LayoutDashboard,
   Menu, 
-  X, 
   LogOut,
-  Settings
+  Settings,
+  Heart,
+  Calendar
 } from 'lucide-react';
 
 const Layout: React.FC = () => {
@@ -26,9 +27,12 @@ const Layout: React.FC = () => {
   }
 
   const navigation = [
-    { name: 'Главная', href: '/dashboard', icon: Home },
-    { name: 'Сотрудники', href: '/employees', icon: Users },
-    { name: 'Курсы', href: '/courses', icon: BookOpen },
+    { name: 'Главная', href: '/home', icon: Home },
+    { name: 'Дашборд', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Адресная книга', href: '/employees', icon: Users },
+    { name: 'База знаний', href: '/courses', icon: BookOpen },
+    { name: 'Наша жизнь', href: '/life', icon: Heart },
+    { name: 'Календарь мероприятий', href: '/events', icon: Calendar },
   ];
 
   const handleLogout = () => {
@@ -52,7 +56,7 @@ const Layout: React.FC = () => {
 
       {/* Sidebar */}
       <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
+        fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="flex h-full flex-col glass-effect">
@@ -78,15 +82,15 @@ const Layout: React.FC = () => {
                     setSidebarOpen(false);
                   }}
                   className={`
-                    w-full flex items-center px-4 py-3 rounded-lg transition-all duration-200
+                    w-full flex items-center px-4 py-3 rounded-lg transition-all duration-200 whitespace-nowrap
                     ${isActive(item.href)
                       ? 'bg-primary-500/20 text-primary-700 border border-primary-200'
                       : 'text-pastel-600 hover:bg-white/20 hover:text-pastel-800'
                     }
                   `}
                 >
-                  <Icon className="w-5 h-5 mr-3" />
-                  {item.name}
+                  <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
+                  <span className="truncate">{item.name}</span>
                 </button>
               );
             })}
