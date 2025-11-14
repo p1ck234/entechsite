@@ -13,6 +13,7 @@ import {
   Heart,
   Calendar
 } from 'lucide-react';
+import Logo from './Logo';
 
 const Layout: React.FC = () => {
   const { user, logout, isAdmin, isAuthenticated } = useAuth();
@@ -61,13 +62,8 @@ const Layout: React.FC = () => {
       `}>
         <div className="flex h-full flex-col glass-effect">
           {/* Logo */}
-          <div className="flex h-16 items-center justify-center border-b border-white/20">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">E</span>
-              </div>
-              <span className="text-xl font-bold text-pastel-800">{SITE_CONFIG.name}</span>
-            </div>
+          <div className="flex h-16 items-center justify-center border-b border-white/20 px-4">
+            <Logo size="md" />
           </div>
 
           {/* Navigation */}

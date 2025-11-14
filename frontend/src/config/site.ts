@@ -1,7 +1,7 @@
 // Site configuration
 export const SITE_CONFIG = {
-  name: 'EnTech',
-  description: 'Система управления компанией',
+  name: 'Энтех Групп',
+  description: 'Управление компанией',
   url: import.meta.env.VITE_SITE_URL || 'http://localhost:5173',
   apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:3001/api',
   version: '1.0.0',

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
+import Logo from '../components/Logo';
 
 const Login: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -42,11 +43,8 @@ const Login: React.FC = () => {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center space-x-3 mb-4">
-            <div className="w-12 h-12 bg-primary-500 rounded-xl flex items-center justify-center">
-              <span className="text-white font-bold text-xl">E</span>
-            </div>
-            <span className="text-3xl font-bold text-pastel-800">EnTech</span>
+          <div className="flex justify-center mb-4">
+            <Logo size="lg" />
           </div>
           <p className="text-pastel-600">Войдите в систему управления компанией</p>
         </div>

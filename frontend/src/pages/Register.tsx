@@ -60,7 +60,7 @@ const Register: React.FC = () => {
             <div className="w-12 h-12 bg-primary-500 rounded-xl flex items-center justify-center">
               <span className="text-white font-bold text-xl">E</span>
             </div>
-            <span className="text-3xl font-bold text-pastel-800">EnTech</span>
+            <span className="text-3xl font-bold text-pastel-800">Энтех Групп</span>
           </div>
           <p className="text-pastel-600">Создайте аккаунт для доступа к системе</p>
         </div>

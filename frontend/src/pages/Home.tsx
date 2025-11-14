@@ -1,5 +1,6 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
+import Logo from '../components/Logo';
 
 const Home: React.FC = () => {
   const location = useLocation();
@@ -72,14 +73,9 @@ const Home: React.FC = () => {
               </div>
 
               {/* Центр – ENTECH GROUP */}
-              <div className="flex items-center justify-center">
-                <div className="text-center uppercase transition-all duration-300 hover:scale-110 cursor-default">
-                  <p className="text-[#b81f1f] font-bold text-2xl sm:text-3xl md:text-4xl lg:text-5xl leading-none">
-                    ENTECH
-                  </p>
-                  <p className="text-[#b81f1f] font-bold text-xl sm:text-2xl md:text-3xl lg:text-4xl leading-tight">
-                    GROUP
-                  </p>
+              <div className="flex items-center justify-center w-full h-full">
+                <div className="transition-all duration-300 hover:scale-110 cursor-default flex items-center justify-center">
+                  <Logo size="lg" />
                 </div>
               </div>
 
