@@ -106,6 +106,21 @@ async function initDatabase() {
       );
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS calendar_events (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        event_date DATE NOT NULL,
+        event_time TIME,
+        location VARCHAR(255),
+        is_all_day BOOLEAN DEFAULT false,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Создание индексов
     await pool.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department);');
@@ -116,6 +131,7 @@ async function initDatabase() {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_course_progress_user ON course_progress(user_id);');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_events_active ON events(is_active);');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date DESC);');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_calendar_events_date ON calendar_events(event_date);');
 
     console.log('✅ База данных успешно инициализирована!');
     

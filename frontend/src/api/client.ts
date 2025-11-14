@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse } from '../types';
+import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, CalendarEvent } from '../types';
 import { SITE_CONFIG } from '../config/site';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -346,6 +346,78 @@ export const eventsAPI = {
 
   deleteEvent: async (id: string): Promise<{ message: string }> => {
     const response = await api.delete(`/events/${id}`);
+    return response.data;
+  },
+};
+
+// Calendar API
+export const calendarAPI = {
+  getEvents: async (params?: {
+    startDate?: string;
+    endDate?: string;
+    month?: number;
+    year?: number;
+  }): Promise<{ events: CalendarEvent[] }> => {
+    const response = await api.get('/calendar', { params });
+    
+    // Transform snake_case to camelCase
+    const transformedEvents = response.data.events.map((event: any) => ({
+      id: event.id,
+      title: event.title,
+      description: event.description,
+      eventDate: event.event_date,
+      eventTime: event.event_time,
+      location: event.location,
+      isAllDay: event.is_all_day,
+      createdBy: event.created_by,
+      createdByEmail: event.created_by_email,
+      createdAt: event.created_at,
+      updatedAt: event.updated_at
+    }));
+
+    return {
+      events: transformedEvents
+    };
+  },
+
+  getEvent: async (id: string): Promise<CalendarEvent> => {
+    const response = await api.get(`/calendar/${id}`);
+    const event = response.data;
+    
+    return {
+      id: event.id,
+      title: event.title,
+      description: event.description,
+      eventDate: event.event_date,
+      eventTime: event.event_time,
+      location: event.location,
+      isAllDay: event.is_all_day,
+      createdBy: event.created_by,
+      createdByEmail: event.created_by_email,
+      createdAt: event.created_at,
+      updatedAt: event.updated_at
+    };
+  },
+
+  createEvent: async (event: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'createdByEmail'>): Promise<{ message: string; event: CalendarEvent }> => {
+    console.log('calendarAPI.createEvent called with:', event);
+    try {
+      const response = await api.post('/calendar', event);
+      console.log('calendarAPI.createEvent response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('calendarAPI.createEvent error:', error);
+      throw error;
+    }
+  },
+
+  updateEvent: async (id: string, event: Partial<CalendarEvent>): Promise<{ message: string; event: CalendarEvent }> => {
+    const response = await api.put(`/calendar/${id}`, event);
+    return response.data;
+  },
+
+  deleteEvent: async (id: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/calendar/${id}`);
     return response.data;
   },
 };

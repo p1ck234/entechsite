@@ -149,3 +149,17 @@ export interface EventsResponse {
   events: Event[];
   pagination: PaginationInfo;
 }
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  description?: string;
+  eventDate: string;
+  eventTime?: string;
+  location?: string;
+  isAllDay: boolean;
+  createdBy?: number;
+  createdByEmail?: string;
+  createdAt: string;
+  updatedAt: string;
+}

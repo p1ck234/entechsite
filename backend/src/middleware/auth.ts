@@ -38,7 +38,11 @@ export const authenticateToken = async (
       return res.status(401).json({ message: 'Invalid token' });
     }
 
-    req.user = result.rows[0];
+    req.user = {
+      id: String(result.rows[0].id),
+      email: result.rows[0].email,
+      role: result.rows[0].role
+    };
     return next();
   } catch (error) {
     console.error('Auth error:', error);

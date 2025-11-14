@@ -12,6 +12,7 @@ import courseRoutes from './routes/courses';
 import lessonRoutes from './routes/lessons';
 import userRoutes from './routes/users';
 import eventRoutes from './routes/events';
+import calendarRoutes from './routes/calendar';
 
 dotenv.config();
 
@@ -48,6 +49,7 @@ app.use('/api/courses', courseRoutes);
 app.use('/api/lessons', lessonRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/calendar', calendarRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
