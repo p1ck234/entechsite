@@ -29,21 +29,36 @@ router.get('/', authenticateToken, [
     const showInactive = req.query.showInactive === 'true' && req.user?.role === 'ADMIN';
     const skip = (page - 1) * limit;
 
-    let whereClause = showInactive ? 'WHERE is_active = false' : 'WHERE is_active = true';
+    let whereClause = showInactive ? 'WHERE e.is_active = false' : 'WHERE e.is_active = true';
     const params: any[] = [];
     let paramCount = 0;
 
     if (search) {
       paramCount++;
-      whereClause += ` AND (first_name ILIKE $${paramCount} OR last_name ILIKE $${paramCount} OR position ILIKE $${paramCount} OR email ILIKE $${paramCount})`;
-      params.push(`%${search}%`);
+      const searchPattern = `%${search}%`;
+      whereClause += ` AND (
+        e.first_name ILIKE $${paramCount} OR 
+        e.last_name ILIKE $${paramCount} OR 
+        e.middle_name ILIKE $${paramCount} OR
+        e.position ILIKE $${paramCount} OR 
+        e.email ILIKE $${paramCount}
+      )`;
+      params.push(searchPattern);
     }
 
     if (department) {
       paramCount++;
-      whereClause += ` AND department ILIKE $${paramCount}`;
+      whereClause += ` AND e.department ILIKE $${paramCount}`;
       params.push(`%${department}%`);
     }
+
+    const limitParam = paramCount + 1;
+    const offsetParam = paramCount + 2;
+    const queryParams = [...params, limit, skip];
+
+    console.log('SQL Query:', `SELECT e.*, u.role as user_role FROM employees e LEFT JOIN users u ON e.email = u.email ${whereClause} ORDER BY e.first_name ASC LIMIT $${limitParam} OFFSET $${offsetParam}`);
+    console.log('Query params:', queryParams);
+    console.log('Param count:', paramCount, 'Limit param:', limitParam, 'Offset param:', offsetParam);
 
     const [employeesResult, totalResult] = await Promise.all([
       pool.query(
@@ -52,10 +67,10 @@ router.get('/', authenticateToken, [
          LEFT JOIN users u ON e.email = u.email 
          ${whereClause} 
          ORDER BY e.first_name ASC 
-         LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
-        [...params, limit, skip]
+         LIMIT $${limitParam} OFFSET $${offsetParam}`,
+        queryParams
       ),
-      pool.query(`SELECT COUNT(*) FROM employees ${whereClause}`, params)
+      pool.query(`SELECT COUNT(*) FROM employees e ${whereClause}`, params)
     ]);
 
     const employees = employeesResult.rows;
@@ -70,9 +85,16 @@ router.get('/', authenticateToken, [
         pages: Math.ceil(total / limit)
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Get employees error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error('Error details:', error?.message || error);
+    if (error?.code) {
+      console.error('PostgreSQL error code:', error.code);
+    }
+    res.status(500).json({ 
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? (error?.message || String(error)) : undefined
+    });
   }
 });
 

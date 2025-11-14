@@ -23,6 +23,13 @@ const Employees: React.FC = () => {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showInactive, setShowInactive] = useState(false);
 
+  // Ensure showInactive is always false for non-admin users
+  useEffect(() => {
+    if (!isAdmin && showInactive) {
+      setShowInactive(false);
+    }
+  }, [isAdmin, showInactive]);
+
   const departments = [
     'IT-Отдел', 'Отдел продаж', 'Отдел финансистов', 'Отдел стройки', 'Отдел производства', 'Отдел управления и планирование'
   ];
@@ -46,15 +53,22 @@ const Employees: React.FC = () => {
     }
   };
 
+  // Reset page when filters change
   useEffect(() => {
-    fetchEmployees();
+    setCurrentPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, selectedDepartment, showInactive]);
+
+  // Fetch employees with debounce for search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchEmployees();
+    }, searchTerm ? 300 : 0); // 300ms delay for search, immediate for other filters
+
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, searchTerm, selectedDepartment, showInactive]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setCurrentPage(1);
-    fetchEmployees();
-  };
 
   const handleDelete = async (id: string) => {
     if (!isAdmin) return;
@@ -144,7 +158,7 @@ const Employees: React.FC = () => {
             </button>
           </div>
         )}
-        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-4">
+        <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-pastel-400 w-5 h-5" />
@@ -167,10 +181,7 @@ const Employees: React.FC = () => {
               <option key={dept} value={dept}>{dept}</option>
             ))}
           </select>
-          <button type="submit" className="btn-secondary">
-            Найти
-          </button>
-        </form>
+        </div>
       </div>
 
       {/* Employees Grid */}
