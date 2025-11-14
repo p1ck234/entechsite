@@ -9,6 +9,81 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
 
+// Create user (Admin only) - creates both user and employee
+router.post('/', authenticateToken, requireAdmin, [
+  body('email').isEmail().normalizeEmail(),
+  body('password').isLength({ min: 6 }),
+  body('role').isIn(['ADMIN', 'USER']),
+  body('firstName').notEmpty().trim(),
+  body('lastName').notEmpty().trim(),
+  body('middleName').optional().isString().trim(),
+  body('position').notEmpty().trim(),
+  body('department').notEmpty().trim(),
+  body('phone').notEmpty().trim(),
+  body('telegram').optional().isString().trim(),
+  body('photo').optional().isString()
+], async (req: any, res: any) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const {
+      email,
+      password,
+      role,
+      firstName,
+      lastName,
+      middleName,
+      position,
+      department,
+      phone,
+      telegram,
+      photo
+    } = req.body;
+
+    // Check if user already exists
+    const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ message: 'User with this email already exists' });
+    }
+
+    // Check if active employee already exists
+    const existingEmployee = await pool.query('SELECT id FROM employees WHERE email = $1 AND is_active = true', [email]);
+    if (existingEmployee.rows.length > 0) {
+      return res.status(400).json({ message: 'Employee with this email already exists' });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Create user
+    const userResult = await pool.query(
+      'INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING id, email, role, created_at',
+      [email, hashedPassword, role]
+    );
+
+    const user = userResult.rows[0];
+
+    // Create employee
+    const employeeResult = await pool.query(
+      `INSERT INTO employees (first_name, last_name, middle_name, position, department, email, phone, telegram, photo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [firstName, lastName, middleName, position, department, email, phone, telegram, photo]
+    );
+
+    res.status(201).json({
+      message: 'User and employee created successfully',
+      user,
+      employee: employeeResult.rows[0]
+    });
+  } catch (error) {
+    console.error('Create user error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 // Get all users (Admin only)
 router.get('/', authenticateToken, requireAdmin, async (req: any, res: any) => {
   try {

@@ -119,14 +119,8 @@ const Login: React.FC = () => {
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-pastel-600">
-              Нет аккаунта?{' '}
-              <Link
-                to="/register"
-                className="text-primary-600 hover:text-primary-700 font-medium transition-colors"
-              >
-                Зарегистрироваться
-              </Link>
+            <p className="text-pastel-600 text-sm">
+              Для получения доступа обратитесь к администратору
             </p>
           </div>
         </div>

@@ -19,6 +19,7 @@ export interface Employee {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  userRole?: 'ADMIN' | 'USER'; // Role from users table
 }
 
 export interface Course {

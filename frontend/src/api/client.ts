@@ -82,7 +82,8 @@ export const employeesAPI = {
       photo: emp.photo,
       isActive: emp.is_active,
       createdAt: emp.created_at,
-      updatedAt: emp.updated_at
+      updatedAt: emp.updated_at,
+      userRole: emp.user_role
     }));
 
     return {
@@ -109,7 +110,8 @@ export const employeesAPI = {
       photo: emp.photo,
       isActive: emp.is_active,
       createdAt: emp.created_at,
-      updatedAt: emp.updated_at
+      updatedAt: emp.updated_at,
+      userRole: emp.user_role
     };
   },
 
@@ -263,6 +265,26 @@ export const lessonsAPI = {
 
   updateProgress: async (lessonId: string, completed: boolean): Promise<{ message: string; progress: any }> => {
     const response = await api.post(`/lessons/${lessonId}/progress`, { completed });
+    return response.data;
+  },
+};
+
+// Users API (Admin only)
+export const usersAPI = {
+  createUser: async (userData: {
+    email: string;
+    password: string;
+    role: 'ADMIN' | 'USER';
+    firstName: string;
+    lastName: string;
+    middleName?: string;
+    position: string;
+    department: string;
+    phone: string;
+    telegram?: string;
+    photo?: string;
+  }): Promise<{ message: string; user: User; employee: Employee }> => {
+    const response = await api.post('/users', userData);
     return response.data;
   },
 };

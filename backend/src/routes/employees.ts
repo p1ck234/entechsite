@@ -45,7 +45,12 @@ router.get('/', authenticateToken, [
 
     const [employeesResult, totalResult] = await Promise.all([
       pool.query(
-        `SELECT * FROM employees ${whereClause} ORDER BY first_name ASC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
+        `SELECT e.*, u.role as user_role 
+         FROM employees e 
+         LEFT JOIN users u ON e.email = u.email 
+         ${whereClause} 
+         ORDER BY e.first_name ASC 
+         LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
         [...params, limit, skip]
       ),
       pool.query(`SELECT COUNT(*) FROM employees ${whereClause}`, params)
@@ -74,7 +79,13 @@ router.get('/:id', authenticateToken, async (req: any, res: any) => {
   try {
     const { id } = req.params;
 
-    const result = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
+    const result = await pool.query(
+      `SELECT e.*, u.role as user_role 
+       FROM employees e 
+       LEFT JOIN users u ON e.email = u.email 
+       WHERE e.id = $1`, 
+      [id]
+    );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Employee not found' });
@@ -120,8 +131,8 @@ router.post('/', authenticateToken, [
       photo
     } = req.body;
 
-    // Check if employee with email already exists
-    const existingEmployee = await pool.query('SELECT id FROM employees WHERE email = $1', [email]);
+    // Check if active employee with email already exists
+    const existingEmployee = await pool.query('SELECT id FROM employees WHERE email = $1 AND is_active = true', [email]);
 
     if (existingEmployee.rows.length > 0) {
       return res.status(400).json({ message: 'Employee with this email already exists' });
@@ -221,7 +232,7 @@ router.put('/:id', authenticateToken, [
   }
 });
 
-// Delete employee (Admin only)
+// Delete employee (Admin only) - also deletes associated user
 router.delete('/:id', authenticateToken, async (req: any, res: any) => {
   try {
     if (req.user?.role !== 'ADMIN') {
@@ -230,15 +241,31 @@ router.delete('/:id', authenticateToken, async (req: any, res: any) => {
 
     const { id } = req.params;
 
-    const employee = await pool.query('SELECT id FROM employees WHERE id = $1', [id]);
+    // Get employee with email
+    const employeeResult = await pool.query('SELECT id, email FROM employees WHERE id = $1', [id]);
 
-    if (employee.rows.length === 0) {
+    if (employeeResult.rows.length === 0) {
       return res.status(404).json({ message: 'Employee not found' });
     }
 
+    const employee = employeeResult.rows[0];
+    const employeeEmail = employee.email;
+
+    // Check if we're trying to delete the current admin
+    if (req.user?.email === employeeEmail) {
+      return res.status(400).json({ message: 'Cannot delete your own account' });
+    }
+
+    // Delete associated user if exists (this will cascade delete course_progress, lesson_progress)
+    const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [employeeEmail]);
+    if (userResult.rows.length > 0) {
+      await pool.query('DELETE FROM users WHERE email = $1', [employeeEmail]);
+    }
+
+    // Deactivate employee
     await pool.query('UPDATE employees SET is_active = false WHERE id = $1', [id]);
 
-    res.json({ message: 'Employee deactivated successfully' });
+    res.json({ message: 'Employee and associated user deleted successfully' });
   } catch (error) {
     console.error('Delete employee error:', error);
     res.status(500).json({ message: 'Internal server error' });

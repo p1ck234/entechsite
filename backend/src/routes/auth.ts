@@ -9,54 +9,9 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
 
-// Register
-router.post('/register', [
-  body('email').isEmail().normalizeEmail(),
-  body('password').isLength({ min: 6 }),
-  body('role').optional().isIn(['ADMIN', 'USER'])
-], async (req: any, res: any) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
-    const { email, password, role = 'USER' } = req.body;
-
-    // Check if user already exists
-    const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-
-    if (existingUser.rows.length > 0) {
-      return res.status(400).json({ message: 'User already exists' });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    // Create user
-    const result = await pool.query(
-      'INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING id, email, role, created_at',
-      [email, hashedPassword, role || 'USER']
-    );
-
-    const user = result.rows[0];
-
-    // Generate JWT
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-change-this-in-production',
-      { expiresIn: '7d' }
-    );
-
-    res.status(201).json({
-      message: 'User created successfully',
-      user,
-      token
-    });
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
+// Register - DISABLED: Only admins can create users now
+router.post('/register', async (req: any, res: any) => {
+  res.status(403).json({ message: 'Public registration is disabled. Please contact an administrator.' });
 });
 
 // Login

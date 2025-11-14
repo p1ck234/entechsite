@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { employeesAPI } from '../api/client';
 import { Employee, EmployeesResponse } from '../types';
-import { Search, Plus, Edit, Trash2, Phone, Mail, MessageCircle, User } from 'lucide-react';
+import { Search, Edit, Trash2, Phone, Mail, MessageCircle, UserPlus } from 'lucide-react';
 import EmployeeModal from '../components/EmployeeModal';
+import UserModal from '../components/UserModal';
 
 const Employees: React.FC = () => {
   const { isAdmin } = useAuth();
@@ -14,6 +15,7 @@ const Employees: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [showModal, setShowModal] = useState(false);
+  const [showUserModal, setShowUserModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
 
   const departments = [
@@ -66,11 +68,6 @@ const Employees: React.FC = () => {
     setShowModal(true);
   };
 
-  const handleAdd = () => {
-    setEditingEmployee(null);
-    setShowModal(true);
-  };
-
   const handleModalClose = () => {
     setShowModal(false);
     setEditingEmployee(null);
@@ -87,11 +84,11 @@ const Employees: React.FC = () => {
         </div>
         {isAdmin && (
           <button
-            onClick={handleAdd}
+            onClick={() => setShowUserModal(true)}
             className="mt-4 sm:mt-0 btn-primary flex items-center space-x-2"
           >
-            <Plus className="w-5 h-5" />
-            <span>Добавить сотрудника</span>
+            <UserPlus className="w-5 h-5" />
+            <span>Создать пользователя</span>
           </button>
         )}
       </div>
@@ -155,7 +152,16 @@ const Employees: React.FC = () => {
                     {employee.firstName} {employee.lastName} {employee.middleName}
                   </h3>
                   <p className="text-pastel-600 text-sm mb-1">{employee.position}</p>
-                  <p className="text-pastel-500 text-xs mb-3">{employee.department}</p>
+                  <p className="text-pastel-500 text-xs mb-1">{employee.department}</p>
+                  {employee.userRole === 'ADMIN' && (
+                    <p className="text-primary-600 text-xs font-semibold mb-3">Менеджер</p>
+                  )}
+                  {!employee.userRole && (
+                    <p className="text-pastel-400 text-xs mb-3">Не зарегистрирован</p>
+                  )}
+                  {employee.userRole === 'USER' && (
+                    <p className="text-pastel-500 text-xs mb-3">Пользователь</p>
+                  )}
                   
                   <div className="space-y-2">
                     <div className="flex items-center space-x-2 text-sm text-pastel-600">
@@ -227,11 +233,21 @@ const Employees: React.FC = () => {
         </div>
       )}
 
-      {/* Employee Modal */}
-      {showModal && (
+      {/* Employee Modal - only for editing */}
+      {showModal && editingEmployee && (
         <EmployeeModal
           employee={editingEmployee}
           onClose={handleModalClose}
+        />
+      )}
+
+      {/* User Modal */}
+      {showUserModal && (
+        <UserModal
+          onClose={() => {
+            setShowUserModal(false);
+            fetchEmployees();
+          }}
         />
       )}
     </div>
