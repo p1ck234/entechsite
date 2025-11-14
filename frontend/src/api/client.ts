@@ -93,6 +93,29 @@ export const employeesAPI = {
     };
   },
 
+  getCurrentEmployee: async (): Promise<Employee> => {
+    const response = await api.get('/employees/me');
+    const emp = response.data;
+    
+    // Transform snake_case to camelCase
+    return {
+      id: emp.id,
+      firstName: emp.first_name,
+      lastName: emp.last_name,
+      middleName: emp.middle_name,
+      position: emp.position,
+      department: emp.department,
+      email: emp.email,
+      phone: emp.phone,
+      telegram: emp.telegram,
+      photo: emp.photo,
+      isActive: emp.is_active,
+      createdAt: emp.created_at,
+      updatedAt: emp.updated_at,
+      userRole: emp.user_role
+    };
+  },
+
   getEmployee: async (id: string): Promise<Employee> => {
     const response = await api.get(`/employees/${id}`);
     const emp = response.data;

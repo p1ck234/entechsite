@@ -14,11 +14,21 @@ const Dashboard: React.FC = () => {
   });
   const [recentEmployees, setRecentEmployees] = useState<Employee[]>([]);
   const [recentCourses, setRecentCourses] = useState<Course[]>([]);
+  const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
+        // Fetch current employee info
+        try {
+          const employee = await employeesAPI.getCurrentEmployee();
+          setCurrentEmployee(employee);
+        } catch (error) {
+          // Employee not found is OK, will show email as fallback
+          console.error('Error fetching current employee:', error);
+        }
+
         // Fetch employees
         const employeesResponse = await employeesAPI.getEmployees({ limit: 5 });
         setRecentEmployees(employeesResponse.employees);
@@ -55,7 +65,7 @@ const Dashboard: React.FC = () => {
     };
 
     fetchDashboardData();
-  }, [isAdmin]);
+  }, [isAdmin, user?.email]);
 
   if (loading) {
     return (
@@ -70,7 +80,9 @@ const Dashboard: React.FC = () => {
       {/* Welcome Section */}
       <div className="glass-card p-6">
         <h1 className="text-3xl font-bold text-pastel-800 mb-2">
-          Добро пожаловать, {user?.email}!
+          Добро пожаловать, {currentEmployee 
+            ? `${currentEmployee.lastName || ''} ${currentEmployee.firstName || ''}`.trim() 
+            : user?.email || 'Пользователь'}!
         </h1>
         <p className="text-pastel-600">
           {isAdmin 

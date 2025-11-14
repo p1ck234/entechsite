@@ -76,6 +76,34 @@ router.get('/', authenticateToken, [
   }
 });
 
+// Get current user's employee info
+router.get('/me', authenticateToken, async (req: any, res: any) => {
+  try {
+    if (!req.user?.email) {
+      return res.status(401).json({ message: 'User email not found' });
+    }
+
+    const result = await pool.query(
+      `SELECT e.*, u.role as user_role 
+       FROM employees e 
+       LEFT JOIN users u ON e.email = u.email 
+       WHERE e.email = $1 
+       ORDER BY e.is_active DESC, e.created_at DESC 
+       LIMIT 1`, 
+      [req.user.email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Employee not found for this user' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Get current employee error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 // Get employee by ID
 router.get('/:id', authenticateToken, async (req: any, res: any) => {
   try {
