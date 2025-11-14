@@ -44,7 +44,18 @@ router.get('/', authenticateToken, [
     }
 
     const result = await pool.query(
-      `SELECT ce.*, u.email as created_by_email
+      `SELECT 
+         ce.id,
+         ce.title,
+         ce.description,
+         TO_CHAR(ce.event_date, 'YYYY-MM-DD') as event_date,
+         CASE WHEN ce.event_time IS NOT NULL THEN TO_CHAR(ce.event_time, 'HH24:MI') ELSE NULL END as event_time,
+         ce.location,
+         ce.is_all_day,
+         ce.created_by,
+         ce.created_at,
+         ce.updated_at,
+         u.email as created_by_email
        FROM calendar_events ce
        LEFT JOIN users u ON ce.created_by = u.id
        WHERE ce.event_date >= $1 AND ce.event_date <= $2
@@ -65,7 +76,18 @@ router.get('/:id', authenticateToken, async (req: any, res: any) => {
     const { id } = req.params;
 
     const result = await pool.query(
-      `SELECT ce.*, u.email as created_by_email
+      `SELECT 
+         ce.id,
+         ce.title,
+         ce.description,
+         TO_CHAR(ce.event_date, 'YYYY-MM-DD') as event_date,
+         CASE WHEN ce.event_time IS NOT NULL THEN TO_CHAR(ce.event_time, 'HH24:MI') ELSE NULL END as event_time,
+         ce.location,
+         ce.is_all_day,
+         ce.created_by,
+         ce.created_at,
+         ce.updated_at,
+         u.email as created_by_email
        FROM calendar_events ce
        LEFT JOIN users u ON ce.created_by = u.id
        WHERE ce.id = $1`,
@@ -140,11 +162,20 @@ router.post('/', authenticateToken, [
 
     const result = await pool.query(
       `INSERT INTO calendar_events (title, description, event_date, event_time, location, is_all_day, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+       VALUES ($1, $2, $3::DATE, $4, $5, $6, $7) 
+       RETURNING 
+         id,
+         title,
+         description,
+         TO_CHAR(event_date, 'YYYY-MM-DD') as event_date,
+         CASE WHEN event_time IS NOT NULL THEN TO_CHAR(event_time, 'HH24:MI') ELSE NULL END as event_time,
+         location,
+         is_all_day,
+         created_by,
+         created_at,
+         updated_at`,
       [title, description || null, eventDate, eventTime || null, location || null, isAllDay, parseInt(req.user.id)]
     );
-
-    console.log('Calendar event created successfully:', result.rows[0]);
 
     res.status(201).json({
       message: 'Calendar event created successfully',
@@ -163,9 +194,9 @@ router.post('/', authenticateToken, [
 // Update calendar event (Admin only)
 router.put('/:id', authenticateToken, [
   body('title').optional().notEmpty().trim(),
-  body('eventDate').optional().isISO8601(),
+  body('eventDate').optional().isString(),
   body('description').optional().isString(),
-  body('eventTime').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
+  body('eventTime').optional().isString(),
   body('location').optional().isString(),
   body('isAllDay').optional().isBoolean(),
 ], async (req: any, res: any) => {
@@ -181,6 +212,21 @@ router.put('/:id', authenticateToken, [
 
     const { id } = req.params;
     const updateData = req.body;
+
+    // Validate date format if provided (YYYY-MM-DD)
+    if (updateData.eventDate && !/^\d{4}-\d{2}-\d{2}$/.test(updateData.eventDate)) {
+      return res.status(400).json({ message: 'Invalid date format. Expected YYYY-MM-DD' });
+    }
+
+    // Validate and format time if provided (HH:MM or HH:MM:SS -> HH:MM)
+    if (updateData.eventTime) {
+      // Remove seconds if present (HH:MM:SS -> HH:MM)
+      const timeStr = updateData.eventTime.split(':').slice(0, 2).join(':');
+      if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(timeStr)) {
+        return res.status(400).json({ message: 'Invalid time format. Expected HH:MM' });
+      }
+      updateData.eventTime = timeStr; // Store only HH:MM
+    }
 
     // Check if event exists
     const existingEvent = await pool.query('SELECT * FROM calendar_events WHERE id = $1', [id]);
@@ -200,7 +246,13 @@ router.put('/:id', authenticateToken, [
         const dbKey = key === 'eventDate' ? 'event_date' :
                      key === 'eventTime' ? 'event_time' :
                      key === 'isAllDay' ? 'is_all_day' : key;
-        updateFields.push(`${dbKey} = $${paramCount}`);
+        
+        // Cast event_date to DATE type to avoid timezone issues
+        if (key === 'eventDate') {
+          updateFields.push(`${dbKey} = $${paramCount}::DATE`);
+        } else {
+          updateFields.push(`${dbKey} = $${paramCount}`);
+        }
         values.push(updateData[key]);
       }
     });
@@ -211,7 +263,20 @@ router.put('/:id', authenticateToken, [
 
     values.push(id);
     const result = await pool.query(
-      `UPDATE calendar_events SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount + 1} RETURNING *`,
+      `UPDATE calendar_events 
+       SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $${paramCount + 1} 
+       RETURNING 
+         id,
+         title,
+         description,
+         TO_CHAR(event_date, 'YYYY-MM-DD') as event_date,
+         CASE WHEN event_time IS NOT NULL THEN TO_CHAR(event_time, 'HH24:MI') ELSE NULL END as event_time,
+         location,
+         is_all_day,
+         created_by,
+         created_at,
+         updated_at`,
       values
     );
 

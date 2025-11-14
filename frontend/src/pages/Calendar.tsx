@@ -37,7 +37,6 @@ const Calendar: React.FC = () => {
         month: month + 1,
         year: year
       });
-      console.log('Fetched calendar events:', response.events);
       setEvents(response.events);
     } catch (error) {
       console.error('Error fetching calendar events:', error);
@@ -87,7 +86,10 @@ const Calendar: React.FC = () => {
   const handleEventClick = (event: CalendarEvent, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingEvent(event);
-    setSelectedDate(new Date(event.eventDate));
+    // Parse date correctly (event.eventDate is in format YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss)
+    const dateStr = event.eventDate.split('T')[0];
+    const [year, month, day] = dateStr.split('-').map(Number);
+    setSelectedDate(new Date(year, month - 1, day));
     setShowModal(true);
   };
 

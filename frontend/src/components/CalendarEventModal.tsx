@@ -34,11 +34,20 @@ const CalendarEventModal: React.FC<CalendarEventModalProps> = ({ event, selected
 
   useEffect(() => {
     if (event) {
+      // Format time to remove seconds if present
+      let eventTime = event.eventTime || '';
+      if (eventTime && eventTime.includes(':')) {
+        const timeParts = eventTime.split(':');
+        if (timeParts.length >= 2) {
+          eventTime = `${timeParts[0]}:${timeParts[1]}`;
+        }
+      }
+      
       setFormData({
         title: event.title || '',
         description: event.description || '',
         eventDate: event.eventDate ? event.eventDate.split('T')[0] : '',
-        eventTime: event.eventTime || '',
+        eventTime: eventTime,
         location: event.location || '',
         isAllDay: event.isAllDay || false,
       });
@@ -53,6 +62,7 @@ const CalendarEventModal: React.FC<CalendarEventModalProps> = ({ event, selected
         location: '',
         isAllDay: false,
       });
+      setIsEditing(false);
     } else {
       const today = formatDateForInput(new Date());
       setFormData({
@@ -63,8 +73,9 @@ const CalendarEventModal: React.FC<CalendarEventModalProps> = ({ event, selected
         location: '',
         isAllDay: false,
       });
+      setIsEditing(false);
     }
-  }, [event, selectedDate]);
+  }, [event, selectedDate, isAdmin]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,17 +98,15 @@ const CalendarEventModal: React.FC<CalendarEventModalProps> = ({ event, selected
       }
 
       if (!formData.isAllDay && formData.eventTime) {
-        eventData.eventTime = formData.eventTime;
+        // Remove seconds if present (HH:MM:SS -> HH:MM)
+        const timeStr = formData.eventTime.split(':').slice(0, 2).join(':');
+        eventData.eventTime = timeStr;
       }
 
-      console.log('Sending calendar event data:', eventData);
-
       if (event) {
-        const result = await calendarAPI.updateEvent(event.id, eventData);
-        console.log('Event updated:', result);
+        await calendarAPI.updateEvent(event.id, eventData);
       } else {
-        const result = await calendarAPI.createEvent(eventData);
-        console.log('Event created:', result);
+        await calendarAPI.createEvent(eventData);
       }
       
       if (onSuccess) {
