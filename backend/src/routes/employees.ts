@@ -94,7 +94,11 @@ router.get('/me', authenticateToken, async (req: any, res: any) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Employee not found for this user' });
+      // Return 404 but with a more descriptive message
+      return res.status(404).json({ 
+        message: 'Employee not found for this user',
+        email: req.user.email 
+      });
     }
 
     res.json(result.rows[0]);

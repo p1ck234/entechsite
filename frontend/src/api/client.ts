@@ -93,27 +93,35 @@ export const employeesAPI = {
     };
   },
 
-  getCurrentEmployee: async (): Promise<Employee> => {
-    const response = await api.get('/employees/me');
-    const emp = response.data;
-    
-    // Transform snake_case to camelCase
-    return {
-      id: emp.id,
-      firstName: emp.first_name,
-      lastName: emp.last_name,
-      middleName: emp.middle_name,
-      position: emp.position,
-      department: emp.department,
-      email: emp.email,
-      phone: emp.phone,
-      telegram: emp.telegram,
-      photo: emp.photo,
-      isActive: emp.is_active,
-      createdAt: emp.created_at,
-      updatedAt: emp.updated_at,
-      userRole: emp.user_role
-    };
+  getCurrentEmployee: async (): Promise<Employee | null> => {
+    try {
+      const response = await api.get('/employees/me');
+      const emp = response.data;
+      
+      // Transform snake_case to camelCase
+      return {
+        id: emp.id,
+        firstName: emp.first_name,
+        lastName: emp.last_name,
+        middleName: emp.middle_name,
+        position: emp.position,
+        department: emp.department,
+        email: emp.email,
+        phone: emp.phone,
+        telegram: emp.telegram,
+        photo: emp.photo,
+        isActive: emp.is_active,
+        createdAt: emp.created_at,
+        updatedAt: emp.updated_at,
+        userRole: emp.user_role
+      };
+    } catch (error: any) {
+      // If employee not found (404), return null instead of throwing
+      if (error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
   },
 
   getEmployee: async (id: string): Promise<Employee> => {

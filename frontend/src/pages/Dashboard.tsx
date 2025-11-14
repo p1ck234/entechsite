@@ -23,7 +23,9 @@ const Dashboard: React.FC = () => {
         // Fetch current employee info
         try {
           const employee = await employeesAPI.getCurrentEmployee();
-          setCurrentEmployee(employee);
+          if (employee) {
+            setCurrentEmployee(employee);
+          }
         } catch (error) {
           // Employee not found is OK, will show email as fallback
           console.error('Error fetching current employee:', error);
