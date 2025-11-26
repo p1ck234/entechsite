@@ -13,6 +13,7 @@ import lessonRoutes from './routes/lessons';
 import userRoutes from './routes/users';
 import eventRoutes from './routes/events';
 import calendarRoutes from './routes/calendar';
+import { initializeDatabase } from './utils/db-init';
 
 dotenv.config();
 
@@ -102,11 +103,32 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV}`);
-  console.log(`📊 Database URL: ${process.env.DATABASE_URL ? 'Configured' : 'NOT CONFIGURED'}`);
-}).on('error', (err: any) => {
-  console.error('❌ Server error:', err);
-  process.exit(1);
-});
+// Initialize database and start server
+async function startServer() {
+  try {
+    // Проверяем подключение к базе данных
+    await pool.query('SELECT 1');
+    console.log('✅ Подключение к базе данных установлено');
+    
+    // Инициализируем базу данных (создаем таблицы и админа, если нужно)
+    await initializeDatabase(pool);
+    
+    // Запускаем сервер
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`📊 Database URL: ${process.env.DATABASE_URL ? 'Configured' : 'NOT CONFIGURED'}`);
+    }).on('error', (err: any) => {
+      console.error('❌ Server error:', err);
+      process.exit(1);
+    });
+  } catch (error: any) {
+    console.error('❌ Ошибка при запуске сервера:', error.message);
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      console.error('❌ Не удалось подключиться к базе данных. Проверьте DATABASE_URL в переменных окружения.');
+    }
+    process.exit(1);
+  }
+}
+
+startServer();
