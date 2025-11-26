@@ -58,106 +58,74 @@ const Login: React.FC = () => {
   };
 
   // Если это Telegram, показываем загрузку
-  if (isTelegram && loading) {
+  if (isTelegram) {
+    if (loading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-pastel-600">Авторизация через Telegram...</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Если ошибка в Telegram
+    if (error) {
+      return (
+        <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
+          <div className="w-full max-w-md">
+            <div className="glass-card rounded-2xl p-8 shadow-2xl text-center">
+              <div className="mb-4">
+                <Logo size="lg" />
+              </div>
+              <h2 className="text-2xl font-bold text-pastel-800 mb-4">
+                Ошибка авторизации
+              </h2>
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                {error}
+              </div>
+              <p className="text-pastel-600 text-sm">
+                Обратитесь к администратору для добавления в систему
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  }
+
+  // Если не Telegram - показываем сообщение
+  if (!isTelegram) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-pastel-600">Авторизация через Telegram...</p>
+        <div className="w-full max-w-md">
+          <div className="glass-card rounded-2xl p-8 shadow-2xl text-center">
+            <div className="mb-4">
+              <Logo size="lg" />
+            </div>
+            <h2 className="text-2xl font-bold text-pastel-800 mb-4">
+              Вход только через Telegram
+            </h2>
+            <p className="text-pastel-600 mb-6">
+              Для входа в систему откройте приложение через Telegram бота
+            </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
+              <p className="font-semibold mb-2">Как войти:</p>
+              <ol className="list-decimal list-inside space-y-1 text-left">
+                <li>Откройте Telegram бота</li>
+                <li>Нажмите на кнопку меню или Mini App</li>
+                <li>Авторизация произойдет автоматически</li>
+              </ol>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <Logo size="lg" />
-          </div>
-          <p className="text-pastel-600">
-            {isTelegram ? 'Вход через Telegram' : 'Войдите в систему управления компанией'}
-          </p>
-        </div>
-
-        {/* Login Form */}
-        <div className="glass-card rounded-2xl p-8 shadow-2xl">
-          <h2 className="text-2xl font-bold text-pastel-800 mb-6 text-center">
-            Вход в систему
-          </h2>
-
-          {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-pastel-700 mb-2">
-                Email
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-pastel-400 w-5 h-5" />
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="input-field pl-10"
-                  placeholder="your@email.com"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-pastel-700 mb-2">
-                Пароль
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-pastel-400 w-5 h-5" />
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="input-field pl-10 pr-10"
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-pastel-400 hover:text-pastel-600"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full btn-primary py-3 text-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Вход...' : 'Войти'}
-            </button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <p className="text-pastel-600 text-sm">
-              Для получения доступа обратитесь к администратору
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  // Fallback (не должно доходить сюда)
+  return null;
 };
 
 export default Login;

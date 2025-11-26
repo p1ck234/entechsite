@@ -71,16 +71,24 @@ router.post('/telegram', [
         if (!telegramId) {
             return res.status(400).json({ message: 'Telegram user ID not found' });
         }
-        const employeeResult = await pool.query(`SELECT * FROM employees WHERE telegram = $1 OR telegram = $2 OR telegram = $3`, [`${telegramId}`, `@${telegramUser.username}`, telegramUser.username]);
-        let userEmail = null;
-        if (employeeResult.rows.length > 0) {
-            userEmail = employeeResult.rows[0].email;
+        const telegramUsername = telegramUser.username;
+        const searchVariants = [];
+        if (telegramUsername) {
+            searchVariants.push(`@${telegramUsername}`);
+            searchVariants.push(telegramUsername);
         }
-        else {
-            userEmail = telegramUser.username
-                ? `${telegramUser.username}@telegram.local`
-                : `telegram_${telegramId}@telegram.local`;
+        searchVariants.push(`${telegramId}`);
+        const placeholders = searchVariants.map((_, i) => `$${i + 1}`).join(' OR telegram = ');
+        const employeeResult = await pool.query(`SELECT * FROM employees WHERE (telegram = ${placeholders}) AND is_active = true`, searchVariants);
+        if (employeeResult.rows.length === 0) {
+            return res.status(403).json({
+                message: 'Доступ запрещен. Обратитесь к администратору для добавления в систему.',
+                telegramUsername: telegramUsername || null,
+                telegramId: telegramId
+            });
         }
+        const employee = employeeResult.rows[0];
+        const userEmail = employee.email;
         let userResult = await pool.query('SELECT * FROM users WHERE email = $1', [userEmail]);
         let user;
         if (userResult.rows.length === 0) {

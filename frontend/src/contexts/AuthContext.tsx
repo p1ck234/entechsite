@@ -88,7 +88,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Ошибка входа через Telegram');
+      const errorMessage = error.response?.data?.message || 'Ошибка входа через Telegram';
+      // Если сотрудник не найден, показываем понятное сообщение
+      if (error.response?.status === 403) {
+        throw new Error('Доступ запрещен. Обратитесь к администратору для добавления в систему.');
+      }
+      throw new Error(errorMessage);
     }
   };
 

@@ -94,27 +94,40 @@ router.post('/telegram', [
       return res.status(400).json({ message: 'Telegram user ID not found' });
     }
 
-    // Ищем пользователя по Telegram ID или создаем email на основе Telegram username
-    // Для упрощения, ищем сотрудника с telegram полем, которое содержит ID или username
-    // Или ищем пользователя по email, который может быть связан с Telegram
+    // Ищем сотрудника по Telegram username (приоритет) или ID
+    // Формат в базе может быть: @username, username, или ID
+    const telegramUsername = telegramUser.username;
     
-    // Сначала пытаемся найти сотрудника по telegram ID или username
+    // Список вариантов для поиска
+    const searchVariants: string[] = [];
+    
+    if (telegramUsername) {
+      // Добавляем варианты с username
+      searchVariants.push(`@${telegramUsername}`); // @p1ck23
+      searchVariants.push(telegramUsername); // p1ck23
+    }
+    // Также ищем по ID
+    searchVariants.push(`${telegramId}`); // 123456789
+    
+    // Строим SQL запрос с нужным количеством параметров
+    const placeholders = searchVariants.map((_, i) => `$${i + 1}`).join(' OR telegram = ');
+    
     const employeeResult = await pool.query(
-      `SELECT * FROM employees WHERE telegram = $1 OR telegram = $2 OR telegram = $3`,
-      [`${telegramId}`, `@${telegramUser.username}`, telegramUser.username]
+      `SELECT * FROM employees WHERE (telegram = ${placeholders}) AND is_active = true`,
+      searchVariants
     );
 
-    let userEmail: string | null = null;
-    
-    if (employeeResult.rows.length > 0) {
-      userEmail = employeeResult.rows[0].email;
-    } else {
-      // Если сотрудник не найден, создаем email на основе Telegram данных
-      // Формат: telegram_{id}@telegram.local или используем username если есть
-      userEmail = telegramUser.username 
-        ? `${telegramUser.username}@telegram.local`
-        : `telegram_${telegramId}@telegram.local`;
+    // Если сотрудник не найден - возвращаем ошибку
+    if (employeeResult.rows.length === 0) {
+      return res.status(403).json({ 
+        message: 'Доступ запрещен. Обратитесь к администратору для добавления в систему.',
+        telegramUsername: telegramUsername || null,
+        telegramId: telegramId
+      });
     }
+
+    const employee = employeeResult.rows[0];
+    const userEmail = employee.email;
 
     // Ищем или создаем пользователя
     let userResult = await pool.query('SELECT * FROM users WHERE email = $1', [userEmail]);
