@@ -17,49 +17,50 @@ import { initializeDatabase } from './utils/db-init';
 
 dotenv.config();
 
-// Проверяем DATABASE_URL
+// Проверяем DATABASE_URL и пытаемся собрать его из отдельных переменных PostgreSQL
 let databaseUrl = process.env.DATABASE_URL;
 
-// Если DATABASE_URL содержит шаблон Railway (не подставлен), пытаемся найти альтернативные варианты
-if (!databaseUrl || databaseUrl.includes('{{')) {
-  // Проверяем альтернативные имена переменных
-  databaseUrl = process.env.DATABASE_URL || 
-                process.env.POSTGRES_URL || 
-                process.env.POSTGRES_DATABASE_URL ||
-                process.env.PGDATABASE ||
-                process.env.DATABASE_CONNECTION_STRING;
+// Если DATABASE_URL не настроен или содержит шаблон Railway, пытаемся собрать из отдельных переменных
+if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
+  // Проверяем переменные PostgreSQL (Railway автоматически создает их для PostgreSQL сервиса)
+  const pgHost = process.env.PGHOST;
+  const pgPort = process.env.PGPORT || '5432';
+  const pgUser = process.env.PGUSER;
+  const pgPassword = process.env.PGPASSWORD;
+  const pgDatabase = process.env.PGDATABASE;
   
-  if (!databaseUrl || databaseUrl.includes('{{')) {
-    console.error('❌ DATABASE_URL не настроен или содержит шаблон Railway!');
-    console.error('\n📊 Доступные переменные окружения:');
-    const envKeys = Object.keys(process.env).filter(key => 
-      key.includes('DATABASE') || 
-      key.includes('POSTGRES') || 
-      key.includes('DB') ||
-      key.includes('PG')
-    );
-    if (envKeys.length > 0) {
-      envKeys.forEach(key => {
-        const value = process.env[key];
-        const masked = value && value.length > 20 
-          ? `${value.substring(0, 10)}...${value.substring(value.length - 5)}`
-          : (value || '<empty>');
-        console.error(`   ${key}: ${masked}`);
-      });
-    } else {
-      console.error('   (переменные базы данных не найдены)');
-    }
+  // Если есть все необходимые переменные, собираем DATABASE_URL
+  if (pgHost && pgUser && pgPassword && pgDatabase) {
+    databaseUrl = `postgresql://${pgUser}:${pgPassword}@${pgHost}:${pgPort}/${pgDatabase}`;
+    console.log('✅ DATABASE_URL собран из переменных PostgreSQL');
+  } else {
+    // Проверяем альтернативные имена переменных
+    databaseUrl = process.env.POSTGRES_URL || 
+                  process.env.POSTGRES_DATABASE_URL ||
+                  process.env.DATABASE_CONNECTION_STRING;
+  }
+  
+  if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
+    console.error('❌ DATABASE_URL не настроен!');
+    console.error('\n📊 Доступные переменные PostgreSQL:');
+    const pgVars = ['PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE'];
+    pgVars.forEach(key => {
+      const value = process.env[key];
+      console.error(`   ${key}: ${value ? '✓ установлена' : '✗ не установлена'}`);
+    });
     
-    console.error('\n📝 Инструкция:');
-    console.error('   1. Откройте PostgreSQL сервис в Railway');
-    console.error('   2. Посмотрите его имя (например: "Postgres", "PostgreSQL", "Database")');
-    console.error('   3. В backend сервисе → Variables → DATABASE_URL');
-    console.error('   4. Используйте: ${{ИМЯ_СЕРВИСА.DATABASE_URL}}');
-    console.error('   5. Или используйте "Raw Editor" чтобы увидеть все доступные переменные');
-    console.error('\n💡 Попробуйте эти варианты:');
-    console.error('   - ${{Postgres.DATABASE_URL}}');
-    console.error('   - ${{PostgreSQL.DATABASE_URL}}');
-    console.error('   - ${{Database.DATABASE_URL}}');
+    console.error('\n📝 Решение:');
+    console.error('   1. Убедитесь, что PostgreSQL сервис добавлен в проект Railway');
+    console.error('   2. Если PostgreSQL сервис есть, но переменные не видны:');
+    console.error('      - Откройте PostgreSQL сервис');
+    console.error('      - Перейдите в "Variables"');
+    console.error('      - Найдите имя сервиса (например: "Postgres", "PostgreSQL")');
+    console.error('      - В backend сервисе → Variables → DATABASE_URL');
+    console.error('      - Используйте: ${{ИМЯ_СЕРВИСА.DATABASE_URL}}');
+    console.error('   3. Если PostgreSQL сервиса нет:');
+    console.error('      - В проекте Railway нажмите "+ New"');
+    console.error('      - Выберите "Database" → "Add PostgreSQL"');
+    console.error('      - Railway автоматически создаст переменные');
     process.exit(1);
   }
 }
