@@ -167,19 +167,22 @@ export async function initializeDatabase(pool: Pool) {
     }
     
     // Проверяем и создаем/обновляем запись сотрудника с Telegram
+    // Сохраняем БЕЗ собачки, чтобы было проще искать
+    const telegramWithoutAt = adminTelegram.startsWith('@') ? adminTelegram.substring(1) : adminTelegram;
+    
     const existingEmployee = await pool.query('SELECT id FROM employees WHERE email = $1', [adminEmail]);
     
     if (existingEmployee.rows.length === 0) {
       await pool.query(
         `INSERT INTO employees (first_name, last_name, position, department, email, phone, telegram, is_active)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        ['Администратор', 'Системы', 'Системный администратор', 'IT-Отдел', adminEmail, '+7 (000) 000-00-00', adminTelegram, true]
+        ['Администратор', 'Системы', 'Системный администратор', 'IT-Отдел', adminEmail, '+7 (000) 000-00-00', telegramWithoutAt, true]
       );
-      console.log(`✅ Создан сотрудник-администратор с Telegram: ${adminTelegram}`);
+      console.log(`✅ Создан сотрудник-администратор с Telegram: ${telegramWithoutAt} (без @)`);
     } else {
-      // Обновляем Telegram username если сотрудник уже существует
-      await pool.query('UPDATE employees SET telegram = $1 WHERE email = $2', [adminTelegram, adminEmail]);
-      console.log(`✅ Telegram username обновлен для администратора: ${adminTelegram}`);
+      // Обновляем Telegram username если сотрудник уже существует (БЕЗ собачки)
+      await pool.query('UPDATE employees SET telegram = $1 WHERE email = $2', [telegramWithoutAt, adminEmail]);
+      console.log(`✅ Telegram username обновлен для администратора: ${telegramWithoutAt} (без @)`);
     }
     
     console.log('✅ База данных готова к работе');

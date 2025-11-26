@@ -102,17 +102,30 @@ router.post('/telegram', [
     }
 
     // Ищем сотрудника по Telegram username (приоритет) или ID
-    // Формат в базе может быть: @username, username, или ID
+    // В базе сохраняем БЕЗ собачки, но ищем и с @, и без
     const searchVariants: string[] = [];
     
     if (telegramUsername) {
-      // Добавляем варианты с username
-      searchVariants.push(`@${telegramUsername}`); // @p1ck23
-      searchVariants.push(telegramUsername); // p1ck23
+      // Убираем @ если есть, чтобы нормализовать
+      const usernameNormalized = telegramUsername.startsWith('@') 
+        ? telegramUsername.substring(1) 
+        : telegramUsername;
+      
+      // Добавляем варианты: без @ (приоритет - так храним в базе), с @, и оригинальный
+      searchVariants.push(usernameNormalized); // pdmin1ck (приоритет)
+      searchVariants.push(`@${usernameNormalized}`); // @pdmin1ck
+      if (telegramUsername !== usernameNormalized && telegramUsername !== `@${usernameNormalized}`) {
+        searchVariants.push(telegramUsername); // оригинальный вариант если отличается
+      }
     }
     // Также ищем по ID
     searchVariants.push(`${telegramId}`); // 123456789
     
+    console.log('🔍 Telegram данные:', {
+      originalUsername: telegramUsername,
+      normalized: telegramUsername ? (telegramUsername.startsWith('@') ? telegramUsername.substring(1) : telegramUsername) : null,
+      telegramId
+    });
     console.log('🔍 Варианты поиска:', searchVariants);
     
     // Строим SQL запрос с нужным количеством параметров

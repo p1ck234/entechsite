@@ -79,10 +79,21 @@ router.post('/telegram', [
         }
         const searchVariants = [];
         if (telegramUsername) {
-            searchVariants.push(`@${telegramUsername}`);
-            searchVariants.push(telegramUsername);
+            const usernameNormalized = telegramUsername.startsWith('@')
+                ? telegramUsername.substring(1)
+                : telegramUsername;
+            searchVariants.push(usernameNormalized);
+            searchVariants.push(`@${usernameNormalized}`);
+            if (telegramUsername !== usernameNormalized && telegramUsername !== `@${usernameNormalized}`) {
+                searchVariants.push(telegramUsername);
+            }
         }
         searchVariants.push(`${telegramId}`);
+        console.log('🔍 Telegram данные:', {
+            originalUsername: telegramUsername,
+            normalized: telegramUsername ? (telegramUsername.startsWith('@') ? telegramUsername.substring(1) : telegramUsername) : null,
+            telegramId
+        });
         console.log('🔍 Варианты поиска:', searchVariants);
         const placeholders = searchVariants.map((_, i) => `telegram = $${i + 1}`).join(' OR ');
         const sqlQuery = `SELECT * FROM employees WHERE (${placeholders}) AND is_active = true`;
