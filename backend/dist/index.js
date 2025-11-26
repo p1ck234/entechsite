@@ -17,9 +17,16 @@ const events_1 = __importDefault(require("./routes/events"));
 const calendar_1 = __importDefault(require("./routes/calendar"));
 const db_init_1 = require("./utils/db-init");
 dotenv_1.default.config();
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+    console.error('❌ DATABASE_URL не настроен!');
+    console.error('📝 В Railway добавьте переменную DATABASE_URL со значением ${{Postgres.DATABASE_URL}}');
+    console.error('   (замените "Postgres" на имя вашего PostgreSQL сервиса)');
+    process.exit(1);
+}
 const app = (0, express_1.default)();
 const pool = new pg_1.Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
+    connectionString: databaseUrl,
 });
 const PORT = parseInt(process.env.PORT || '3001', 10);
 app.use((0, helmet_1.default)());
@@ -81,13 +88,19 @@ process.on('SIGTERM', async () => {
 });
 async function startServer() {
     try {
+        console.log('🔗 Попытка подключения к базе данных...');
+        if (databaseUrl) {
+            const maskedUrl = databaseUrl.length > 30
+                ? `${databaseUrl.substring(0, 20)}...${databaseUrl.substring(databaseUrl.length - 10)}`
+                : '***';
+            console.log(`📊 DATABASE_URL: ${maskedUrl}`);
+        }
         await pool.query('SELECT 1');
         console.log('✅ Подключение к базе данных установлено');
         await (0, db_init_1.initializeDatabase)(pool);
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`🚀 Server running on port ${PORT}`);
             console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-            console.log(`📊 Database URL: ${process.env.DATABASE_URL ? 'Configured' : 'NOT CONFIGURED'}`);
         }).on('error', (err) => {
             console.error('❌ Server error:', err);
             process.exit(1);
@@ -96,7 +109,20 @@ async function startServer() {
     catch (error) {
         console.error('❌ Ошибка при запуске сервера:', error.message);
         if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-            console.error('❌ Не удалось подключиться к базе данных. Проверьте DATABASE_URL в переменных окружения.');
+            console.error('\n❌ Не удалось подключиться к базе данных!');
+            console.error('\n📝 Инструкция по настройке DATABASE_URL в Railway:');
+            console.error('   1. Убедитесь, что PostgreSQL сервис добавлен в проект');
+            console.error('   2. В backend сервисе перейдите в "Variables"');
+            console.error('   3. Добавьте переменную DATABASE_URL');
+            console.error('   4. Значение: ${{Postgres.DATABASE_URL}}');
+            console.error('      (замените "Postgres" на имя вашего PostgreSQL сервиса)');
+            console.error('   5. Или используйте "Raw Editor" для просмотра всех переменных');
+        }
+        else if (error.code === '28P01') {
+            console.error('❌ Ошибка аутентификации. Проверьте правильность DATABASE_URL.');
+        }
+        else if (error.code === '3D000') {
+            console.error('❌ База данных не существует. Проверьте имя базы данных в DATABASE_URL.');
         }
         process.exit(1);
     }
