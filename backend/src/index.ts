@@ -29,14 +29,17 @@ app.use(cors({
     ? [
         'https://entech.p1ck23.ru', 
         'http://entech.p1ck23.ru',
+        'https://entechsite-production.up.railway.app',
+        process.env.FRONTEND_URL, // URL frontend из переменных окружения
         'https://web.telegram.org',
         'https://webk.telegram.org',
         'https://webz.telegram.org'
-      ] 
+      ].filter(Boolean) // Убираем undefined значения
     : [
         'http://localhost:5173',
         'http://localhost:3000',
         'https://entech.p1ck23.ru',
+        'https://entechsite-production.up.railway.app',
         'https://web.telegram.org',
         'https://webk.telegram.org',
         'https://webz.telegram.org'
