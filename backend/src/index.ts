@@ -24,26 +24,28 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(helmet());
+const allowedOrigins = process.env.NODE_ENV === 'production' 
+  ? [
+      'https://entech.p1ck23.ru', 
+      'http://entech.p1ck23.ru',
+      'https://entechsite-production.up.railway.app',
+      process.env.FRONTEND_URL,
+      'https://web.telegram.org',
+      'https://webk.telegram.org',
+      'https://webz.telegram.org'
+    ].filter((origin): origin is string => Boolean(origin)) // Убираем undefined значения с правильной типизацией
+  : [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'https://entech.p1ck23.ru',
+      'https://entechsite-production.up.railway.app',
+      'https://web.telegram.org',
+      'https://webk.telegram.org',
+      'https://webz.telegram.org'
+    ];
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? [
-        'https://entech.p1ck23.ru', 
-        'http://entech.p1ck23.ru',
-        'https://entechsite-production.up.railway.app',
-        process.env.FRONTEND_URL, // URL frontend из переменных окружения
-        'https://web.telegram.org',
-        'https://webk.telegram.org',
-        'https://webz.telegram.org'
-      ].filter(Boolean) // Убираем undefined значения
-    : [
-        'http://localhost:5173',
-        'http://localhost:3000',
-        'https://entech.p1ck23.ru',
-        'https://entechsite-production.up.railway.app',
-        'https://web.telegram.org',
-        'https://webk.telegram.org',
-        'https://webz.telegram.org'
-      ],
+  origin: allowedOrigins,
   credentials: true
 }));
 

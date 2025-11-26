@@ -22,23 +22,27 @@ const pool = new pg_1.Pool({
 });
 const PORT = process.env.PORT || 3001;
 app.use((0, helmet_1.default)());
+const allowedOrigins = process.env.NODE_ENV === 'production'
+    ? [
+        'https://entech.p1ck23.ru',
+        'http://entech.p1ck23.ru',
+        'https://entechsite-production.up.railway.app',
+        process.env.FRONTEND_URL,
+        'https://web.telegram.org',
+        'https://webk.telegram.org',
+        'https://webz.telegram.org'
+    ].filter((origin) => Boolean(origin))
+    : [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'https://entech.p1ck23.ru',
+        'https://entechsite-production.up.railway.app',
+        'https://web.telegram.org',
+        'https://webk.telegram.org',
+        'https://webz.telegram.org'
+    ];
 app.use((0, cors_1.default)({
-    origin: process.env.NODE_ENV === 'production'
-        ? [
-            'https://entech.p1ck23.ru',
-            'http://entech.p1ck23.ru',
-            'https://web.telegram.org',
-            'https://webk.telegram.org',
-            'https://webz.telegram.org'
-        ]
-        : [
-            'http://localhost:5173',
-            'http://localhost:3000',
-            'https://entech.p1ck23.ru',
-            'https://web.telegram.org',
-            'https://webk.telegram.org',
-            'https://webz.telegram.org'
-        ],
+    origin: allowedOrigins,
     credentials: true
 }));
 app.use(express_1.default.json({ limit: '10mb' }));
