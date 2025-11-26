@@ -33,6 +33,26 @@ if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
             process.env.POSTGRES_DATABASE_URL ||
             process.env.DATABASE_CONNECTION_STRING;
     }
+    if ((!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') && !pgHost) {
+        const possibleServiceNames = ['Postgres', 'PostgreSQL', 'Database', 'Postgresql', 'DB', 'pg'];
+        const allEnvKeys = Object.keys(process.env);
+        for (const serviceName of possibleServiceNames) {
+            const possibleKeys = [
+                `${serviceName}_DATABASE_URL`,
+                `${serviceName.toUpperCase()}_DATABASE_URL`,
+                `${serviceName.toLowerCase()}_DATABASE_URL`,
+            ];
+            for (const key of possibleKeys) {
+                if (process.env[key] && !process.env[key].includes('{{')) {
+                    databaseUrl = process.env[key];
+                    console.log(`✅ DATABASE_URL найден в переменной: ${key}`);
+                    break;
+                }
+            }
+            if (databaseUrl && !databaseUrl.includes('{{'))
+                break;
+        }
+    }
     if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
         console.error('❌ DATABASE_URL не настроен!');
         console.error('\n📊 Доступные переменные PostgreSQL:');
@@ -41,18 +61,31 @@ if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
             const value = process.env[key];
             console.error(`   ${key}: ${value ? '✓ установлена' : '✗ не установлена'}`);
         });
-        console.error('\n📝 Решение:');
-        console.error('   1. Убедитесь, что PostgreSQL сервис добавлен в проект Railway');
-        console.error('   2. Если PostgreSQL сервис есть, но переменные не видны:');
-        console.error('      - Откройте PostgreSQL сервис');
-        console.error('      - Перейдите в "Variables"');
-        console.error('      - Найдите имя сервиса (например: "Postgres", "PostgreSQL")');
-        console.error('      - В backend сервисе → Variables → DATABASE_URL');
-        console.error('      - Используйте: ${{ИМЯ_СЕРВИСА.DATABASE_URL}}');
-        console.error('   3. Если PostgreSQL сервиса нет:');
-        console.error('      - В проекте Railway нажмите "+ New"');
-        console.error('      - Выберите "Database" → "Add PostgreSQL"');
-        console.error('      - Railway автоматически создаст переменные');
+        console.error('\n📋 Все переменные, содержащие "DATABASE" или "POSTGRES":');
+        const dbRelatedVars = Object.keys(process.env).filter(key => key.toUpperCase().includes('DATABASE') ||
+            key.toUpperCase().includes('POSTGRES') ||
+            key.toUpperCase().includes('PG'));
+        if (dbRelatedVars.length > 0) {
+            dbRelatedVars.forEach(key => {
+                const value = process.env[key];
+                const masked = value && value.length > 30
+                    ? `${value.substring(0, 15)}...${value.substring(value.length - 10)}`
+                    : (value || '<empty>');
+                console.error(`   ${key}: ${masked}`);
+            });
+        }
+        else {
+            console.error('   (переменные не найдены)');
+        }
+        console.error('\n📝 Решение для Railway:');
+        console.error('   1. Убедитесь, что PostgreSQL сервис добавлен в проект');
+        console.error('   2. В backend сервисе → Variables → DATABASE_URL');
+        console.error('   3. Попробуйте эти варианты (по очереди):');
+        console.error('      - ${{Postgres.DATABASE_URL}}');
+        console.error('      - ${{PostgreSQL.DATABASE_URL}}');
+        console.error('      - ${{Database.DATABASE_URL}}');
+        console.error('      - ${{Postgresql.DATABASE_URL}}');
+        console.error('   4. Или используйте "Raw Editor" чтобы увидеть все доступные переменные');
         process.exit(1);
     }
 }
