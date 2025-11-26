@@ -39,6 +39,7 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
       'http://localhost:3000',
       'https://entech.p1ck23.ru',
       'https://entechsite-production.up.railway.app',
+      'https://entechsite-backend-production.up.railway.app',
       'https://web.telegram.org',
       'https://webk.telegram.org',
       'https://webz.telegram.org'
