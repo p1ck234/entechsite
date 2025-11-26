@@ -1,12 +1,49 @@
-import React from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { useTelegram } from '../contexts/TelegramContext';
 import Logo from '../components/Logo';
 
 const Home: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isAuthenticated, loginTelegram } = useAuth();
+  const { isTelegram, initData } = useTelegram();
+  const [loading, setLoading] = useState(false);
 
   // Определяем, находимся ли мы внутри Layout (защищенный маршрут /home)
   const isInsideLayout = location.pathname === '/home';
+
+  // Автоматическая авторизация через Telegram на главной странице
+  useEffect(() => {
+    // Если это Telegram Mini App, пользователь не авторизован, и есть initData
+    if (isTelegram && !isAuthenticated && initData && location.pathname === '/') {
+      const handleTelegramLogin = async () => {
+        try {
+          setLoading(true);
+          await loginTelegram(initData);
+          navigate('/home');
+        } catch (err: any) {
+          // Если ошибка авторизации, перенаправляем на /login для показа ошибки
+          console.error('Telegram login error:', err);
+          navigate('/login');
+        }
+      };
+      handleTelegramLogin();
+    }
+  }, [isTelegram, isAuthenticated, initData, location.pathname, loginTelegram, navigate]);
+
+  // Если идет авторизация, показываем загрузку
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-pastel-600">Авторизация через Telegram...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
