@@ -38,17 +38,19 @@ async function resetDatabase() {
     const adminUser = userResult.rows[0];
     console.log('✅ Администратор создан:', adminUser.email);
     
-    // Create employee record for admin
+    // Create employee record for admin with Telegram
+    const adminTelegram = '@pdmin1ck';
     await pool.query(
-      `INSERT INTO employees (first_name, last_name, position, department, email, phone, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      ['Администратор', 'Системы', 'Системный администратор', 'IT-Отдел', 'admin@entech.com', '+7 (000) 000-00-00', true]
+      `INSERT INTO employees (first_name, last_name, position, department, email, phone, telegram, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      ['Администратор', 'Системы', 'Системный администратор', 'IT-Отдел', 'admin@entech.com', '+7 (000) 000-00-00', adminTelegram, true]
     );
     
     console.log('✅ Запись сотрудника для администратора создана');
     console.log('\n📋 Данные для входа:');
     console.log('   Email: admin@entech.com');
     console.log('   Password: admin123');
+    console.log('   Telegram: @pdmin1ck');
     console.log('   Role: ADMIN');
     
     await pool.end();
