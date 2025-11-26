@@ -177,6 +177,12 @@ entechsite/
 
 ## 🚀 Развертывание
 
+### Быстрый старт
+
+Для развертывания на хостинге Sweb см.:
+- **Краткая инструкция**: [`DEPLOY_QUICK_START.md`](./DEPLOY_QUICK_START.md)
+- **Подробная инструкция**: [`DEPLOY_SWEB.md`](./DEPLOY_SWEB.md)
+
 ### Production сборка
 
 ```bash
@@ -188,7 +194,7 @@ npm run build
 cd ../backend
 npm run build
 
-# Запуск в production
+# Запуск в production (локально для тестирования)
 cd backend
 npm start
 ```
@@ -201,6 +207,19 @@ JWT_SECRET="your-super-secret-jwt-key-here"
 PORT=3001
 NODE_ENV="production"
 ```
+
+### Развертывание на Sweb
+
+1. Соберите проект (см. выше)
+2. Загрузите на сервер через Git или SCP
+3. Настройте базу данных PostgreSQL
+4. Установите зависимости и соберите проект
+5. Настройте PM2 для запуска backend
+6. Настройте Nginx для раздачи frontend и проксирования API
+7. Настройте SSL сертификат
+8. Обновите CORS настройки
+
+**Подробные инструкции:** [`DEPLOY_SWEB.md`](./DEPLOY_SWEB.md)
 
 ## 🤝 Разработка
 

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTelegram } from '../contexts/TelegramContext';
 import { SITE_CONFIG } from '../config/site';
 import { 
   Users, 
@@ -17,9 +18,37 @@ import Logo from './Logo';
 
 const Layout: React.FC = () => {
   const { user, logout, isAdmin, isAuthenticated } = useAuth();
+  const { isTelegram, webApp } = useTelegram();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Обработка кнопки "Назад" в Telegram
+  useEffect(() => {
+    if (!isTelegram || !webApp) return;
+
+    const handleBackButton = () => {
+      if (location.pathname === '/home' || location.pathname === '/dashboard') {
+        // Если на главной странице, закрываем приложение
+        webApp.close();
+      } else {
+        // Иначе возвращаемся назад
+        navigate(-1);
+      }
+    };
+
+    // Показываем кнопку "Назад" если не на главной странице
+    if (location.pathname !== '/home' && location.pathname !== '/dashboard') {
+      webApp.BackButton.show();
+      webApp.BackButton.onClick(handleBackButton);
+    } else {
+      webApp.BackButton.hide();
+    }
+
+    return () => {
+      webApp.BackButton.offClick(handleBackButton);
+    };
+  }, [isTelegram, webApp, location.pathname, navigate]);
 
   // Redirect to login if not authenticated
   if (!isAuthenticated) {
@@ -44,9 +73,9 @@ const Layout: React.FC = () => {
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div className="min-h-screen flex">
+    <div className={`min-h-screen flex ${isTelegram ? 'flex-col' : ''}`}>
       {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
+      {!isTelegram && sidebarOpen && (
         <div 
           className="fixed inset-0 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
@@ -55,11 +84,12 @@ const Layout: React.FC = () => {
         </div>
       )}
 
-      {/* Sidebar */}
-      <div className={`
-        fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
+      {/* Sidebar - скрываем в Telegram, используем bottom navigation */}
+      {!isTelegram && (
+        <div className={`
+          fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}>
         <div className="flex h-full flex-col glass-effect">
           {/* Logo */}
           <div className="flex h-16 items-center justify-center border-b border-white/20 px-4">
@@ -128,33 +158,63 @@ const Layout: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      )}
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col lg:ml-0">
-        {/* Top bar */}
-        <header className="bg-white/30 backdrop-blur-sm border-b border-white/20 px-4 py-4 lg:px-6">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-lg hover:bg-white/20 transition-colors"
-            >
-              <Menu className="w-6 h-6 text-pastel-700" />
-            </button>
-            
-            <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold text-pastel-800">
-                {navigation.find(item => isActive(item.href))?.name || SITE_CONFIG.name}
-              </h1>
+      <div className={`flex-1 flex flex-col ${isTelegram ? '' : 'lg:ml-0'}`}>
+        {/* Top bar - скрываем в Telegram */}
+        {!isTelegram && (
+          <header className="bg-white/30 backdrop-blur-sm border-b border-white/20 px-4 py-4 lg:px-6">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden p-2 rounded-lg hover:bg-white/20 transition-colors"
+              >
+                <Menu className="w-6 h-6 text-pastel-700" />
+              </button>
+              
+              <div className="flex items-center space-x-4">
+                <h1 className="text-2xl font-bold text-pastel-800">
+                  {navigation.find(item => isActive(item.href))?.name || SITE_CONFIG.name}
+                </h1>
+              </div>
             </div>
-          </div>
-        </header>
+          </header>
+        )}
 
         {/* Page content */}
-        <main className="flex-1 p-4 lg:p-6">
+        <main className={`flex-1 ${isTelegram ? 'p-4 pb-20' : 'p-4 lg:p-6'}`}>
           <Outlet />
         </main>
       </div>
+
+      {/* Bottom Navigation для Telegram */}
+      {isTelegram && (
+        <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-pastel-200 z-50 safe-area-inset-bottom">
+          <div className="flex justify-around items-center h-16">
+            {navigation.slice(0, 5).map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.name}
+                  onClick={() => navigate(item.href)}
+                  className={`
+                    flex flex-col items-center justify-center flex-1 h-full transition-colors
+                    ${isActive(item.href)
+                      ? 'text-primary-600'
+                      : 'text-pastel-600'
+                    }
+                  `}
+                >
+                  <Icon className="w-5 h-5 mb-1" />
+                  <span className="text-xs">{item.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
     </div>
   );
 };

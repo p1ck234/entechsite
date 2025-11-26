@@ -116,7 +116,7 @@ const Life: React.FC = () => {
                           src={image}
                           alt={`${event.title} ${index + 1}`}
                           className="w-full h-full object-cover"
-                          onError={(e) => {
+                          onError={() => {
                             // Fallback handled in component
                           }}
                         />

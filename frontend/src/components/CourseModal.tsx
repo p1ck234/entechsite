@@ -45,6 +45,7 @@ const CourseModal: React.FC<CourseModalProps> = ({ course, onClose }) => {
       const courseData = {
         ...formData,
         duration: formData.duration ? parseInt(formData.duration) : undefined,
+        isActive: true,
       };
 
       if (course) {

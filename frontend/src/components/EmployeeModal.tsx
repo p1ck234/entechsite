@@ -64,7 +64,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
       if (employee) {
         await employeesAPI.updateEmployee(employee.id, formData);
       } else {
-        await employeesAPI.createEmployee(formData);
+        await employeesAPI.createEmployee({ ...formData, isActive: true });
       }
       onClose();
     } catch (err: any) {

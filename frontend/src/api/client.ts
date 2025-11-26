@@ -1,6 +1,5 @@
 import axios from 'axios';
 import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, CalendarEvent } from '../types';
-import { SITE_CONFIG } from '../config/site';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -49,6 +48,11 @@ export const authAPI = {
 
   register: async (email: string, password: string, role?: string): Promise<AuthResponse> => {
     const response = await api.post('/auth/register', { email, password, role });
+    return response.data;
+  },
+
+  loginTelegram: async (initData: string): Promise<AuthResponse> => {
+    const response = await api.post('/auth/telegram', { initData });
     return response.data;
   },
 

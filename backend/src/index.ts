@@ -26,8 +26,21 @@ const PORT = process.env.PORT || 3001;
 app.use(helmet());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://entech.p1ck23.ru', 'http://entech.p1ck23.ru'] 
-    : ['http://localhost:5173', 'http://localhost:3000', 'https://entech.p1ck23.ru'],
+    ? [
+        'https://entech.p1ck23.ru', 
+        'http://entech.p1ck23.ru',
+        'https://web.telegram.org',
+        'https://webk.telegram.org',
+        'https://webz.telegram.org'
+      ] 
+    : [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'https://entech.p1ck23.ru',
+        'https://web.telegram.org',
+        'https://webk.telegram.org',
+        'https://webz.telegram.org'
+      ],
   credentials: true
 }));
 

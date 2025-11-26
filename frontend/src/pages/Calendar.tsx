@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { calendarAPI } from '../api/client';
 import { CalendarEvent } from '../types';
-import { ChevronLeft, ChevronRight, Plus, Edit, Trash2, MapPin, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Clock } from 'lucide-react';
 import CalendarEventModal from '../components/CalendarEventModal';
 
 const Calendar: React.FC = () => {
@@ -91,20 +91,6 @@ const Calendar: React.FC = () => {
     const [year, month, day] = dateStr.split('-').map(Number);
     setSelectedDate(new Date(year, month - 1, day));
     setShowModal(true);
-  };
-
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!isAdmin) return;
-    
-    if (window.confirm('Вы уверены, что хотите удалить это мероприятие?')) {
-      try {
-        await calendarAPI.deleteEvent(id);
-        fetchEvents();
-      } catch (error) {
-        console.error('Error deleting event:', error);
-      }
-    }
   };
 
   const handleModalClose = () => {

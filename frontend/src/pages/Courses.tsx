@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { coursesAPI, lessonsAPI } from '../api/client';
 import { Course, CoursesResponse, Lesson } from '../types';
-import { Search, Plus, Edit, Trash2, ExternalLink, Play, CheckCircle, Clock, BookOpen, List } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, ExternalLink, Play, CheckCircle, Clock, BookOpen } from 'lucide-react';
 import CourseModal from '../components/CourseModal';
 import LessonModal from '../components/LessonModal';
 import { useLocation } from 'react-router-dom';
@@ -167,7 +167,7 @@ const Courses: React.FC = () => {
     if (course.userProgress?.completed) {
       return <CheckCircle className="w-5 h-5 text-green-500" />;
     }
-    if (course.userProgress?.progress > 0) {
+    if (course.userProgress?.progress && course.userProgress.progress > 0) {
       return <Clock className="w-5 h-5 text-yellow-500" />;
     }
     return <Play className="w-5 h-5 text-pastel-400" />;

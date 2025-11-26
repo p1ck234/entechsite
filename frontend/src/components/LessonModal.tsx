@@ -60,9 +60,10 @@ const LessonModal: React.FC<LessonModalProps> = ({ lesson, courseId, onClose }) 
         // Create lesson - include courseId
         const createData = {
           ...formData,
-          courseId: parseInt(courseId),
+          courseId: courseId,
           duration: formData.duration ? parseInt(formData.duration) : undefined,
           orderIndex: parseInt(formData.orderIndex.toString()) || 0,
+          isActive: true,
         };
         await lessonsAPI.createLesson(createData);
       }

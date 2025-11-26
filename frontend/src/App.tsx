@@ -8,7 +8,6 @@ import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
 import Courses from './pages/Courses';
 import Profile from './pages/Profile';
-import ComingSoon from './pages/ComingSoon';
 import Life from './pages/Life';
 import Calendar from './pages/Calendar';
 import LoadingSpinner from './components/LoadingSpinner';

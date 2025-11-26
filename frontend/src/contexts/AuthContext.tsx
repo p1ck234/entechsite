@@ -6,6 +6,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
+  loginTelegram: (initData: string) => Promise<void>;
   register: (email: string, password: string, role?: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
@@ -77,6 +78,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const loginTelegram = async (initData: string) => {
+    try {
+      const response = await authAPI.loginTelegram(initData);
+      const { user, token } = response;
+
+      setUser(user);
+      setToken(token);
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Ошибка входа через Telegram');
+    }
+  };
+
   const register = async (email: string, password: string, role?: string) => {
     try {
       const response = await authAPI.register(email, password, role);
@@ -102,6 +117,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user,
     token,
     login,
+    loginTelegram,
     register,
     logout,
     loading,

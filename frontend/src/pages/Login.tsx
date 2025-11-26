@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTelegram } from '../contexts/TelegramContext';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import Logo from '../components/Logo';
 
@@ -13,8 +14,26 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { login } = useAuth();
+  const { login, loginTelegram } = useAuth();
+  const { isTelegram, initData } = useTelegram();
   const navigate = useNavigate();
+
+  // Автоматическая авторизация через Telegram
+  useEffect(() => {
+    if (isTelegram && initData) {
+      const handleTelegramLogin = async () => {
+        try {
+          setLoading(true);
+          await loginTelegram(initData);
+          navigate('/home');
+        } catch (err: any) {
+          setError(err.message || 'Ошибка авторизации через Telegram');
+          setLoading(false);
+        }
+      };
+      handleTelegramLogin();
+    }
+  }, [isTelegram, initData, loginTelegram, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +57,18 @@ const Login: React.FC = () => {
     });
   };
 
+  // Если это Telegram, показываем загрузку
+  if (isTelegram && loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-pastel-600">Авторизация через Telegram...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
       <div className="w-full max-w-md">
@@ -46,7 +77,9 @@ const Login: React.FC = () => {
           <div className="flex justify-center mb-4">
             <Logo size="lg" />
           </div>
-          <p className="text-pastel-600">Войдите в систему управления компанией</p>
+          <p className="text-pastel-600">
+            {isTelegram ? 'Вход через Telegram' : 'Войдите в систему управления компанией'}
+          </p>
         </div>
 
         {/* Login Form */}
