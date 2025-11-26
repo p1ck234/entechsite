@@ -89,6 +89,13 @@ router.post('/telegram', [
 
     const telegramUser = JSON.parse(decodeURIComponent(userStr));
     const telegramId = telegramUser.id;
+    const telegramUsername = telegramUser.username;
+
+    console.log('🔍 Telegram авторизация:', {
+      telegramId,
+      telegramUsername,
+      fullUser: telegramUser
+    });
 
     if (!telegramId) {
       return res.status(400).json({ message: 'Telegram user ID not found' });
@@ -96,9 +103,6 @@ router.post('/telegram', [
 
     // Ищем сотрудника по Telegram username (приоритет) или ID
     // Формат в базе может быть: @username, username, или ID
-    const telegramUsername = telegramUser.username;
-    
-    // Список вариантов для поиска
     const searchVariants: string[] = [];
     
     if (telegramUsername) {
@@ -109,13 +113,30 @@ router.post('/telegram', [
     // Также ищем по ID
     searchVariants.push(`${telegramId}`); // 123456789
     
-    // Строим SQL запрос с нужным количеством параметров
-    const placeholders = searchVariants.map((_, i) => `$${i + 1}`).join(' OR telegram = ');
+    console.log('🔍 Варианты поиска:', searchVariants);
     
-    const employeeResult = await pool.query(
-      `SELECT * FROM employees WHERE (telegram = ${placeholders}) AND is_active = true`,
-      searchVariants
-    );
+    // Строим SQL запрос с нужным количеством параметров
+    // Используем правильный синтаксис для множественного поиска
+    const placeholders = searchVariants.map((_, i) => `telegram = $${i + 1}`).join(' OR ');
+    const sqlQuery = `SELECT * FROM employees WHERE (${placeholders}) AND is_active = true`;
+    
+    console.log('🔍 SQL запрос:', sqlQuery);
+    console.log('🔍 Параметры поиска:', searchVariants);
+    
+    const employeeResult = await pool.query(sqlQuery, searchVariants);
+    
+    console.log('🔍 Найдено сотрудников:', employeeResult.rows.length);
+    if (employeeResult.rows.length > 0) {
+      console.log('✅ Найден сотрудник:', {
+        id: employeeResult.rows[0].id,
+        email: employeeResult.rows[0].email,
+        telegram: employeeResult.rows[0].telegram
+      });
+    } else {
+      // Показываем все сотрудники для отладки
+      const allEmployees = await pool.query('SELECT id, email, telegram, is_active FROM employees LIMIT 10');
+      console.log('📋 Все сотрудники в базе:', allEmployees.rows);
+    }
 
     // Если сотрудник не найден - возвращаем ошибку
     if (employeeResult.rows.length === 0) {

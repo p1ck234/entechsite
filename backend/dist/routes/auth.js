@@ -68,18 +68,39 @@ router.post('/telegram', [
         }
         const telegramUser = JSON.parse(decodeURIComponent(userStr));
         const telegramId = telegramUser.id;
+        const telegramUsername = telegramUser.username;
+        console.log('🔍 Telegram авторизация:', {
+            telegramId,
+            telegramUsername,
+            fullUser: telegramUser
+        });
         if (!telegramId) {
             return res.status(400).json({ message: 'Telegram user ID not found' });
         }
-        const telegramUsername = telegramUser.username;
         const searchVariants = [];
         if (telegramUsername) {
             searchVariants.push(`@${telegramUsername}`);
             searchVariants.push(telegramUsername);
         }
         searchVariants.push(`${telegramId}`);
-        const placeholders = searchVariants.map((_, i) => `$${i + 1}`).join(' OR telegram = ');
-        const employeeResult = await pool.query(`SELECT * FROM employees WHERE (telegram = ${placeholders}) AND is_active = true`, searchVariants);
+        console.log('🔍 Варианты поиска:', searchVariants);
+        const placeholders = searchVariants.map((_, i) => `telegram = $${i + 1}`).join(' OR ');
+        const sqlQuery = `SELECT * FROM employees WHERE (${placeholders}) AND is_active = true`;
+        console.log('🔍 SQL запрос:', sqlQuery);
+        console.log('🔍 Параметры поиска:', searchVariants);
+        const employeeResult = await pool.query(sqlQuery, searchVariants);
+        console.log('🔍 Найдено сотрудников:', employeeResult.rows.length);
+        if (employeeResult.rows.length > 0) {
+            console.log('✅ Найден сотрудник:', {
+                id: employeeResult.rows[0].id,
+                email: employeeResult.rows[0].email,
+                telegram: employeeResult.rows[0].telegram
+            });
+        }
+        else {
+            const allEmployees = await pool.query('SELECT id, email, telegram, is_active FROM employees LIMIT 10');
+            console.log('📋 Все сотрудники в базе:', allEmployees.rows);
+        }
         if (employeeResult.rows.length === 0) {
             return res.status(403).json({
                 message: 'Доступ запрещен. Обратитесь к администратору для добавления в систему.',
