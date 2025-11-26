@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, AtSign } from 'lucide-react';
 
 const Register: React.FC = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     confirmPassword: '',
+    telegramUsername: '',
+    firstName: '',
+    lastName: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -34,9 +37,27 @@ const Register: React.FC = () => {
       return;
     }
 
+    if (!formData.telegramUsername) {
+      setError('Укажите ваш Telegram username');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.firstName || !formData.lastName) {
+      setError('Укажите имя и фамилию');
+      setLoading(false);
+      return;
+    }
+
     try {
-      await register(formData.email, formData.password);
-      navigate('/dashboard');
+      await register(
+        formData.email, 
+        formData.password, 
+        formData.telegramUsername,
+        formData.firstName,
+        formData.lastName
+      );
+      navigate('/home');
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -78,6 +99,71 @@ const Register: React.FC = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
+              <p className="font-medium mb-1">Регистрация первого пользователя</p>
+              <p>Первый зарегистрированный пользователь автоматически станет администратором. После регистрации вы сможете войти через Telegram Mini App.</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="firstName" className="block text-sm font-medium text-pastel-700 mb-2">
+                  Имя
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-pastel-400 w-5 h-5" />
+                  <input
+                    id="firstName"
+                    name="firstName"
+                    type="text"
+                    required
+                    value={formData.firstName}
+                    onChange={handleChange}
+                    className="input-field pl-10"
+                    placeholder="Иван"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="lastName" className="block text-sm font-medium text-pastel-700 mb-2">
+                  Фамилия
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-pastel-400 w-5 h-5" />
+                  <input
+                    id="lastName"
+                    name="lastName"
+                    type="text"
+                    required
+                    value={formData.lastName}
+                    onChange={handleChange}
+                    className="input-field pl-10"
+                    placeholder="Иванов"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="telegramUsername" className="block text-sm font-medium text-pastel-700 mb-2">
+                Telegram Username
+              </label>
+              <div className="relative">
+                <AtSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-pastel-400 w-5 h-5" />
+                <input
+                  id="telegramUsername"
+                  name="telegramUsername"
+                  type="text"
+                  required
+                  value={formData.telegramUsername}
+                  onChange={handleChange}
+                  className="input-field pl-10"
+                  placeholder="pdmin1ck (без @)"
+                />
+              </div>
+              <p className="mt-1 text-xs text-pastel-500">Укажите ваш Telegram username без символа @</p>
+            </div>
+
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-pastel-700 mb-2">
                 Email

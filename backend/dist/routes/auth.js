@@ -12,8 +12,86 @@ const router = express_1.default.Router();
 const pool = new pg_1.Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
-router.post('/register', async (req, res) => {
-    res.status(403).json({ message: 'Public registration is disabled. Please contact an administrator.' });
+router.post('/register', [
+    (0, express_validator_1.body)('email').isEmail().normalizeEmail(),
+    (0, express_validator_1.body)('password').isLength({ min: 6 }),
+    (0, express_validator_1.body)('telegramUsername').notEmpty().trim(),
+    (0, express_validator_1.body)('firstName').notEmpty().trim(),
+    (0, express_validator_1.body)('lastName').notEmpty().trim(),
+    (0, express_validator_1.body)('position').optional().isString().trim(),
+    (0, express_validator_1.body)('department').optional().isString().trim(),
+], async (req, res) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        const { email, password, telegramUsername, firstName, lastName, position, department } = req.body;
+        const existingUsers = await pool.query('SELECT COUNT(*) as count FROM users');
+        const userCount = parseInt(existingUsers.rows[0].count);
+        if (userCount > 0) {
+            return res.status(403).json({
+                message: 'Регистрация закрыта. Обратитесь к администратору для добавления в систему.',
+                hint: 'Первый пользователь уже зарегистрирован. Для добавления новых пользователей используйте админ-панель.'
+            });
+        }
+        const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ message: 'Пользователь с таким email уже существует' });
+        }
+        const telegramNormalized = telegramUsername.startsWith('@')
+            ? telegramUsername.substring(1)
+            : telegramUsername;
+        const existingEmployee = await pool.query('SELECT id FROM employees WHERE telegram = $1 OR telegram = $2', [telegramNormalized, `@${telegramNormalized}`]);
+        if (existingEmployee.rows.length > 0) {
+            return res.status(400).json({ message: 'Сотрудник с таким Telegram username уже существует' });
+        }
+        const hashedPassword = await bcryptjs_1.default.hash(password, 12);
+        const userResult = await pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING id, email, role, created_at', [email, hashedPassword, 'ADMIN']);
+        const user = userResult.rows[0];
+        const employeeResult = await pool.query(`INSERT INTO employees (first_name, last_name, position, department, email, phone, telegram, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`, [
+            firstName,
+            lastName,
+            position || 'Сотрудник',
+            department || 'Общий отдел',
+            email,
+            '+7 (000) 000-00-00',
+            telegramNormalized,
+            true
+        ]);
+        console.log('✅ Первый пользователь зарегистрирован:', {
+            email: user.email,
+            role: user.role,
+            telegram: telegramNormalized,
+            employeeId: employeeResult.rows[0].id
+        });
+        const token = jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-change-this-in-production', { expiresIn: '30d' });
+        res.status(201).json({
+            message: 'Регистрация успешна! Вы стали первым администратором.',
+            user: {
+                id: user.id,
+                email: user.email,
+                role: user.role
+            },
+            employee: {
+                id: employeeResult.rows[0].id,
+                firstName: employeeResult.rows[0].first_name,
+                lastName: employeeResult.rows[0].last_name,
+                telegram: employeeResult.rows[0].telegram
+            },
+            token,
+            instructions: {
+                telegram: `Ваш Telegram username: ${telegramNormalized}`,
+                login: 'Теперь вы можете войти через Telegram Mini App',
+                note: 'После входа через Telegram вы сможете добавлять других пользователей через админ-панель'
+            }
+        });
+    }
+    catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ message: 'Ошибка при регистрации', error: error instanceof Error ? error.message : 'Unknown error' });
+    }
 });
 router.post('/login', [
     (0, express_validator_1.body)('email').isEmail().normalizeEmail(),

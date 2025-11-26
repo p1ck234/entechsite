@@ -46,8 +46,16 @@ export const authAPI = {
     return response.data;
   },
 
-  register: async (email: string, password: string, role?: string): Promise<AuthResponse> => {
-    const response = await api.post('/auth/register', { email, password, role });
+  register: async (email: string, password: string, telegramUsername: string, firstName: string, lastName: string, position?: string, department?: string): Promise<AuthResponse> => {
+    const response = await api.post('/auth/register', { 
+      email, 
+      password, 
+      telegramUsername,
+      firstName,
+      lastName,
+      position,
+      department
+    });
     return response.data;
   },
 

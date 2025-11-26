@@ -9,9 +9,121 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
 
-// Register - DISABLED: Only admins can create users now
-router.post('/register', async (req: any, res: any) => {
-  res.status(403).json({ message: 'Public registration is disabled. Please contact an administrator.' });
+// Register - ВРЕМЕННО: Разрешена регистрация первого пользователя с Telegram
+router.post('/register', [
+  body('email').isEmail().normalizeEmail(),
+  body('password').isLength({ min: 6 }),
+  body('telegramUsername').notEmpty().trim(),
+  body('firstName').notEmpty().trim(),
+  body('lastName').notEmpty().trim(),
+  body('position').optional().isString().trim(),
+  body('department').optional().isString().trim(),
+], async (req: any, res: any) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { email, password, telegramUsername, firstName, lastName, position, department } = req.body;
+
+    // Проверяем, есть ли уже пользователи в системе
+    const existingUsers = await pool.query('SELECT COUNT(*) as count FROM users');
+    const userCount = parseInt(existingUsers.rows[0].count);
+
+    // Если уже есть пользователи - запрещаем регистрацию
+    if (userCount > 0) {
+      return res.status(403).json({ 
+        message: 'Регистрация закрыта. Обратитесь к администратору для добавления в систему.',
+        hint: 'Первый пользователь уже зарегистрирован. Для добавления новых пользователей используйте админ-панель.'
+      });
+    }
+
+    // Проверяем, не существует ли уже пользователь с таким email
+    const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ message: 'Пользователь с таким email уже существует' });
+    }
+
+    // Нормализуем Telegram username (убираем @ если есть)
+    const telegramNormalized = telegramUsername.startsWith('@') 
+      ? telegramUsername.substring(1) 
+      : telegramUsername;
+
+    // Проверяем, не существует ли уже сотрудник с таким Telegram
+    const existingEmployee = await pool.query(
+      'SELECT id FROM employees WHERE telegram = $1 OR telegram = $2',
+      [telegramNormalized, `@${telegramNormalized}`]
+    );
+    if (existingEmployee.rows.length > 0) {
+      return res.status(400).json({ message: 'Сотрудник с таким Telegram username уже существует' });
+    }
+
+    // Хешируем пароль
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Создаем пользователя (первый пользователь становится ADMIN)
+    const userResult = await pool.query(
+      'INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING id, email, role, created_at',
+      [email, hashedPassword, 'ADMIN']
+    );
+
+    const user = userResult.rows[0];
+
+    // Создаем сотрудника с Telegram username
+    const employeeResult = await pool.query(
+      `INSERT INTO employees (first_name, last_name, position, department, email, phone, telegram, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [
+        firstName,
+        lastName,
+        position || 'Сотрудник',
+        department || 'Общий отдел',
+        email,
+        '+7 (000) 000-00-00', // Временный телефон
+        telegramNormalized, // Сохраняем БЕЗ @
+        true
+      ]
+    );
+
+    console.log('✅ Первый пользователь зарегистрирован:', {
+      email: user.email,
+      role: user.role,
+      telegram: telegramNormalized,
+      employeeId: employeeResult.rows[0].id
+    });
+
+    // Генерируем JWT токен
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-change-this-in-production',
+      { expiresIn: '30d' }
+    );
+
+    res.status(201).json({
+      message: 'Регистрация успешна! Вы стали первым администратором.',
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role
+      },
+      employee: {
+        id: employeeResult.rows[0].id,
+        firstName: employeeResult.rows[0].first_name,
+        lastName: employeeResult.rows[0].last_name,
+        telegram: employeeResult.rows[0].telegram
+      },
+      token,
+      instructions: {
+        telegram: `Ваш Telegram username: ${telegramNormalized}`,
+        login: 'Теперь вы можете войти через Telegram Mini App',
+        note: 'После входа через Telegram вы сможете добавлять других пользователей через админ-панель'
+      }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ message: 'Ошибка при регистрации', error: error instanceof Error ? error.message : 'Unknown error' });
+  }
 });
 
 // Login

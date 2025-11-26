@@ -7,7 +7,7 @@ interface AuthContextType {
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
   loginTelegram: (initData: string) => Promise<void>;
-  register: (email: string, password: string, role?: string) => Promise<void>;
+  register: (email: string, password: string, telegramUsername: string, firstName: string, lastName: string, position?: string, department?: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
   isAuthenticated: boolean;
@@ -97,9 +97,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const register = async (email: string, password: string, role?: string) => {
+  const register = async (email: string, password: string, telegramUsername: string, firstName: string, lastName: string, position?: string, department?: string) => {
     try {
-      const response = await authAPI.register(email, password, role);
+      const response = await authAPI.register(email, password, telegramUsername, firstName, lastName, position, department);
       const { user, token } = response;
 
       setUser(user);
