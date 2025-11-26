@@ -2,19 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTelegram } from '../contexts/TelegramContext';
-import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import Logo from '../components/Logo';
 
 const Login: React.FC = () => {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { login, loginTelegram } = useAuth();
+  const { loginTelegram } = useAuth();
   const { isTelegram, initData } = useTelegram();
   const navigate = useNavigate();
 
@@ -34,28 +28,6 @@ const Login: React.FC = () => {
       handleTelegramLogin();
     }
   }, [isTelegram, initData, loginTelegram, navigate]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      await login(formData.email, formData.password);
-      navigate('/home');
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
 
   // Если это Telegram, показываем загрузку
   if (isTelegram) {
