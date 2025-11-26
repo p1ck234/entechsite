@@ -179,26 +179,65 @@ router.post('/telegram', [
         console.log('🔍 Параметры поиска:', searchVariants);
         const employeeResult = await pool.query(sqlQuery, searchVariants);
         console.log('🔍 Найдено сотрудников:', employeeResult.rows.length);
-        if (employeeResult.rows.length > 0) {
-            console.log('✅ Найден сотрудник:', {
-                id: employeeResult.rows[0].id,
-                email: employeeResult.rows[0].email,
-                telegram: employeeResult.rows[0].telegram
-            });
+        let employee;
+        let userEmail;
+        if (employeeResult.rows.length === 0) {
+            const usersCount = await pool.query('SELECT COUNT(*) as count FROM users');
+            const totalUsers = parseInt(usersCount.rows[0].count);
+            if (totalUsers === 0) {
+                console.log('👤 Первый пользователь - создаем автоматически через Telegram');
+                if (!telegramUsername) {
+                    return res.status(400).json({
+                        message: 'Для первого входа необходим Telegram username. Убедитесь, что у вас установлен username в настройках Telegram.'
+                    });
+                }
+                const telegramNormalized = telegramUsername.startsWith('@')
+                    ? telegramUsername.substring(1)
+                    : telegramUsername;
+                userEmail = `${telegramNormalized}@telegram.local`;
+                const randomPassword = Math.random().toString(36).slice(-12);
+                const hashedPassword = await bcryptjs_1.default.hash(randomPassword, 12);
+                const userResult = await pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING *', [userEmail, hashedPassword, 'ADMIN']);
+                console.log('✅ Создан первый администратор:', userResult.rows[0].email);
+                const employeeResult = await pool.query(`INSERT INTO employees (first_name, last_name, position, department, email, phone, telegram, is_active)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`, [
+                    telegramUser.first_name || 'Пользователь',
+                    telegramUser.last_name || 'Telegram',
+                    'Администратор',
+                    'IT-Отдел',
+                    userEmail,
+                    '+7 (000) 000-00-00',
+                    telegramNormalized,
+                    true
+                ]);
+                employee = employeeResult.rows[0];
+                console.log('✅ Создан первый сотрудник с Telegram:', telegramNormalized);
+            }
+            else {
+                const allEmployees = await pool.query('SELECT id, email, telegram, is_active FROM employees LIMIT 10');
+                console.log('📋 Все сотрудники в базе:', allEmployees.rows.map(e => ({
+                    id: e.id,
+                    email: e.email,
+                    telegram: e.telegram,
+                    is_active: e.is_active
+                })));
+                return res.status(403).json({
+                    message: 'Доступ запрещен. Обратитесь к администратору для добавления в систему.',
+                    telegramUsername: telegramUsername || null,
+                    telegramId: telegramId,
+                    hint: `Ваш Telegram username: ${telegramUsername || 'не установлен'}. Сообщите его администратору.`
+                });
+            }
         }
         else {
-            const allEmployees = await pool.query('SELECT id, email, telegram, is_active FROM employees LIMIT 10');
-            console.log('📋 Все сотрудники в базе:', allEmployees.rows);
-        }
-        if (employeeResult.rows.length === 0) {
-            return res.status(403).json({
-                message: 'Доступ запрещен. Обратитесь к администратору для добавления в систему.',
-                telegramUsername: telegramUsername || null,
-                telegramId: telegramId
+            employee = employeeResult.rows[0];
+            userEmail = employee.email;
+            console.log('✅ Найден сотрудник:', {
+                id: employee.id,
+                email: employee.email,
+                telegram: employee.telegram
             });
         }
-        const employee = employeeResult.rows[0];
-        const userEmail = employee.email;
         let userResult = await pool.query('SELECT * FROM users WHERE email = $1', [userEmail]);
         let user;
         if (userResult.rows.length === 0) {
