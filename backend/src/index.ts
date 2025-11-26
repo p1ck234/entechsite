@@ -18,12 +18,50 @@ import { initializeDatabase } from './utils/db-init';
 dotenv.config();
 
 // Проверяем DATABASE_URL
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  console.error('❌ DATABASE_URL не настроен!');
-  console.error('📝 В Railway добавьте переменную DATABASE_URL со значением ${{Postgres.DATABASE_URL}}');
-  console.error('   (замените "Postgres" на имя вашего PostgreSQL сервиса)');
-  process.exit(1);
+let databaseUrl = process.env.DATABASE_URL;
+
+// Если DATABASE_URL содержит шаблон Railway (не подставлен), пытаемся найти альтернативные варианты
+if (!databaseUrl || databaseUrl.includes('{{')) {
+  // Проверяем альтернативные имена переменных
+  databaseUrl = process.env.DATABASE_URL || 
+                process.env.POSTGRES_URL || 
+                process.env.POSTGRES_DATABASE_URL ||
+                process.env.PGDATABASE ||
+                process.env.DATABASE_CONNECTION_STRING;
+  
+  if (!databaseUrl || databaseUrl.includes('{{')) {
+    console.error('❌ DATABASE_URL не настроен или содержит шаблон Railway!');
+    console.error('\n📊 Доступные переменные окружения:');
+    const envKeys = Object.keys(process.env).filter(key => 
+      key.includes('DATABASE') || 
+      key.includes('POSTGRES') || 
+      key.includes('DB') ||
+      key.includes('PG')
+    );
+    if (envKeys.length > 0) {
+      envKeys.forEach(key => {
+        const value = process.env[key];
+        const masked = value && value.length > 20 
+          ? `${value.substring(0, 10)}...${value.substring(value.length - 5)}`
+          : (value || '<empty>');
+        console.error(`   ${key}: ${masked}`);
+      });
+    } else {
+      console.error('   (переменные базы данных не найдены)');
+    }
+    
+    console.error('\n📝 Инструкция:');
+    console.error('   1. Откройте PostgreSQL сервис в Railway');
+    console.error('   2. Посмотрите его имя (например: "Postgres", "PostgreSQL", "Database")');
+    console.error('   3. В backend сервисе → Variables → DATABASE_URL');
+    console.error('   4. Используйте: ${{ИМЯ_СЕРВИСА.DATABASE_URL}}');
+    console.error('   5. Или используйте "Raw Editor" чтобы увидеть все доступные переменные');
+    console.error('\n💡 Попробуйте эти варианты:');
+    console.error('   - ${{Postgres.DATABASE_URL}}');
+    console.error('   - ${{PostgreSQL.DATABASE_URL}}');
+    console.error('   - ${{Database.DATABASE_URL}}');
+    process.exit(1);
+  }
 }
 
 const app = express();
