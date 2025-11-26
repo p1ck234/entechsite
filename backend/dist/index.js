@@ -20,7 +20,7 @@ const app = (0, express_1.default)();
 const pool = new pg_1.Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
-const PORT = process.env.PORT || 3001;
+const PORT = parseInt(process.env.PORT || '3001', 10);
 app.use((0, helmet_1.default)());
 const allowedOrigins = process.env.NODE_ENV === 'production'
     ? [
@@ -37,6 +37,7 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
         'http://localhost:3000',
         'https://entech.p1ck23.ru',
         'https://entechsite-production.up.railway.app',
+        'https://entechsite-backend-production.up.railway.app',
         'https://web.telegram.org',
         'https://webk.telegram.org',
         'https://webz.telegram.org'
@@ -77,8 +78,12 @@ process.on('SIGTERM', async () => {
     await pool.end();
     process.exit(0);
 });
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV}`);
+    console.log(`📊 Database URL: ${process.env.DATABASE_URL ? 'Configured' : 'NOT CONFIGURED'}`);
+}).on('error', (err) => {
+    console.error('❌ Server error:', err);
+    process.exit(1);
 });
 //# sourceMappingURL=index.js.map
