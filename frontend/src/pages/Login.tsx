@@ -77,16 +77,24 @@ const Login: React.FC = () => {
         return;
       }
       
-      // Проверяем, не создан ли уже виджет
-      if (container.querySelector('script[data-telegram-login]')) {
+      // Проверяем, не создан ли уже виджет (iframe или script)
+      if (container.querySelector('iframe[id*="telegram-login"], script[data-telegram-login]')) {
         console.log('✅ Widget already exists');
         return;
       }
       
-      // Очищаем контейнер
-      container.innerHTML = '';
+      // Очищаем контейнер только если там нет виджета
+      const existingWidget = container.querySelector('iframe[id*="telegram-login"]');
+      if (!existingWidget) {
+        container.innerHTML = '';
+      } else {
+        return; // Виджет уже есть
+      }
       
       console.log('✅ Creating Telegram widget with bot name:', botName);
+      
+      // Упрощаем return_to URL - используем только путь без данных
+      const returnTo = window.location.origin + '/login';
       
       // Создаем script тег с атрибутами (правильный способ для Telegram Widget)
       // Telegram Widget автоматически найдет все script теги с data-telegram-login
@@ -98,6 +106,8 @@ const Login: React.FC = () => {
       widgetScript.setAttribute('data-size', 'large');
       widgetScript.setAttribute('data-onauth', 'onTelegramAuth(user)');
       widgetScript.setAttribute('data-request-access', 'write');
+      // Упрощаем return_to - используем только origin + путь
+      widgetScript.setAttribute('data-auth-url', returnTo);
       
       widgetScript.onload = () => {
         console.log('✅ Telegram widget script loaded');
