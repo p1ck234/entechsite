@@ -534,21 +534,38 @@ router.post('/telegram-oauth', [
     });
 
     // Ищем сотрудника по Telegram username или ID
-    const searchVariants: string[] = [];
-    
+    // Используем два типа поиска: по telegram (username) и по telegram_id (ID)
+    const searchConditions: string[] = [];
+    const searchParams: any[] = [];
+    let paramIndex = 1;
+
+    // Поиск по username
     if (username) {
       const usernameNormalized = username.startsWith('@') 
         ? username.substring(1) 
         : username;
-      searchVariants.push(usernameNormalized);
-      searchVariants.push(`@${usernameNormalized}`);
+      searchConditions.push(`(telegram = $${paramIndex} OR telegram = $${paramIndex + 1})`);
+      searchParams.push(usernameNormalized);
+      searchParams.push(`@${usernameNormalized}`);
+      paramIndex += 2;
     }
-    searchVariants.push(`${id}`);
 
-    const placeholders = searchVariants.map((_, i) => `telegram = $${i + 1}`).join(' OR ');
-    const sqlQuery = `SELECT * FROM employees WHERE (${placeholders}) AND is_active = true AND status = 'APPROVED'`;
+    // Поиск по Telegram ID (число)
+    searchConditions.push(`telegram_id = $${paramIndex}`);
+    searchParams.push(id);
+    paramIndex++;
 
-    const employeeResult = await pool.query(sqlQuery, searchVariants);
+    // Также ищем по telegram как строке (на случай если ID сохранен как строка)
+    searchConditions.push(`telegram = $${paramIndex}`);
+    searchParams.push(`${id}`);
+
+    const whereClause = searchConditions.join(' OR ');
+    const sqlQuery = `SELECT * FROM employees WHERE (${whereClause}) AND is_active = true AND status = 'APPROVED'`;
+
+    console.log('🔍 SQL запрос:', sqlQuery);
+    console.log('🔍 Параметры:', searchParams);
+
+    const employeeResult = await pool.query(sqlQuery, searchParams);
 
     if (employeeResult.rows.length === 0) {
       return res.status(403).json({ 
@@ -584,6 +601,27 @@ router.post('/telegram-oauth', [
       telegram: employee.telegram,
       status: employee.status
     });
+
+    // Обновляем telegram_id в employees если его еще нет
+    if (!employee.telegram_id) {
+      await pool.query(
+        'UPDATE employees SET telegram_id = $1 WHERE id = $2',
+        [id, employee.id]
+      );
+      console.log('✅ Обновлен telegram_id для сотрудника:', employee.id);
+    }
+
+    // Обновляем telegram username если его нет или изменился
+    if (username) {
+      const usernameNormalized = username.startsWith('@') ? username.substring(1) : username;
+      if (employee.telegram !== usernameNormalized && employee.telegram !== `@${usernameNormalized}`) {
+        await pool.query(
+          'UPDATE employees SET telegram = $1 WHERE id = $2',
+          [usernameNormalized, employee.id]
+        );
+        console.log('✅ Обновлен telegram username для сотрудника:', employee.id);
+      }
+    }
 
     // Ищем или создаем пользователя
     let userResult = await pool.query('SELECT * FROM users WHERE email = $1', [userEmail]);

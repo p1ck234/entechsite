@@ -386,18 +386,28 @@ router.post('/telegram-oauth', [
             first_name,
             last_name
         });
-        const searchVariants = [];
+        const searchConditions = [];
+        const searchParams = [];
+        let paramIndex = 1;
         if (username) {
             const usernameNormalized = username.startsWith('@')
                 ? username.substring(1)
                 : username;
-            searchVariants.push(usernameNormalized);
-            searchVariants.push(`@${usernameNormalized}`);
+            searchConditions.push(`(telegram = $${paramIndex} OR telegram = $${paramIndex + 1})`);
+            searchParams.push(usernameNormalized);
+            searchParams.push(`@${usernameNormalized}`);
+            paramIndex += 2;
         }
-        searchVariants.push(`${id}`);
-        const placeholders = searchVariants.map((_, i) => `telegram = $${i + 1}`).join(' OR ');
-        const sqlQuery = `SELECT * FROM employees WHERE (${placeholders}) AND is_active = true AND status = 'APPROVED'`;
-        const employeeResult = await pool.query(sqlQuery, searchVariants);
+        searchConditions.push(`telegram_id = $${paramIndex}`);
+        searchParams.push(id);
+        paramIndex++;
+        searchConditions.push(`telegram = $${paramIndex}`);
+        searchParams.push(`${id}`);
+        const whereClause = searchConditions.join(' OR ');
+        const sqlQuery = `SELECT * FROM employees WHERE (${whereClause}) AND is_active = true AND status = 'APPROVED'`;
+        console.log('🔍 SQL запрос:', sqlQuery);
+        console.log('🔍 Параметры:', searchParams);
+        const employeeResult = await pool.query(sqlQuery, searchParams);
         if (employeeResult.rows.length === 0) {
             return res.status(403).json({
                 message: 'Вы не зарегистрированы в системе. Обратитесь к администратору для добавления в систему.',
@@ -427,6 +437,17 @@ router.post('/telegram-oauth', [
             telegram: employee.telegram,
             status: employee.status
         });
+        if (!employee.telegram_id) {
+            await pool.query('UPDATE employees SET telegram_id = $1 WHERE id = $2', [id, employee.id]);
+            console.log('✅ Обновлен telegram_id для сотрудника:', employee.id);
+        }
+        if (username) {
+            const usernameNormalized = username.startsWith('@') ? username.substring(1) : username;
+            if (employee.telegram !== usernameNormalized && employee.telegram !== `@${usernameNormalized}`) {
+                await pool.query('UPDATE employees SET telegram = $1 WHERE id = $2', [usernameNormalized, employee.id]);
+                console.log('✅ Обновлен telegram username для сотрудника:', employee.id);
+            }
+        }
         let userResult = await pool.query('SELECT * FROM users WHERE email = $1', [userEmail]);
         let user;
         if (userResult.rows.length === 0) {

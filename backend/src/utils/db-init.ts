@@ -40,6 +40,7 @@ export async function initializeDatabase(pool: Pool) {
           email VARCHAR(255) UNIQUE NOT NULL,
           phone VARCHAR(20) NOT NULL,
           telegram VARCHAR(100),
+          telegram_id BIGINT,
           photo VARCHAR(500),
           is_active BOOLEAN DEFAULT true,
           status VARCHAR(20) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
@@ -59,6 +60,21 @@ export async function initializeDatabase(pool: Pool) {
             ALTER TABLE employees ADD COLUMN status VARCHAR(20) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED'));
             -- Существующие сотрудники считаем одобренными
             UPDATE employees SET status = 'APPROVED' WHERE status IS NULL;
+          END IF;
+        END $$;
+      `);
+
+      // Добавляем колонку telegram_id если её нет (для поиска по Telegram ID)
+      await pool.query(`
+        DO $$ 
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'employees' AND column_name = 'telegram_id'
+          ) THEN
+            ALTER TABLE employees ADD COLUMN telegram_id BIGINT;
+            -- Создаем индекс для быстрого поиска
+            CREATE INDEX IF NOT EXISTS idx_employees_telegram_id ON employees(telegram_id);
           END IF;
         END $$;
       `);
