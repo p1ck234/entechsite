@@ -71,7 +71,23 @@ const RegisterTelegram: React.FC = () => {
         });
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Ошибка при регистрации');
+      console.error('Registration error:', err);
+      const errorMessage = err.response?.data?.message 
+        || err.response?.data?.error 
+        || err.message 
+        || 'Ошибка при регистрации';
+      
+      // Показываем детальную информацию об ошибке
+      let detailedError = errorMessage;
+      if (err.response?.data) {
+        if (err.response.data.errors) {
+          detailedError = err.response.data.errors.map((e: any) => e.msg || e.message).join(', ');
+        } else if (err.response.data.error) {
+          detailedError = `${errorMessage}: ${err.response.data.error}`;
+        }
+      }
+      
+      setError(detailedError);
     } finally {
       setLoading(false);
     }
@@ -110,8 +126,9 @@ const RegisterTelegram: React.FC = () => {
           </h2>
 
           {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-              {error}
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-700 font-semibold mb-1">Ошибка:</p>
+              <p className="text-red-600 text-sm whitespace-pre-wrap break-words">{error}</p>
             </div>
           )}
 

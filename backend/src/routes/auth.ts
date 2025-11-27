@@ -150,9 +150,36 @@ router.post('/register-telegram', [
       approved: false,
       status: 'PENDING'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Registration error:', error);
-    res.status(500).json({ message: 'Ошибка при регистрации', error: error instanceof Error ? error.message : 'Unknown error' });
+    console.error('Error details:', {
+      code: error.code,
+      constraint: error.constraint,
+      detail: error.detail,
+      message: error.message,
+      stack: error.stack
+    });
+    
+    // Более детальная обработка ошибок
+    if (error.code === '23505') { // Unique constraint violation
+      if (error.constraint?.includes('email')) {
+        return res.status(400).json({ message: 'Пользователь с таким email уже существует' });
+      }
+      if (error.constraint?.includes('telegram')) {
+        return res.status(400).json({ message: 'Пользователь с таким Telegram username уже зарегистрирован' });
+      }
+      return res.status(400).json({ message: 'Пользователь с такими данными уже существует' });
+    }
+    
+    if (error.code === '23503') { // Foreign key violation
+      return res.status(400).json({ message: 'Ошибка связи данных. Проверьте введенные данные.' });
+    }
+    
+    res.status(500).json({ 
+      message: 'Ошибка при регистрации', 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
