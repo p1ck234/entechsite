@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTelegram } from '../contexts/TelegramContext';
 import { authAPI } from '../api/client';
+import { API_BASE_URL } from '../config/api';
 import Logo from '../components/Logo';
 import { User, Briefcase, Building2, Phone } from 'lucide-react';
 
@@ -97,8 +98,8 @@ const RegisterTelegram: React.FC = () => {
         if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
           errorMessage = 'Превышено время ожидания. Проверьте подключение к интернету.';
         } else if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
-          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-          errorMessage = `Ошибка сети. Не удалось подключиться к серверу.\n\nПроверьте:\n1. URL API: ${apiUrl}\n2. Доступность сервера\n3. Настройки CORS на сервере`;
+          // Используем API_BASE_URL из config/api.ts
+          errorMessage = `Ошибка сети. Не удалось подключиться к серверу.\n\nПроверьте:\n1. URL API: ${API_BASE_URL}\n2. Доступность сервера\n3. Настройки CORS на сервере`;
         } else {
           errorMessage = `Ошибка подключения: ${err.message || 'Неизвестная ошибка'}`;
         }

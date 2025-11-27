@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTelegram } from '../contexts/TelegramContext';
+import { API_BASE_URL } from '../config/api';
 import Logo from '../components/Logo';
 
 const Login: React.FC = () => {
@@ -109,11 +110,8 @@ const Login: React.FC = () => {
         setLoading(true);
         setError('');
         
-        // Получаем API URL
-        const apiUrl = import.meta.env.VITE_API_URL || 
-          (window.location.hostname.includes('railway.app') || window.location.hostname.includes('p1ck23.ru')
-            ? 'https://entechsite-backend-production.up.railway.app/api'
-            : 'http://localhost:3001/api');
+        // Используем API_BASE_URL из config/api.ts
+        const apiUrl = API_BASE_URL;
         
         // Отправляем данные на backend
         const response = await fetch(`${apiUrl}/auth/telegram-oauth`, {

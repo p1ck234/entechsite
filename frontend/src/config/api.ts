@@ -29,8 +29,12 @@ function getApiUrl(): string {
     return (window as any).__API_URL__;
   }
 
-  // 4. По умолчанию для разработки
-  return 'http://localhost:3001/api';
+  // 4. По умолчанию - используем production URL, если не в development режиме
+  if (import.meta.env.MODE === 'development' || import.meta.env.DEV) {
+    return 'http://localhost:3001/api';
+  }
+  // В production используем production URL
+  return 'https://entechsite-backend-production.up.railway.app/api';
 }
 
 export const API_BASE_URL = getApiUrl();
