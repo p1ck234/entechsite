@@ -137,10 +137,10 @@ const Calendar: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-pastel-800">Календарь мероприятий</h1>
-          <p className="text-pastel-600 mt-1">Планирование и отслеживание событий</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-pastel-800">Календарь мероприятий</h1>
+          <p className="text-pastel-600 mt-1 text-sm sm:text-base">Планирование и отслеживание событий</p>
         </div>
         {isAdmin && (
           <button
@@ -149,31 +149,32 @@ const Calendar: React.FC = () => {
               setEditingEvent(null);
               setShowModal(true);
             }}
-            className="mt-4 sm:mt-0 btn-primary flex items-center space-x-2"
+            className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
           >
-            <Plus className="w-5 h-5" />
-            <span>Добавить мероприятие</span>
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="text-sm sm:text-base">Добавить мероприятие</span>
           </button>
         )}
       </div>
 
       {/* Calendar Navigation */}
-      <div className="glass-card p-6">
-        <div className="flex items-center justify-between mb-6">
+      <div className="glass-card p-4 sm:p-6">
+        <div className="flex items-center justify-between mb-4 sm:mb-6">
           <button
             onClick={handlePreviousMonth}
-            className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+            className="p-2 hover:bg-white/20 rounded-lg transition-colors flex-shrink-0"
+            aria-label="Предыдущий месяц"
           >
-            <ChevronLeft className="w-6 h-6 text-pastel-700" />
+            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 text-pastel-700" />
           </button>
           
-          <div className="flex items-center space-x-4">
-            <h2 className="text-2xl font-bold text-pastel-800">
+          <div className="flex items-center space-x-2 sm:space-x-4 flex-1 justify-center">
+            <h2 className="text-lg sm:text-2xl font-bold text-pastel-800 text-center">
               {monthNames[month]} {year}
             </h2>
             <button
               onClick={handleToday}
-              className="btn-secondary text-sm"
+              className="btn-secondary text-xs sm:text-sm px-2 sm:px-4 py-1 sm:py-2"
             >
               Сегодня
             </button>
@@ -181,9 +182,10 @@ const Calendar: React.FC = () => {
           
           <button
             onClick={handleNextMonth}
-            className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+            className="p-2 hover:bg-white/20 rounded-lg transition-colors flex-shrink-0"
+            aria-label="Следующий месяц"
           >
-            <ChevronRight className="w-6 h-6 text-pastel-700" />
+            <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 text-pastel-700" />
           </button>
         </div>
 
@@ -193,12 +195,12 @@ const Calendar: React.FC = () => {
             <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin"></div>
           </div>
         ) : (
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1 sm:gap-2">
             {/* Day headers */}
             {dayNames.map((day) => (
               <div
                 key={day}
-                className="text-center font-semibold text-pastel-700 py-2 text-sm"
+                className="text-center font-semibold text-pastel-700 py-1 sm:py-2 text-xs sm:text-sm"
               >
                 {day}
               </div>
@@ -215,51 +217,51 @@ const Calendar: React.FC = () => {
                   key={index}
                   onClick={() => isAdmin && handleDateClick(date)}
                   className={`
-                    min-h-[100px] border border-pastel-200 rounded-lg p-2
+                    min-h-[60px] sm:min-h-[80px] md:min-h-[100px] border border-pastel-200 rounded-lg p-1 sm:p-2
                     ${!isCurrentMonthDay ? 'opacity-40' : ''}
                     ${isTodayDay ? 'bg-primary-50 border-primary-300 border-2' : 'bg-white/50'}
                     ${isAdmin ? 'cursor-pointer hover:bg-white/70 transition-colors' : ''}
                   `}
                 >
                   <div className={`
-                    text-sm font-medium mb-1
+                    text-xs sm:text-sm font-medium mb-0.5 sm:mb-1
                     ${isTodayDay ? 'text-primary-700' : 'text-pastel-700'}
                   `}>
                     {date.getDate()}
                   </div>
                   
-                  <div className="space-y-1">
-                    {dayEvents.slice(0, 3).map((event) => (
+                  <div className="space-y-0.5 sm:space-y-1">
+                    {dayEvents.slice(0, 2).map((event) => (
                       <div
                         key={event.id}
                         onClick={(e) => handleEventClick(event, e)}
                         className={`
-                          text-xs p-1.5 rounded truncate font-medium
+                          text-[10px] sm:text-xs p-0.5 sm:p-1.5 rounded truncate font-medium
                           cursor-pointer hover:opacity-80 transition-opacity
                           ${event.isAllDay ? 'bg-primary-500 text-white' : 'bg-primary-200 text-primary-800'}
                         `}
                         title={`${event.title}${event.location ? ` - ${event.location}` : ''}${event.description ? `\n${event.description}` : ''}`}
                       >
                         {event.isAllDay ? (
-                          <span className="font-semibold">{event.title}</span>
+                          <span className="font-semibold truncate block">{event.title}</span>
                         ) : (
-                          <>
-                            <Clock className="w-3 h-3 inline mr-1 align-middle" />
-                            <span className="font-semibold">{event.eventTime?.substring(0, 5)}</span>
-                            <span className="ml-1">{event.title}</span>
-                          </>
+                          <div className="flex items-center gap-0.5 sm:gap-1">
+                            <Clock className="w-2 h-2 sm:w-3 sm:h-3 flex-shrink-0" />
+                            <span className="font-semibold text-[9px] sm:text-xs">{event.eventTime?.substring(0, 5)}</span>
+                            <span className="truncate">{event.title}</span>
+                          </div>
                         )}
                       </div>
                     ))}
-                    {dayEvents.length > 3 && (
+                    {dayEvents.length > 2 && (
                       <div 
-                        className="text-xs text-pastel-600 font-medium cursor-pointer hover:text-pastel-800"
+                        className="text-[10px] sm:text-xs text-pastel-600 font-medium cursor-pointer hover:text-pastel-800"
                         onClick={(e) => {
                           e.stopPropagation();
                           // Можно показать модальное окно со всеми событиями дня
                         }}
                       >
-                        +{dayEvents.length - 3} еще
+                        +{dayEvents.length - 2} еще
                       </div>
                     )}
                   </div>

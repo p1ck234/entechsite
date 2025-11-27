@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { employeesAPI, usersAPI } from '../api/client';
 import { Employee, EmployeesResponse } from '../types';
-import { Search, Edit, Trash2, Phone, Mail, MessageCircle, RotateCcw, Lock, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Search, Edit, Trash2, Phone, Mail, MessageCircle, RotateCcw, CheckCircle, XCircle, Clock } from 'lucide-react';
 import EmployeeModal from '../components/EmployeeModal';
-import ChangePasswordModal from '../components/ChangePasswordModal';
 import ImageWithLoader from '../components/ImageWithLoader';
 
 const Employees: React.FC = () => {
@@ -16,8 +15,6 @@ const Employees: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [showModal, setShowModal] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [passwordEmployee, setPasswordEmployee] = useState<Employee | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showInactive, setShowInactive] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'active' | 'pending' | 'rejected'>('active');
@@ -144,30 +141,30 @@ const Employees: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-pastel-800">Сотрудники</h1>
-          <p className="text-pastel-600 mt-1">Адресная книга компании</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-pastel-800">Сотрудники</h1>
+          <p className="text-pastel-600 mt-1 text-sm sm:text-base">Адресная книга компании</p>
         </div>
         {/* Кнопка создания пользователя убрана - теперь регистрация только через Telegram */}
       </div>
 
       {/* Filters */}
-      <div className="glass-card p-6 space-y-4">
+      <div className="glass-card p-4 sm:p-6 space-y-4">
         {isAdmin && (
-          <div className="flex items-center space-x-4 pb-4 border-b border-pastel-200">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 pb-4 border-b border-pastel-200">
             <button
               onClick={() => {
                 setStatusFilter('active');
                 setCurrentPage(1);
               }}
-              className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+              className={`px-3 sm:px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 text-sm sm:text-base ${
                 statusFilter === 'active'
                   ? 'bg-primary-500 text-white'
                   : 'bg-pastel-100 text-pastel-700 hover:bg-pastel-200'
               }`}
             >
-              <CheckCircle className="w-4 h-4" />
+              <CheckCircle className="w-4 h-4 flex-shrink-0" />
               <span>Активные</span>
             </button>
             <button
@@ -175,27 +172,27 @@ const Employees: React.FC = () => {
                 setStatusFilter('pending');
                 setCurrentPage(1);
               }}
-              className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+              className={`px-3 sm:px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 text-sm sm:text-base ${
                 statusFilter === 'pending'
                   ? 'bg-primary-500 text-white'
                   : 'bg-pastel-100 text-pastel-700 hover:bg-pastel-200'
               }`}
             >
-              <Clock className="w-4 h-4" />
-              <span>На согласовании</span>
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="whitespace-nowrap">На согласовании</span>
             </button>
             <button
               onClick={() => {
                 setStatusFilter('rejected');
                 setCurrentPage(1);
               }}
-              className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+              className={`px-3 sm:px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 text-sm sm:text-base ${
                 statusFilter === 'rejected'
                   ? 'bg-primary-500 text-white'
                   : 'bg-pastel-100 text-pastel-700 hover:bg-pastel-200'
               }`}
             >
-              <XCircle className="w-4 h-4" />
+              <XCircle className="w-4 h-4 flex-shrink-0" />
               <span>Удаленные</span>
             </button>
           </div>
@@ -294,7 +291,12 @@ const Employees: React.FC = () => {
                     </div>
                     <div className="flex items-center space-x-2 text-sm text-pastel-600">
                       <Phone className="w-4 h-4" />
-                      <span>{employee.phone}</span>
+                      <a 
+                        href={`tel:${employee.phone.replace(/[^\d+]/g, '')}`}
+                        className="text-primary-600 hover:text-primary-700 hover:underline transition-colors"
+                      >
+                        {employee.phone}
+                      </a>
                     </div>
                     {employee.telegram && (
                       <div className="flex items-center space-x-2 text-sm text-pastel-600">
@@ -343,18 +345,6 @@ const Employees: React.FC = () => {
                     </button>
                   ) : (
                     <>
-                      {employee.userRole && (
-                        <button
-                          onClick={() => {
-                            setPasswordEmployee(employee);
-                            setShowPasswordModal(true);
-                          }}
-                          className="p-2 text-pastel-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Изменить пароль"
-                        >
-                          <Lock className="w-4 h-4" />
-                        </button>
-                      )}
                       <button
                         onClick={() => handleEdit(employee)}
                         className="p-2 text-pastel-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
@@ -410,21 +400,6 @@ const Employees: React.FC = () => {
       )}
 
       {/* User Modal убран - регистрация только через Telegram */}
-
-      {/* Change Password Modal */}
-      {showPasswordModal && passwordEmployee && (
-        <ChangePasswordModal
-          employeeEmail={passwordEmployee.email}
-          employeeName={`${passwordEmployee.firstName} ${passwordEmployee.lastName}`}
-          onClose={() => {
-            setShowPasswordModal(false);
-            setPasswordEmployee(null);
-          }}
-          onSuccess={() => {
-            // Optionally show success message or refresh data
-          }}
-        />
-      )}
     </div>
   );
 };

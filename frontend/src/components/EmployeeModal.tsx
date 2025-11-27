@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { Employee } from '../types';
 import { employeesAPI } from '../api/client';
+import { useAuth } from '../contexts/AuthContext';
 
 interface EmployeeModalProps {
   employee: Employee | null;
@@ -9,6 +10,7 @@ interface EmployeeModalProps {
 }
 
 const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
+  const { isAdmin } = useAuth();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -19,6 +21,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
     phone: '',
     telegram: '',
     photo: '',
+    role: 'USER' as 'ADMIN' | 'USER',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -39,6 +42,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
         phone: employee.phone,
         telegram: employee.telegram || '',
         photo: employee.photo || '',
+        role: (employee.userRole as 'ADMIN' | 'USER') || 'USER',
       });
     } else {
       setFormData({
@@ -51,6 +55,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
         phone: '',
         telegram: '',
         photo: '',
+        role: 'USER',
       });
     }
   }, [employee]);
@@ -250,6 +255,27 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
                   placeholder="https://example.com/photo.jpg"
                 />
               </div>
+
+              {isAdmin && employee && employee.userRole && (
+                <div className="md:col-span-2">
+                  <label htmlFor="role" className="block text-sm font-medium text-pastel-700 mb-2">
+                    Роль пользователя
+                  </label>
+                  <select
+                    id="role"
+                    name="role"
+                    value={formData.role}
+                    onChange={handleChange}
+                    className="input-field"
+                  >
+                    <option value="USER">Пользователь</option>
+                    <option value="ADMIN">Администратор</option>
+                  </select>
+                  <p className="text-xs text-pastel-500 mt-1">
+                    Изменение роли повлияет на права доступа пользователя в системе
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end space-x-4">

@@ -71,14 +71,14 @@ const Home: React.FC = () => {
   return (
     <div
       className={`${
-        isInsideLayout ? 'min-h-full' : 'min-h-screen'
-      } bg-gray-600 flex items-center justify-center p-4`}
+        isInsideLayout ? 'h-full w-full absolute inset-0' : 'min-h-screen'
+      } bg-gray-600 flex items-center justify-center ${isInsideLayout ? 'p-0' : 'p-2 sm:p-4'}`}
     >
-      <div className="w-full max-w-7xl flex items-center justify-center">
+      <div className={`w-full ${isInsideLayout ? 'h-full' : 'max-w-7xl'} flex items-center justify-center`}>
         {/* Основной блок */}
-        <div className="relative flex-1 flex items-center justify-center">
+        <div className={`relative ${isInsideLayout ? 'w-full h-full' : 'flex-1'} flex items-center justify-center`}>
           {/* Серый прямоугольник как на картинке */}
-          <div className="relative w-full max-w-5xl aspect-[16/9] bg-[#b9bbbf] rounded-[32px] shadow-2xl border border-white/30 overflow-hidden">
+          <div className={`relative ${isInsideLayout ? 'w-full h-full rounded-none' : 'w-full max-w-5xl aspect-[16/9] rounded-[32px]'} bg-[#b9bbbf] ${isInsideLayout ? '' : 'shadow-2xl'} border border-white/30 overflow-hidden`}>
             {/* Светящиеся линии (крест) */}
             <div className="absolute inset-0 pointer-events-none">
               {/* Горизонтальные */}
@@ -90,7 +90,7 @@ const Home: React.FC = () => {
             </div>
 
             {/* Сетка 3×3 с текстами */}
-            <div className="relative z-10 h-full grid grid-cols-3 gap-2 md:gap-4 px-4 py-4 md:px-8 md:py-8 text-[11px] xs:text-[12px] sm:text-[13px] md:text-[15px] lg:text-[17px] font-semibold leading-tight">
+            <div className="relative z-10 h-full grid grid-cols-3 gap-1 sm:gap-2 md:gap-4 px-2 py-2 sm:px-4 sm:py-4 md:px-8 md:py-8 text-[9px] xs:text-[10px] sm:text-[12px] md:text-[15px] lg:text-[17px] font-semibold leading-tight">
               {/* Верхний левый блок */}
               <div className="flex items-center justify-center">
                 <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default text-center">

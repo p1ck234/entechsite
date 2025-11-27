@@ -174,27 +174,27 @@ const Courses: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-pastel-800">Курсы</h1>
-          <p className="text-pastel-600 mt-1">Образовательные материалы компании</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-pastel-800">Курсы</h1>
+          <p className="text-pastel-600 mt-1 text-sm sm:text-base">Образовательные материалы компании</p>
         </div>
         {isAdmin && (
           <button
             onClick={handleAdd}
-            className="mt-4 sm:mt-0 btn-primary flex items-center space-x-2"
+            className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
           >
-            <Plus className="w-5 h-5" />
-            <span>Добавить курс</span>
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="text-sm sm:text-base">Добавить курс</span>
           </button>
         )}
       </div>
 
       {/* Search */}
-      <div className="glass-card p-6">
-        <form onSubmit={handleSearch} className="flex gap-4">
+      <div className="glass-card p-4 sm:p-6">
+        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-pastel-400 w-5 h-5" />
@@ -207,7 +207,7 @@ const Courses: React.FC = () => {
               />
             </div>
           </div>
-          <button type="submit" className="btn-secondary">
+          <button type="submit" className="btn-secondary w-full sm:w-auto">
             Найти
           </button>
         </form>
@@ -237,19 +237,19 @@ const Courses: React.FC = () => {
         </div>
       ) : selectedCourse ? (
         // Lessons view
-        <div className="space-y-6">
-          <div className="glass-card p-6">
-            <div className="flex items-center justify-between mb-4">
+        <div className="space-y-4 sm:space-y-6">
+          <div className="glass-card p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
               <div className="flex-1">
-                <h2 className="text-2xl font-bold text-pastel-800">{selectedCourse.title}</h2>
-                <p className="text-pastel-600">{selectedCourse.description}</p>
+                <h2 className="text-xl sm:text-2xl font-bold text-pastel-800">{selectedCourse.title}</h2>
+                <p className="text-pastel-600 text-sm sm:text-base mt-1">{selectedCourse.description}</p>
                 {selectedCourse.googleDriveUrl && (
                   <div className="mt-3">
                     <a
                       href={selectedCourse.googleDriveUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="btn-secondary inline-flex items-center space-x-2"
+                      className="btn-secondary inline-flex items-center space-x-2 text-sm sm:text-base w-full sm:w-auto justify-center"
                     >
                       <ExternalLink className="w-4 h-4" />
                       <span>Открыть курс в Google Drive</span>
@@ -260,18 +260,18 @@ const Courses: React.FC = () => {
               {isAdmin && (
                 <button
                   onClick={() => handleAddLesson(selectedCourse)}
-                  className="btn-primary flex items-center space-x-2 ml-4"
+                  className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
                 >
-                  <Plus className="w-5 h-5" />
-                  <span>Добавить урок</span>
+                  <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <span className="text-sm sm:text-base">Добавить урок</span>
                 </button>
               )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {lessons.map((lesson) => (
-              <div key={lesson.id} className="card p-6 hover:scale-105 transition-transform">
+              <div key={lesson.id} className="card p-4 sm:p-6 hover:scale-105 transition-transform">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-pastel-800 mb-2 line-clamp-2">
@@ -367,9 +367,9 @@ const Courses: React.FC = () => {
         </div>
       ) : (
         // Courses view
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {courses.map((course) => (
-            <div key={course.id} className="card p-6 hover:scale-105 transition-transform">
+            <div key={course.id} className="card p-4 sm:p-6 hover:scale-105 transition-transform">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-pastel-800 mb-2 line-clamp-2">

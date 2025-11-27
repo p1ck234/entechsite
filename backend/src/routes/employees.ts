@@ -1,6 +1,7 @@
 import express from 'express';
 import { body, validationResult, query } from 'express-validator';
 import { Pool } from 'pg';
+import bcrypt from 'bcryptjs';
 import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
@@ -240,7 +241,8 @@ router.put('/:id', authenticateToken, [
   body('phone').optional().notEmpty().trim(),
   body('telegram').optional().isString(),
   body('photo').optional().isString(),
-  body('isActive').optional().isBoolean()
+  body('isActive').optional().isBoolean(),
+  body('role').optional().isIn(['ADMIN', 'USER']) // Added role field
 ], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
@@ -275,9 +277,11 @@ router.put('/:id', authenticateToken, [
     const updateFields: string[] = [];
     const values: any[] = [];
     let paramCount = 0;
+    const roleToUpdate = updateData.role; // Сохраняем роль отдельно, она не в employees
 
     Object.keys(updateData).forEach(key => {
-      if (updateData[key] !== undefined) {
+      // Пропускаем role - это поле из таблицы users, обрабатывается отдельно
+      if (updateData[key] !== undefined && key !== 'role') {
         paramCount++;
         const dbKey = key === 'firstName' ? 'first_name' : 
                      key === 'lastName' ? 'last_name' : 
@@ -288,19 +292,52 @@ router.put('/:id', authenticateToken, [
       }
     });
 
-    if (updateFields.length === 0) {
-      return res.status(400).json({ message: 'No fields to update' });
+    // Если есть поля для обновления в employees, обновляем их
+    if (updateFields.length > 0) {
+      values.push(id);
+      await pool.query(
+        `UPDATE employees SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount + 1}`,
+        values
+      );
     }
 
-    values.push(id);
-    const result = await pool.query(
-      `UPDATE employees SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount + 1} RETURNING *`,
-      values
+    // Если указана роль, обновляем её в таблице users
+    if (roleToUpdate !== undefined) {
+      const employeeEmail = updateData.email || existingEmployee.rows[0].email;
+      const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [employeeEmail]);
+      
+      if (userResult.rows.length > 0) {
+        // Пользователь существует - обновляем роль
+        await pool.query(
+          'UPDATE users SET role = $1, updated_at = CURRENT_TIMESTAMP WHERE email = $2',
+          [roleToUpdate, employeeEmail]
+        );
+        console.log(`✅ Роль пользователя ${employeeEmail} обновлена на ${roleToUpdate}`);
+      } else {
+        // Пользователь не существует - создаем его с указанной ролью
+        const randomPassword = Math.random().toString(36).slice(-12);
+        const hashedPassword = await bcrypt.hash(randomPassword, 10);
+        
+        await pool.query(
+          'INSERT INTO users (email, password, role) VALUES ($1, $2, $3)',
+          [employeeEmail, hashedPassword, roleToUpdate]
+        );
+        console.log(`✅ Пользователь ${employeeEmail} создан с ролью ${roleToUpdate}`);
+      }
+    }
+
+    // Получаем обновленные данные сотрудника с ролью из users
+    const updatedEmployee = await pool.query(
+      `SELECT e.*, u.role as user_role 
+       FROM employees e 
+       LEFT JOIN users u ON e.email = u.email 
+       WHERE e.id = $1`,
+      [id]
     );
 
     res.json({
       message: 'Employee updated successfully',
-      employee: result.rows[0]
+      employee: updatedEmployee.rows[0]
     });
   } catch (error) {
     console.error('Update employee error:', error);

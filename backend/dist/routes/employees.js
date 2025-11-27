@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const express_validator_1 = require("express-validator");
 const pg_1 = require("pg");
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const auth_1 = require("../middleware/auth");
 const router = express_1.default.Router();
 const pool = new pg_1.Pool({
@@ -190,7 +191,8 @@ router.put('/:id', auth_1.authenticateToken, [
     (0, express_validator_1.body)('phone').optional().notEmpty().trim(),
     (0, express_validator_1.body)('telegram').optional().isString(),
     (0, express_validator_1.body)('photo').optional().isString(),
-    (0, express_validator_1.body)('isActive').optional().isBoolean()
+    (0, express_validator_1.body)('isActive').optional().isBoolean(),
+    (0, express_validator_1.body)('role').optional().isIn(['ADMIN', 'USER'])
 ], async (req, res) => {
     try {
         const errors = (0, express_validator_1.validationResult)(req);
@@ -215,8 +217,9 @@ router.put('/:id', auth_1.authenticateToken, [
         const updateFields = [];
         const values = [];
         let paramCount = 0;
+        const roleToUpdate = updateData.role;
         Object.keys(updateData).forEach(key => {
-            if (updateData[key] !== undefined) {
+            if (updateData[key] !== undefined && key !== 'role') {
                 paramCount++;
                 const dbKey = key === 'firstName' ? 'first_name' :
                     key === 'lastName' ? 'last_name' :
@@ -226,14 +229,31 @@ router.put('/:id', auth_1.authenticateToken, [
                 values.push(updateData[key]);
             }
         });
-        if (updateFields.length === 0) {
-            return res.status(400).json({ message: 'No fields to update' });
+        if (updateFields.length > 0) {
+            values.push(id);
+            await pool.query(`UPDATE employees SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount + 1}`, values);
         }
-        values.push(id);
-        const result = await pool.query(`UPDATE employees SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount + 1} RETURNING *`, values);
+        if (roleToUpdate !== undefined) {
+            const employeeEmail = updateData.email || existingEmployee.rows[0].email;
+            const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [employeeEmail]);
+            if (userResult.rows.length > 0) {
+                await pool.query('UPDATE users SET role = $1, updated_at = CURRENT_TIMESTAMP WHERE email = $2', [roleToUpdate, employeeEmail]);
+                console.log(`✅ Роль пользователя ${employeeEmail} обновлена на ${roleToUpdate}`);
+            }
+            else {
+                const randomPassword = Math.random().toString(36).slice(-12);
+                const hashedPassword = await bcryptjs_1.default.hash(randomPassword, 10);
+                await pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3)', [employeeEmail, hashedPassword, roleToUpdate]);
+                console.log(`✅ Пользователь ${employeeEmail} создан с ролью ${roleToUpdate}`);
+            }
+        }
+        const updatedEmployee = await pool.query(`SELECT e.*, u.role as user_role 
+       FROM employees e 
+       LEFT JOIN users u ON e.email = u.email 
+       WHERE e.id = $1`, [id]);
         res.json({
             message: 'Employee updated successfully',
-            employee: result.rows[0]
+            employee: updatedEmployee.rows[0]
         });
     }
     catch (error) {

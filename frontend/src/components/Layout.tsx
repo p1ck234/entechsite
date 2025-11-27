@@ -162,7 +162,7 @@ const Layout: React.FC = () => {
       )}
 
       {/* Main content */}
-      <div className={`flex-1 flex flex-col ${isTelegram ? '' : 'lg:ml-0'}`}>
+      <div className={`flex-1 flex flex-col ${isTelegram ? '' : 'lg:ml-0'} ${isTelegram && location.pathname === '/home' ? 'relative h-full' : ''}`}>
         {/* Top bar - скрываем в Telegram */}
         {!isTelegram && (
           <header className="bg-white/30 backdrop-blur-sm border-b border-white/20 px-4 py-4 lg:px-6">
@@ -184,7 +184,7 @@ const Layout: React.FC = () => {
         )}
 
         {/* Page content */}
-        <main className={`flex-1 ${isTelegram ? 'p-4 pb-20' : 'p-4 lg:p-6'}`}>
+        <main className={`flex-1 ${isTelegram && location.pathname === '/home' ? 'p-0 pb-0 relative h-full overflow-hidden' : isTelegram ? 'p-4 pb-20' : 'p-4 lg:p-6'}`}>
           <Outlet />
         </main>
       </div>
@@ -192,23 +192,28 @@ const Layout: React.FC = () => {
       {/* Bottom Navigation для Telegram */}
       {isTelegram && (
         <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-pastel-200 z-50 safe-area-inset-bottom">
-          <div className="flex justify-around items-center h-16">
-            {navigation.slice(0, 5).map((item) => {
+          <div className="flex justify-around items-center h-16 overflow-x-auto">
+            {navigation.map((item) => {
               const Icon = item.icon;
+              // Сокращаем длинные названия для мобильных
+              const shortName = item.name.length > 12 
+                ? item.name.split(' ').map(w => w[0]).join('') 
+                : item.name;
               return (
                 <button
                   key={item.name}
                   onClick={() => navigate(item.href)}
                   className={`
-                    flex flex-col items-center justify-center flex-1 h-full transition-colors
+                    flex flex-col items-center justify-center flex-1 min-w-[60px] h-full transition-colors px-1
                     ${isActive(item.href)
                       ? 'text-primary-600'
                       : 'text-pastel-600'
                     }
                   `}
+                  title={item.name}
                 >
-                  <Icon className="w-5 h-5 mb-1" />
-                  <span className="text-xs">{item.name}</span>
+                  <Icon className="w-5 h-5 mb-0.5 flex-shrink-0" />
+                  <span className="text-[10px] leading-tight text-center">{shortName}</span>
                 </button>
               );
             })}
