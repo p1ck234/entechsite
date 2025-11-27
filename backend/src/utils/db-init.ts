@@ -162,44 +162,8 @@ export async function initializeDatabase(pool: Pool) {
       console.log('✅ Таблицы уже существуют');
     }
     
-    // Создание/обновление администратора с Telegram
-    const adminEmail = 'admin@entech.com';
-    const adminPassword = '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/8.8.8.8'; // password: admin123
-    const adminTelegram = '@pdmin1ck';
-    
-    // Проверяем и создаем/обновляем пользователя-администратора
-    const existingAdmin = await pool.query('SELECT id FROM users WHERE email = $1', [adminEmail]);
-    
-    if (existingAdmin.rows.length === 0) {
-      await pool.query(
-        'INSERT INTO users (email, password, role) VALUES ($1, $2, $3)',
-        [adminEmail, adminPassword, 'ADMIN']
-      );
-      console.log('👤 Создан администратор: admin@entech.com');
-    } else {
-      // Обновляем роль на ADMIN если пользователь уже существует
-      await pool.query('UPDATE users SET role = $1 WHERE email = $2', ['ADMIN', adminEmail]);
-      console.log('👤 Роль администратора обновлена для: admin@entech.com');
-    }
-    
-    // Проверяем и создаем/обновляем запись сотрудника с Telegram
-    // Сохраняем БЕЗ собачки, чтобы было проще искать
-    const telegramWithoutAt = adminTelegram.startsWith('@') ? adminTelegram.substring(1) : adminTelegram;
-    
-    const existingEmployee = await pool.query('SELECT id FROM employees WHERE email = $1', [adminEmail]);
-    
-    if (existingEmployee.rows.length === 0) {
-      await pool.query(
-        `INSERT INTO employees (first_name, last_name, position, department, email, phone, telegram, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        ['Администратор', 'Системы', 'Системный администратор', 'IT-Отдел', adminEmail, '+7 (000) 000-00-00', telegramWithoutAt, true]
-      );
-      console.log(`✅ Создан сотрудник-администратор с Telegram: ${telegramWithoutAt} (без @)`);
-    } else {
-      // Обновляем Telegram username если сотрудник уже существует (БЕЗ собачки)
-      await pool.query('UPDATE employees SET telegram = $1 WHERE email = $2', [telegramWithoutAt, adminEmail]);
-      console.log(`✅ Telegram username обновлен для администратора: ${telegramWithoutAt} (без @)`);
-    }
+    // Администратор создается автоматически при первой авторизации через Telegram
+    // Первый пользователь, который войдет через Telegram, станет администратором
     
     console.log('✅ База данных готова к работе');
   } catch (error) {

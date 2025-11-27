@@ -145,29 +145,6 @@ async function initializeDatabase(pool) {
         else {
             console.log('✅ Таблицы уже существуют');
         }
-        const adminEmail = 'admin@entech.com';
-        const adminPassword = '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/8.8.8.8';
-        const adminTelegram = '@pdmin1ck';
-        const existingAdmin = await pool.query('SELECT id FROM users WHERE email = $1', [adminEmail]);
-        if (existingAdmin.rows.length === 0) {
-            await pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3)', [adminEmail, adminPassword, 'ADMIN']);
-            console.log('👤 Создан администратор: admin@entech.com');
-        }
-        else {
-            await pool.query('UPDATE users SET role = $1 WHERE email = $2', ['ADMIN', adminEmail]);
-            console.log('👤 Роль администратора обновлена для: admin@entech.com');
-        }
-        const telegramWithoutAt = adminTelegram.startsWith('@') ? adminTelegram.substring(1) : adminTelegram;
-        const existingEmployee = await pool.query('SELECT id FROM employees WHERE email = $1', [adminEmail]);
-        if (existingEmployee.rows.length === 0) {
-            await pool.query(`INSERT INTO employees (first_name, last_name, position, department, email, phone, telegram, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, ['Администратор', 'Системы', 'Системный администратор', 'IT-Отдел', adminEmail, '+7 (000) 000-00-00', telegramWithoutAt, true]);
-            console.log(`✅ Создан сотрудник-администратор с Telegram: ${telegramWithoutAt} (без @)`);
-        }
-        else {
-            await pool.query('UPDATE employees SET telegram = $1 WHERE email = $2', [telegramWithoutAt, adminEmail]);
-            console.log(`✅ Telegram username обновлен для администратора: ${telegramWithoutAt} (без @)`);
-        }
         console.log('✅ База данных готова к работе');
     }
     catch (error) {

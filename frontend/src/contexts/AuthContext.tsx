@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '../types';
+import { User, AuthResponse } from '../types';
 import { authAPI } from '../api/client';
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
-  loginTelegram: (initData: string) => Promise<void>;
+  loginTelegram: (initData: string) => Promise<AuthResponse>;
   register: (email: string, password: string, telegramUsername: string, firstName: string, lastName: string, position?: string, department?: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
@@ -87,6 +87,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setToken(token);
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
+      
+      // Возвращаем полный ответ для обработки isNewUser
+      return response;
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || 'Ошибка входа через Telegram';
       // Если сотрудник не найден, показываем понятное сообщение

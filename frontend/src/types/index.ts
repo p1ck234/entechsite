@@ -81,6 +81,8 @@ export interface AuthResponse {
   approved?: boolean;
   employee?: Employee;
   status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  isNewUser?: boolean;
+  needsApproval?: boolean;
 }
 
 export interface ApiResponse<T> {

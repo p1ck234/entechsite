@@ -311,30 +311,79 @@ router.post('/telegram', [
         let employee;
         let userEmail;
         if (employeeResult.rows.length === 0) {
-            return res.status(403).json({
-                message: 'Вы не зарегистрированы в системе. Пожалуйста, заполните форму регистрации.',
-                telegramUsername: telegramUsername || null,
-                telegramId: telegramId,
-                needsRegistration: true
+            console.log('👤 Пользователь не найден - создаем автоматически');
+            if (!telegramUsername) {
+                return res.status(400).json({
+                    message: 'Для входа необходим Telegram username. Установите его в настройках Telegram.'
+                });
+            }
+            const telegramNormalized = telegramUsername.startsWith('@')
+                ? telegramUsername.substring(1)
+                : telegramUsername;
+            const usersCount = await pool.query('SELECT COUNT(*) as count FROM users');
+            const totalUsers = parseInt(usersCount.rows[0].count);
+            const userRole = totalUsers === 0 ? 'ADMIN' : 'USER';
+            const employeeStatus = totalUsers === 0 ? 'APPROVED' : 'PENDING';
+            const isActive = totalUsers === 0 ? true : false;
+            userEmail = `${telegramNormalized}@telegram.local`;
+            const randomPassword = Math.random().toString(36).slice(-12);
+            const hashedPassword = await bcryptjs_1.default.hash(randomPassword, 12);
+            const userResult = await pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING *', [userEmail, hashedPassword, userRole]);
+            console.log(`✅ Создан пользователь: ${userEmail} (${userRole})`);
+            const newEmployeeResult = await pool.query(`INSERT INTO employees (first_name, last_name, position, department, email, phone, telegram, is_active, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`, [
+                telegramUser.first_name || 'Пользователь',
+                telegramUser.last_name || 'Telegram',
+                userRole === 'ADMIN' ? 'Администратор' : 'Сотрудник',
+                userRole === 'ADMIN' ? 'IT-Отдел' : 'Общий отдел',
+                userEmail,
+                '+7 (000) 000-00-00',
+                telegramNormalized,
+                isActive,
+                employeeStatus
+            ]);
+            employee = newEmployeeResult.rows[0];
+            console.log(`✅ Создан сотрудник: ${telegramNormalized} (${employeeStatus})`);
+            if (userRole === 'ADMIN') {
+                const token = jsonwebtoken_1.default.sign({ userId: userResult.rows[0].id, email: userEmail, role: userRole, telegramId }, process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-change-this-in-production', { expiresIn: '30d' });
+                return res.json({
+                    message: 'Добро пожаловать! Вы стали первым администратором.',
+                    user: {
+                        id: userResult.rows[0].id,
+                        email: userEmail,
+                        role: userRole,
+                        telegramId: telegramId,
+                        telegramUser: telegramUser
+                    },
+                    token,
+                    isNewUser: true
+                });
+            }
+            const token = jsonwebtoken_1.default.sign({ userId: userResult.rows[0].id, email: userEmail, role: userRole, telegramId }, process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-change-this-in-production', { expiresIn: '30d' });
+            return res.json({
+                message: 'Добро пожаловать! Ваш аккаунт создан. Администратор подтвердит ваш доступ.',
+                user: {
+                    id: userResult.rows[0].id,
+                    email: userEmail,
+                    role: userRole,
+                    telegramId: telegramId,
+                    telegramUser: telegramUser
+                },
+                token,
+                isNewUser: true,
+                needsApproval: true
             });
         }
         employee = employeeResult.rows[0];
         userEmail = employee.email;
-        if (employee.status === 'PENDING') {
-            return res.status(403).json({
-                message: 'Ваша заявка на регистрацию ожидает подтверждения администратора.',
-                status: 'PENDING',
-                telegramUsername: telegramUsername || null
-            });
-        }
         if (employee.status === 'REJECTED') {
             return res.status(403).json({
-                message: 'Ваша заявка на регистрацию была отклонена. Обратитесь к администратору.',
+                message: 'Ваш аккаунт был отклонен администратором. Обратитесь к администратору.',
                 status: 'REJECTED',
                 telegramUsername: telegramUsername || null
             });
         }
-        if (!employee.is_active) {
+        if (!employee.is_active && employee.status !== 'PENDING') {
             return res.status(403).json({
                 message: 'Ваш аккаунт деактивирован. Обратитесь к администратору.',
                 telegramUsername: telegramUsername || null
