@@ -49,9 +49,8 @@ const Login: React.FC = () => {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         
-        // Обновляем состояние AuthContext через перезагрузку страницы
-        // Это проще чем обновлять контекст вручную
-        window.location.href = '/home';
+        // Используем navigate вместо window.location для правильной работы в React Router
+        navigate('/home', { replace: true });
       } catch (err: any) {
         console.error('Telegram OAuth error:', err);
         setError(err.message || 'Ошибка авторизации через Telegram');
@@ -92,17 +91,23 @@ const Login: React.FC = () => {
         return;
       }
       
-      // Очищаем контейнер только если там нет виджета
+      // Проверяем, есть ли уже iframe виджета
       const existingWidget = container.querySelector('iframe[id*="telegram-login"]');
-      if (!existingWidget) {
-        // Используем безопасный способ очистки
-        while (container.firstChild) {
-          container.removeChild(container.firstChild);
-        }
-      } else {
+      if (existingWidget) {
         widgetInitializedRef.current = true;
-        return; // Виджет уже есть
+        return; // Виджет уже есть, не трогаем его
       }
+      
+      // Если есть script тег, но нет iframe - ждем
+      const existingScript = container.querySelector('script[data-telegram-login]');
+      if (existingScript) {
+        console.log('⏳ Script exists, waiting for iframe...');
+        return; // Скрипт уже загружается, ждем
+      }
+      
+      // Очищаем контейнер только если там нет ни виджета, ни скрипта
+      // Используем innerHTML для полной очистки, чтобы избежать конфликтов с React
+      container.innerHTML = '';
       
       console.log('✅ Creating Telegram widget with bot name:', botName);
       
