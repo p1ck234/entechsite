@@ -181,7 +181,7 @@ const Login: React.FC = () => {
     const timeoutId = setTimeout(initWidget, 500);
 
     return () => {
-      clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
       delete (window as any).onTelegramAuth;
     };
   }, [navigate, isTelegram]);
