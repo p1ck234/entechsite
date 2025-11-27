@@ -113,19 +113,23 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 
 // Middleware
 app.use(helmet());
+
+// Нормализуем FRONTEND_URL (убираем слэш в конце)
+const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, '') || '';
+
 const allowedOrigins = process.env.NODE_ENV === 'production' 
   ? [
       'https://entech.p1ck23.ru', 
       'http://entech.p1ck23.ru',
       'https://entechsite-production.up.railway.app',
       'https://entechsite-frontend-production.up.railway.app',
-      process.env.FRONTEND_URL,
+      frontendUrl, // Нормализованный URL без слэша
       'https://web.telegram.org',
       'https://webk.telegram.org',
       'https://webz.telegram.org',
       'https://telegram.org',
       'https://t.me'
-    ].filter((origin): origin is string => Boolean(origin)) // Убираем undefined значения с правильной типизацией
+    ].filter((origin): origin is string => Boolean(origin)) // Убираем undefined и пустые значения
   : [
       'http://localhost:5173',
       'http://localhost:3000',
@@ -149,10 +153,16 @@ app.use(cors({
       return callback(null, true);
     }
     
-    if (allowedOrigins.includes(origin)) {
+    // Нормализуем origin (убираем слэш в конце для сравнения)
+    const normalizedOrigin = origin.replace(/\/$/, '');
+    
+    // Проверяем точное совпадение или вариант с/без слэша
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes(normalizedOrigin) || 
+        allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin)) {
       callback(null, true);
     } else {
       console.warn('⚠️ Blocked CORS request from:', origin);
+      console.warn('   Allowed origins:', allowedOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },

@@ -95,13 +95,14 @@ const pool = new pg_1.Pool({
 });
 const PORT = parseInt(process.env.PORT || '3001', 10);
 app.use((0, helmet_1.default)());
+const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, '') || '';
 const allowedOrigins = process.env.NODE_ENV === 'production'
     ? [
         'https://entech.p1ck23.ru',
         'http://entech.p1ck23.ru',
         'https://entechsite-production.up.railway.app',
         'https://entechsite-frontend-production.up.railway.app',
-        process.env.FRONTEND_URL,
+        frontendUrl,
         'https://web.telegram.org',
         'https://webk.telegram.org',
         'https://webz.telegram.org',
@@ -127,11 +128,14 @@ app.use((0, cors_1.default)({
         if (!origin) {
             return callback(null, true);
         }
-        if (allowedOrigins.includes(origin)) {
+        const normalizedOrigin = origin.replace(/\/$/, '');
+        if (allowedOrigins.includes(origin) || allowedOrigins.includes(normalizedOrigin) ||
+            allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin)) {
             callback(null, true);
         }
         else {
             console.warn('⚠️ Blocked CORS request from:', origin);
+            console.warn('   Allowed origins:', allowedOrigins);
             callback(new Error('Not allowed by CORS'));
         }
     },
