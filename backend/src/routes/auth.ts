@@ -565,16 +565,94 @@ router.post('/telegram-oauth', [
     console.log('🔍 SQL запрос:', sqlQuery);
     console.log('🔍 Параметры:', searchParams);
 
-    const employeeResult = await pool.query(sqlQuery, searchParams);
+    // Сначала ищем без фильтра по статусу (чтобы найти всех, включая PENDING)
+    const allEmployeesResult = await pool.query(
+      `SELECT * FROM employees WHERE (${searchConditions.join(' OR ')})`,
+      searchParams
+    );
 
-    if (employeeResult.rows.length === 0) {
+    if (allEmployeesResult.rows.length === 0) {
+      // Пользователь не найден - создаем заявку на регистрацию
+      console.log('📝 Пользователь не найден, создаем заявку на регистрацию...');
+      
+      const usernameNormalized = username ? (username.startsWith('@') ? username.substring(1) : username) : null;
+      const userEmail = usernameNormalized ? `${usernameNormalized}@telegram.local` : `telegram_${id}@telegram.local`;
+      
+      try {
+        const newEmployeeResult = await pool.query(
+          `INSERT INTO employees (
+            first_name, last_name, position, department, email, phone, 
+            telegram, telegram_id, is_active, status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+          [
+            first_name || 'Пользователь',
+            last_name || 'Telegram',
+            'Сотрудник',
+            'Общий отдел',
+            userEmail,
+            '+7 (000) 000-00-00',
+            usernameNormalized,
+            id,
+            false, // Не активен до одобрения
+            'PENDING' // Статус ожидания
+          ]
+        );
+        
+        console.log('✅ Заявка на регистрацию создана:', newEmployeeResult.rows[0].id);
+        console.log('📧 Email:', userEmail);
+        console.log('🆔 Telegram ID:', id);
+        console.log('👤 Telegram username:', usernameNormalized);
+        
+        return res.status(403).json({ 
+          message: 'Ваша заявка на регистрацию отправлена. Ожидайте подтверждения администратора.',
+          telegramUsername: username || null,
+          telegramId: id,
+          needsRegistration: true,
+          status: 'PENDING',
+          registrationId: newEmployeeResult.rows[0].id
+        });
+      } catch (error: any) {
+        console.error('❌ Ошибка при создании заявки:', error);
+        // Если заявка уже существует (дубликат)
+        if (error.code === '23505') {
+          return res.status(403).json({ 
+            message: 'Заявка на регистрацию уже отправлена. Ожидайте подтверждения администратора.',
+            telegramUsername: username || null,
+            telegramId: id,
+            needsRegistration: true,
+            status: 'PENDING'
+          });
+        }
+        throw error;
+      }
+    }
+
+    // Если найден сотрудник со статусом PENDING
+    const pendingEmployee = allEmployeesResult.rows.find((emp: any) => emp.status === 'PENDING');
+    if (pendingEmployee) {
       return res.status(403).json({ 
-        message: 'Вы не зарегистрированы в системе. Обратитесь к администратору для добавления в систему.',
+        message: 'Ваша заявка на регистрацию ожидает подтверждения администратора.',
         telegramUsername: username || null,
         telegramId: id,
-        needsRegistration: true
+        needsRegistration: true,
+        status: 'PENDING',
+        registrationId: pendingEmployee.id
       });
     }
+
+    // Если найден сотрудник со статусом REJECTED
+    const rejectedEmployee = allEmployeesResult.rows.find((emp: any) => emp.status === 'REJECTED');
+    if (rejectedEmployee) {
+      return res.status(403).json({ 
+        message: 'Ваш аккаунт был отклонен администратором. Обратитесь к администратору.',
+        telegramUsername: username || null,
+        telegramId: id,
+        status: 'REJECTED'
+      });
+    }
+
+    // Теперь проверяем только одобренных и активных
+    const employeeResult = await pool.query(sqlQuery, searchParams);
 
     const employee = employeeResult.rows[0];
     const userEmail = employee.email;

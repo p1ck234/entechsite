@@ -16,7 +16,8 @@ router.get('/', auth_1.authenticateToken, [
     (0, express_validator_1.query)('limit').optional().isInt({ min: 1, max: 100 }),
     (0, express_validator_1.query)('search').optional().isString(),
     (0, express_validator_1.query)('department').optional().isString(),
-    (0, express_validator_1.query)('showInactive').optional().isBoolean()
+    (0, express_validator_1.query)('showInactive').optional().isBoolean(),
+    (0, express_validator_1.query)('status').optional().isIn(['APPROVED', 'PENDING', 'REJECTED'])
 ], async (req, res) => {
     try {
         const errors = (0, express_validator_1.validationResult)(req);
@@ -28,10 +29,26 @@ router.get('/', auth_1.authenticateToken, [
         const search = req.query.search;
         const department = req.query.department;
         const showInactive = req.query.showInactive === 'true' && req.user?.role === 'ADMIN';
+        const statusFilter = req.query.status;
         const skip = (page - 1) * limit;
-        let whereClause = showInactive ? 'WHERE e.is_active = false' : 'WHERE e.is_active = true';
+        let whereClause = '';
         const params = [];
         let paramCount = 0;
+        if (statusFilter === 'PENDING') {
+            paramCount++;
+            whereClause = `WHERE e.status = $${paramCount}`;
+            params.push('PENDING');
+        }
+        else if (statusFilter === 'REJECTED') {
+            paramCount++;
+            whereClause = `WHERE (e.status = $${paramCount} OR e.is_active = false)`;
+            params.push('REJECTED');
+        }
+        else {
+            paramCount++;
+            whereClause = `WHERE e.is_active = true AND e.status = $${paramCount}`;
+            params.push('APPROVED');
+        }
         if (search) {
             paramCount++;
             const searchPattern = `%${search}%`;

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { employeesAPI } from '../api/client';
 import { Employee, EmployeesResponse } from '../types';
-import { Search, Edit, Trash2, Phone, Mail, MessageCircle, UserPlus, RotateCcw, Lock } from 'lucide-react';
+import { Search, Edit, Trash2, Phone, Mail, MessageCircle, UserPlus, RotateCcw, Lock, CheckCircle, XCircle, Clock } from 'lucide-react';
 import EmployeeModal from '../components/EmployeeModal';
 import UserModal from '../components/UserModal';
 import ChangePasswordModal from '../components/ChangePasswordModal';
@@ -17,11 +17,11 @@ const Employees: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [showModal, setShowModal] = useState(false);
-  const [showUserModal, setShowUserModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordEmployee, setPasswordEmployee] = useState<Employee | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showInactive, setShowInactive] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'active' | 'pending' | 'rejected'>('active');
 
   // Ensure showInactive is always false for non-admin users
   useEffect(() => {
@@ -37,12 +37,23 @@ const Employees: React.FC = () => {
   const fetchEmployees = async () => {
     try {
       setLoading(true);
+      // Преобразуем статус фильтр в формат, который ожидает backend
+      let statusParam: 'APPROVED' | 'PENDING' | 'REJECTED' | undefined;
+      if (statusFilter === 'active') {
+        statusParam = 'APPROVED';
+      } else if (statusFilter === 'pending') {
+        statusParam = 'PENDING';
+      } else if (statusFilter === 'rejected') {
+        statusParam = 'REJECTED';
+      }
+      
       const response: EmployeesResponse = await employeesAPI.getEmployees({
         page: currentPage,
         limit: 12,
         search: searchTerm || undefined,
         department: selectedDepartment || undefined,
         showInactive: isAdmin && showInactive,
+        status: statusParam,
       });
       setEmployees(response.employees);
       setTotalPages(response.pagination.pages);
@@ -57,7 +68,7 @@ const Employees: React.FC = () => {
   useEffect(() => {
     setCurrentPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, selectedDepartment, showInactive]);
+  }, [searchTerm, selectedDepartment, showInactive, statusFilter]);
 
   // Fetch employees with debounce for search
   useEffect(() => {
@@ -67,7 +78,7 @@ const Employees: React.FC = () => {
 
     return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, searchTerm, selectedDepartment, showInactive]);
+  }, [currentPage, searchTerm, selectedDepartment, showInactive, statusFilter]);
 
 
   const handleDelete = async (id: string) => {
@@ -115,15 +126,7 @@ const Employees: React.FC = () => {
           <h1 className="text-3xl font-bold text-pastel-800">Сотрудники</h1>
           <p className="text-pastel-600 mt-1">Адресная книга компании</p>
         </div>
-        {isAdmin && (
-          <button
-            onClick={() => setShowUserModal(true)}
-            className="mt-4 sm:mt-0 btn-primary flex items-center space-x-2"
-          >
-            <UserPlus className="w-5 h-5" />
-            <span>Создать пользователя</span>
-          </button>
-        )}
+        {/* Кнопка создания пользователя убрана - теперь регистрация только через Telegram */}
       </div>
 
       {/* Filters */}
@@ -132,29 +135,45 @@ const Employees: React.FC = () => {
           <div className="flex items-center space-x-4 pb-4 border-b border-pastel-200">
             <button
               onClick={() => {
-                setShowInactive(false);
+                setStatusFilter('active');
                 setCurrentPage(1);
               }}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                !showInactive
+              className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+                statusFilter === 'active'
                   ? 'bg-primary-500 text-white'
                   : 'bg-pastel-100 text-pastel-700 hover:bg-pastel-200'
               }`}
             >
-              Активные
+              <CheckCircle className="w-4 h-4" />
+              <span>Активные</span>
             </button>
             <button
               onClick={() => {
-                setShowInactive(true);
+                setStatusFilter('pending');
                 setCurrentPage(1);
               }}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                showInactive
+              className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+                statusFilter === 'pending'
                   ? 'bg-primary-500 text-white'
                   : 'bg-pastel-100 text-pastel-700 hover:bg-pastel-200'
               }`}
             >
-              Удаленные
+              <Clock className="w-4 h-4" />
+              <span>На согласовании</span>
+            </button>
+            <button
+              onClick={() => {
+                setStatusFilter('rejected');
+                setCurrentPage(1);
+              }}
+              className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+                statusFilter === 'rejected'
+                  ? 'bg-primary-500 text-white'
+                  : 'bg-pastel-100 text-pastel-700 hover:bg-pastel-200'
+              }`}
+            >
+              <XCircle className="w-4 h-4" />
+              <span>Удаленные</span>
             </button>
           </div>
         )}
@@ -217,9 +236,19 @@ const Employees: React.FC = () => {
                     <h3 className="text-lg font-semibold text-pastel-800 truncate">
                       {employee.firstName} {employee.lastName} {employee.middleName}
                     </h3>
-                    {!employee.isActive && (
+                    {employee.status === 'PENDING' && (
+                      <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-semibold rounded">
+                        На согласовании
+                      </span>
+                    )}
+                    {employee.status === 'REJECTED' && (
                       <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-semibold rounded">
-                        Удален
+                        Отклонен
+                      </span>
+                    )}
+                    {!employee.isActive && employee.status === 'APPROVED' && (
+                      <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded">
+                        Неактивен
                       </span>
                     )}
                   </div>
@@ -263,7 +292,25 @@ const Employees: React.FC = () => {
               
               {isAdmin && (
                 <div className="flex justify-end space-x-2 mt-4 pt-4 border-t border-pastel-200">
-                  {!employee.isActive ? (
+                  {employee.status === 'PENDING' ? (
+                    // Кнопки для заявок на согласовании
+                    <>
+                      <button
+                        onClick={() => handleApprove(employee.id)}
+                        className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Одобрить"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleReject(employee.id)}
+                        className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Отклонить"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    </>
+                  ) : !employee.isActive ? (
                     <button
                       onClick={() => handleRestore(employee.id)}
                       className="p-2 text-pastel-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
@@ -339,15 +386,7 @@ const Employees: React.FC = () => {
         />
       )}
 
-      {/* User Modal */}
-      {showUserModal && (
-        <UserModal
-          onClose={() => {
-            setShowUserModal(false);
-            fetchEmployees();
-          }}
-        />
-      )}
+      {/* User Modal убран - регистрация только через Telegram */}
 
       {/* Change Password Modal */}
       {showPasswordModal && passwordEmployee && (

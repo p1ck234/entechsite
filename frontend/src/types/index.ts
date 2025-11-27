@@ -17,6 +17,7 @@ export interface Employee {
   telegram?: string;
   photo?: string;
   isActive: boolean;
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED'; // Статус регистрации
   createdAt: string;
   updatedAt: string;
   userRole?: 'ADMIN' | 'USER'; // Role from users table

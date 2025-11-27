@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { useTelegram } from '../contexts/TelegramContext';
 import { API_BASE_URL } from '../config/api';
 import Logo from '../components/Logo';
 
@@ -7,11 +9,47 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { loginTelegram } = useAuth();
+  const { isTelegram, initData } = useTelegram();
   const widgetContainerRef = useRef<HTMLDivElement>(null);
   const widgetInitializedRef = useRef(false);
 
-  // Обработчик Telegram OAuth Widget
+  // Автоматическая авторизация в Mini App через initData
   useEffect(() => {
+    if (isTelegram && initData) {
+      const handleMiniAppLogin = async () => {
+        try {
+          setLoading(true);
+          setError('');
+          await loginTelegram(initData);
+          navigate('/home');
+        } catch (err: any) {
+          console.error('Telegram Mini App login error:', err);
+          const errorMessage = err.message || 'Ошибка авторизации';
+          
+          // Если нужна регистрация - показываем сообщение
+          if (err.response?.data?.needsRegistration || 
+              err.response?.data?.status === 'PENDING' ||
+              errorMessage.includes('заявка') ||
+              errorMessage.includes('ожидайте')) {
+            setError(errorMessage);
+          } else {
+            setError(errorMessage);
+          }
+          setLoading(false);
+        }
+      };
+      
+      handleMiniAppLogin();
+    }
+  }, [isTelegram, initData, loginTelegram, navigate]);
+
+  // Обработчик Telegram OAuth Widget (только для браузера, не для Mini App)
+  useEffect(() => {
+    // Если это Mini App, не показываем OAuth Widget
+    if (isTelegram) {
+      return;
+    }
 
     // Создаем глобальную функцию для обработки OAuth callback
     (window as any).onTelegramAuth = async (user: any) => {
@@ -175,10 +213,12 @@ const Login: React.FC = () => {
             <Logo size="lg" />
           </div>
           <h2 className="text-2xl font-bold text-pastel-800 mb-4">
-            Вход через Telegram
+            {isTelegram ? 'Авторизация в Telegram Mini App' : 'Вход через Telegram'}
           </h2>
           <p className="text-pastel-600 mb-6">
-            Нажмите кнопку ниже, чтобы войти через Telegram
+            {isTelegram 
+              ? 'Выполняется автоматическая авторизация...'
+              : 'Нажмите кнопку ниже, чтобы войти через Telegram'}
           </p>
           
           {loading && (
@@ -195,27 +235,37 @@ const Login: React.FC = () => {
             </div>
           )}
 
-          {/* Telegram OAuth Widget */}
-          {/* Используем dangerouslySetInnerHTML чтобы React не трогал содержимое */}
-          <div 
-            className="flex justify-center mb-4 min-h-[50px]" 
-            style={{ minHeight: '50px' }}
-          >
-            <div 
-              ref={widgetContainerRef}
-              id="telegram-login-container"
-              suppressHydrationWarning
-            />
-            {!loading && !error && !widgetInitializedRef.current && (
-              <div className="text-pastel-500 text-sm absolute">
-                Загрузка кнопки входа...
+          {/* Telegram OAuth Widget - только для браузера */}
+          {!isTelegram && (
+            <>
+              <div 
+                className="flex justify-center mb-4 min-h-[50px]" 
+                style={{ minHeight: '50px' }}
+              >
+                <div 
+                  ref={widgetContainerRef}
+                  id="telegram-login-container"
+                  suppressHydrationWarning
+                />
+                {!loading && !error && !widgetInitializedRef.current && (
+                  <div className="text-pastel-500 text-sm absolute">
+                    Загрузка кнопки входа...
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          <p className="text-pastel-600 text-sm mt-4">
-            После нажатия кнопки вы будете перенаправлены на страницу авторизации Telegram, где нужно будет ввести номер телефона и подтвердить код
-          </p>
+              <p className="text-pastel-600 text-sm mt-4">
+                После нажатия кнопки вы будете перенаправлены на страницу авторизации Telegram, где нужно будет ввести номер телефона и подтвердить код
+              </p>
+            </>
+          )}
+
+          {/* Сообщение для Mini App */}
+          {isTelegram && !loading && !error && (
+            <p className="text-pastel-600 text-sm mt-4">
+              Если авторизация не выполнилась автоматически, обратитесь к администратору
+            </p>
+          )}
         </div>
       </div>
     </div>

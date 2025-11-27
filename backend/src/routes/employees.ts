@@ -14,7 +14,8 @@ router.get('/', authenticateToken, [
   query('limit').optional().isInt({ min: 1, max: 100 }),
   query('search').optional().isString(),
   query('department').optional().isString(),
-  query('showInactive').optional().isBoolean()
+  query('showInactive').optional().isBoolean(),
+  query('status').optional().isIn(['APPROVED', 'PENDING', 'REJECTED']) // Added status filter
 ], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
@@ -27,11 +28,30 @@ router.get('/', authenticateToken, [
     const search = req.query.search as string;
     const department = req.query.department as string;
     const showInactive = req.query.showInactive === 'true' && req.user?.role === 'ADMIN';
+    const statusFilter = req.query.status as string; // 'APPROVED', 'PENDING', 'REJECTED'
     const skip = (page - 1) * limit;
 
-    let whereClause = showInactive ? 'WHERE e.is_active = false' : 'WHERE e.is_active = true';
+    // Строим WHERE clause на основе фильтра статуса
+    let whereClause = '';
     const params: any[] = [];
     let paramCount = 0;
+
+    if (statusFilter === 'PENDING') {
+      // Показываем только заявки на согласовании
+      paramCount++;
+      whereClause = `WHERE e.status = $${paramCount}`;
+      params.push('PENDING');
+    } else if (statusFilter === 'REJECTED') {
+      // Показываем отклоненные или неактивные
+      paramCount++;
+      whereClause = `WHERE (e.status = $${paramCount} OR e.is_active = false)`;
+      params.push('REJECTED');
+    } else {
+      // По умолчанию показываем активных и одобренных
+      paramCount++;
+      whereClause = `WHERE e.is_active = true AND e.status = $${paramCount}`;
+      params.push('APPROVED');
+    }
 
     if (search) {
       paramCount++;

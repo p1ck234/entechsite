@@ -108,13 +108,14 @@ export const authAPI = {
 
 // Employees API
 export const employeesAPI = {
-  getEmployees: async (params?: {
-    page?: number;
-    limit?: number;
-    search?: string;
-    department?: string;
-    showInactive?: boolean;
-  }): Promise<EmployeesResponse> => {
+      getEmployees: async (params?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        department?: string;
+        showInactive?: boolean;
+        status?: 'APPROVED' | 'PENDING' | 'REJECTED'; // Changed to match backend format
+      }): Promise<EmployeesResponse> => {
     const response = await api.get('/employees', { params });
     
     // Transform snake_case to camelCase
@@ -132,7 +133,8 @@ export const employeesAPI = {
       isActive: emp.is_active,
       createdAt: emp.created_at,
       updatedAt: emp.updated_at,
-      userRole: emp.user_role
+      userRole: emp.user_role,
+      status: emp.status // Добавляем статус
     }));
 
     return {
