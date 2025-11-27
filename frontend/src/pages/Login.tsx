@@ -152,14 +152,36 @@ const Login: React.FC = () => {
     };
 
     // Загружаем скрипт Telegram OAuth Widget если его еще нет
-    if (!document.querySelector('script[src*="telegram-widget.js"]')) {
+    const existingScript = document.querySelector('script[src*="telegram-widget.js"]');
+    if (!existingScript) {
       const script = document.createElement('script');
       script.src = 'https://telegram.org/js/telegram-widget.js?22';
       script.async = true;
       document.head.appendChild(script);
     }
 
+    // Создаем виджет после небольшой задержки, чтобы скрипт успел загрузиться
+    const initWidget = () => {
+      const container = document.getElementById('telegram-login-container') || 
+                       document.getElementById('telegram-login-container-fallback');
+      if (container && !container.querySelector('script[data-telegram-login]')) {
+        const widgetScript = document.createElement('script');
+        widgetScript.src = 'https://telegram.org/js/telegram-widget.js?22';
+        widgetScript.setAttribute('data-telegram-login', import.meta.env.VITE_TELEGRAM_BOT_NAME || 'your_bot_name');
+        widgetScript.setAttribute('data-size', 'large');
+        widgetScript.setAttribute('data-onauth', 'onTelegramAuth(user)');
+        widgetScript.setAttribute('data-request-access', 'write');
+        widgetScript.async = true;
+        container.appendChild(widgetScript);
+      }
+    };
+
+    // Пытаемся инициализировать виджет сразу и после задержки
+    initWidget();
+    const timeoutId = setTimeout(initWidget, 500);
+
     return () => {
+      clearTimeout(timeoutId);
       delete (window as any).onTelegramAuth;
     };
   }, [navigate, isTelegram]);
@@ -194,14 +216,8 @@ const Login: React.FC = () => {
             )}
 
             {/* Telegram OAuth Widget */}
-            <div className="flex justify-center mb-4">
-              <div
-                className="telegram-login-widget"
-                data-telegram-login={import.meta.env.VITE_TELEGRAM_BOT_NAME || 'your_bot_name'}
-                data-size="large"
-                data-onauth="onTelegramAuth(user)"
-                data-request-access="write"
-              ></div>
+            <div className="flex justify-center mb-4" id="telegram-login-container">
+              {/* Виджет будет добавлен скриптом */}
             </div>
 
             <p className="text-pastel-600 text-sm mt-4">
@@ -242,14 +258,8 @@ const Login: React.FC = () => {
           )}
 
           {/* Telegram OAuth Widget */}
-          <div className="flex justify-center mb-4">
-            <div
-              className="telegram-login-widget"
-              data-telegram-login={import.meta.env.VITE_TELEGRAM_BOT_NAME || 'your_bot_name'}
-              data-size="large"
-              data-onauth="onTelegramAuth(user)"
-              data-request-access="write"
-            ></div>
+          <div className="flex justify-center mb-4" id="telegram-login-container-fallback">
+            {/* Виджет будет добавлен скриптом */}
           </div>
 
           <p className="text-pastel-600 text-sm mt-4">
