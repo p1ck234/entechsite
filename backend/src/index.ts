@@ -148,95 +148,33 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
 
 console.log('🌐 Allowed CORS origins:', allowedOrigins);
 
-// Обрабатываем OPTIONS запросы (preflight) ПЕРВЫМИ - ДО всех других middleware
-app.options('*', (req, res) => {
-  const origin = req.headers.origin;
-  
-  console.log('🔍 OPTIONS preflight request from:', origin);
-  
-  if (!origin) {
-    console.log('✅ No origin, allowing');
-    return res.sendStatus(204);
-  }
-  
-  // Нормализуем origin
-  const normalizedOrigin = origin.replace(/\/$/, '');
-  
-  // Проверяем, разрешен ли origin
-  const isAllowed = allowedOrigins.includes(origin) || 
-                   allowedOrigins.includes(normalizedOrigin) || 
-                   allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin);
-  
-  console.log('🔍 Origin check:', {
-    origin,
-    normalizedOrigin,
-    isAllowed,
-    allowedOrigins
-  });
-  
-  if (isAllowed) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    res.setHeader('Access-Control-Max-Age', '86400'); // 24 часа
-    console.log('✅ CORS preflight allowed for:', origin);
-    return res.sendStatus(204);
-  } else {
-    console.warn('❌ CORS preflight BLOCKED for:', origin);
-    console.warn('   Allowed origins:', allowedOrigins);
-    return res.status(403).json({ error: 'CORS not allowed' });
-  }
-});
-
-// Основной CORS middleware для всех остальных запросов
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  
-  // Разрешаем запросы без origin
-  if (!origin) {
-    return next();
-  }
-  
-  // Нормализуем origin (убираем слэш в конце для сравнения)
-  const normalizedOrigin = origin.replace(/\/$/, '');
-  
-  // Проверяем, разрешен ли origin
-  const isAllowed = allowedOrigins.includes(origin) || 
-                   allowedOrigins.includes(normalizedOrigin) || 
-                   allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin);
-  
-  if (isAllowed) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Type');
-  } else {
-    console.warn('⚠️ Blocked CORS request from:', origin);
-    console.warn('   Allowed origins:', allowedOrigins);
-  }
-  
-  next();
-});
-
-// Используем cors middleware для дополнительной поддержки
+// Упрощенная и надежная CORS конфигурация
+// Используем только один cors middleware, но с правильной настройкой
 app.use(cors({
   origin: (origin, callback) => {
-    // Разрешаем запросы без origin
+    // Разрешаем запросы без origin (например, из Postman или мобильных приложений)
     if (!origin) {
       return callback(null, true);
     }
     
-    // Нормализуем origin
+    // Нормализуем origin (убираем слэш в конце)
     const normalizedOrigin = origin.replace(/\/$/, '');
     
-    // Проверяем разрешен ли origin
-    if (allowedOrigins.includes(origin) || allowedOrigins.includes(normalizedOrigin) || 
-        allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin)) {
+    // Проверяем, разрешен ли origin
+    const isAllowed = allowedOrigins.includes(origin) || 
+                     allowedOrigins.includes(normalizedOrigin) || 
+                     allowedOrigins.some(allowed => {
+                       const normalizedAllowed = allowed.replace(/\/$/, '');
+                       return normalizedAllowed === normalizedOrigin;
+                     });
+    
+    if (isAllowed) {
+      console.log('✅ CORS allowed for:', origin);
       callback(null, true);
     } else {
-      console.warn('⚠️ CORS blocked origin:', origin);
+      console.warn('❌ CORS blocked for:', origin);
+      console.warn('   Normalized:', normalizedOrigin);
+      console.warn('   Allowed origins:', allowedOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -245,11 +183,11 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   exposedHeaders: ['Content-Length', 'Content-Type'],
   preflightContinue: false,
-  optionsSuccessStatus: 204
+  optionsSuccessStatus: 204,
+  maxAge: 86400 // 24 часа кеширования preflight
 }));
 
-// Теперь применяем helmet ПОСЛЕ CORS, чтобы он не блокировал заголовки
-// Настраиваем helmet чтобы он не конфликтовал с CORS
+// Применяем helmet ПОСЛЕ CORS, чтобы он не блокировал заголовки
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
   crossOriginEmbedderPolicy: false

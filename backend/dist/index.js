@@ -124,72 +124,26 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
         'https://t.me'
     ];
 console.log('🌐 Allowed CORS origins:', allowedOrigins);
-app.options('*', (req, res) => {
-    const origin = req.headers.origin;
-    console.log('🔍 OPTIONS preflight request from:', origin);
-    if (!origin) {
-        console.log('✅ No origin, allowing');
-        return res.sendStatus(204);
-    }
-    const normalizedOrigin = origin.replace(/\/$/, '');
-    const isAllowed = allowedOrigins.includes(origin) ||
-        allowedOrigins.includes(normalizedOrigin) ||
-        allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin);
-    console.log('🔍 Origin check:', {
-        origin,
-        normalizedOrigin,
-        isAllowed,
-        allowedOrigins
-    });
-    if (isAllowed) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-        res.setHeader('Access-Control-Max-Age', '86400');
-        console.log('✅ CORS preflight allowed for:', origin);
-        return res.sendStatus(204);
-    }
-    else {
-        console.warn('❌ CORS preflight BLOCKED for:', origin);
-        console.warn('   Allowed origins:', allowedOrigins);
-        return res.status(403).json({ error: 'CORS not allowed' });
-    }
-});
-app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (!origin) {
-        return next();
-    }
-    const normalizedOrigin = origin.replace(/\/$/, '');
-    const isAllowed = allowedOrigins.includes(origin) ||
-        allowedOrigins.includes(normalizedOrigin) ||
-        allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin);
-    if (isAllowed) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-        res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Type');
-    }
-    else {
-        console.warn('⚠️ Blocked CORS request from:', origin);
-        console.warn('   Allowed origins:', allowedOrigins);
-    }
-    next();
-});
 app.use((0, cors_1.default)({
     origin: (origin, callback) => {
         if (!origin) {
             return callback(null, true);
         }
         const normalizedOrigin = origin.replace(/\/$/, '');
-        if (allowedOrigins.includes(origin) || allowedOrigins.includes(normalizedOrigin) ||
-            allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin)) {
+        const isAllowed = allowedOrigins.includes(origin) ||
+            allowedOrigins.includes(normalizedOrigin) ||
+            allowedOrigins.some(allowed => {
+                const normalizedAllowed = allowed.replace(/\/$/, '');
+                return normalizedAllowed === normalizedOrigin;
+            });
+        if (isAllowed) {
+            console.log('✅ CORS allowed for:', origin);
             callback(null, true);
         }
         else {
-            console.warn('⚠️ CORS blocked origin:', origin);
+            console.warn('❌ CORS blocked for:', origin);
+            console.warn('   Normalized:', normalizedOrigin);
+            console.warn('   Allowed origins:', allowedOrigins);
             callback(new Error('Not allowed by CORS'));
         }
     },
@@ -198,7 +152,8 @@ app.use((0, cors_1.default)({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
     exposedHeaders: ['Content-Length', 'Content-Type'],
     preflightContinue: false,
-    optionsSuccessStatus: 204
+    optionsSuccessStatus: 204,
+    maxAge: 86400
 }));
 app.use((0, helmet_1.default)({
     crossOriginResourcePolicy: { policy: "cross-origin" },
