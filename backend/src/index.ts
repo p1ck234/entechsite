@@ -111,8 +111,8 @@ const pool = new Pool({
 });
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
-// Middleware
-app.use(helmet());
+// CORS должен быть ПЕРЕД helmet, иначе helmet может блокировать заголовки
+// Сначала настраиваем CORS
 
 // Нормализуем FRONTEND_URL (убираем слэш в конце)
 const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, '') || '';
@@ -148,12 +148,14 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
 
 console.log('🌐 Allowed CORS origins:', allowedOrigins);
 
-// CORS middleware - должен быть ДО других middleware
-// Обрабатываем OPTIONS запросы (preflight) ПЕРВЫМИ
+// Обрабатываем OPTIONS запросы (preflight) ПЕРВЫМИ - ДО всех других middleware
 app.options('*', (req, res) => {
   const origin = req.headers.origin;
   
+  console.log('🔍 OPTIONS preflight request from:', origin);
+  
   if (!origin) {
+    console.log('✅ No origin, allowing');
     return res.sendStatus(204);
   }
   
@@ -165,16 +167,25 @@ app.options('*', (req, res) => {
                    allowedOrigins.includes(normalizedOrigin) || 
                    allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin);
   
+  console.log('🔍 Origin check:', {
+    origin,
+    normalizedOrigin,
+    isAllowed,
+    allowedOrigins
+  });
+  
   if (isAllowed) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    res.header('Access-Control-Max-Age', '86400'); // 24 часа
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.setHeader('Access-Control-Max-Age', '86400'); // 24 часа
+    console.log('✅ CORS preflight allowed for:', origin);
     return res.sendStatus(204);
   } else {
-    console.warn('⚠️ Blocked CORS preflight from:', origin);
-    return res.sendStatus(403);
+    console.warn('❌ CORS preflight BLOCKED for:', origin);
+    console.warn('   Allowed origins:', allowedOrigins);
+    return res.status(403).json({ error: 'CORS not allowed' });
   }
 });
 
@@ -196,11 +207,11 @@ app.use((req, res, next) => {
                    allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin);
   
   if (isAllowed) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    res.header('Access-Control-Expose-Headers', 'Content-Length, Content-Type');
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Type');
   } else {
     console.warn('⚠️ Blocked CORS request from:', origin);
     console.warn('   Allowed origins:', allowedOrigins);
@@ -209,7 +220,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Также используем cors middleware для дополнительной поддержки
+// Используем cors middleware для дополнительной поддержки
 app.use(cors({
   origin: (origin, callback) => {
     // Разрешаем запросы без origin
@@ -235,6 +246,13 @@ app.use(cors({
   exposedHeaders: ['Content-Length', 'Content-Type'],
   preflightContinue: false,
   optionsSuccessStatus: 204
+}));
+
+// Теперь применяем helmet ПОСЛЕ CORS, чтобы он не блокировал заголовки
+// Настраиваем helmet чтобы он не конфликтовал с CORS
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false
 }));
 
 app.use(express.json({ limit: '10mb' }));
@@ -289,8 +307,19 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
-// Initialize database and start server
-async function startServer() {
+// Запускаем сервер СРАЗУ, чтобы он мог обрабатывать запросы (включая OPTIONS)
+// Подключение к базе данных будет выполнено асинхронно
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log('✅ Server is ready to accept requests (database connection will be established in background)');
+}).on('error', (err: any) => {
+  console.error('❌ Server error:', err);
+  process.exit(1);
+});
+
+// Initialize database in background
+async function initializeDatabaseConnection() {
   try {
     console.log('🔗 Попытка подключения к базе данных...');
     if (databaseUrl) {
@@ -306,17 +335,9 @@ async function startServer() {
     
     // Инициализируем базу данных (создаем таблицы и админа, если нужно)
     await initializeDatabase(pool);
-    
-    // Запускаем сервер
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-    }).on('error', (err: any) => {
-      console.error('❌ Server error:', err);
-      process.exit(1);
-    });
+    console.log('✅ База данных инициализирована');
   } catch (error: any) {
-    console.error('❌ Ошибка при запуске сервера:', error.message);
+    console.error('❌ Ошибка при подключении к базе данных:', error.message);
     if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
       console.error('\n❌ Не удалось подключиться к базе данных!');
       console.error('\n📝 Инструкция по настройке DATABASE_URL в Railway:');
@@ -326,13 +347,17 @@ async function startServer() {
       console.error('   4. Значение: ${{Postgres.DATABASE_URL}}');
       console.error('      (замените "Postgres" на имя вашего PostgreSQL сервиса)');
       console.error('   5. Или используйте "Raw Editor" для просмотра всех переменных');
+      console.error('\n⚠️ Сервер продолжит работу, но запросы к базе данных будут возвращать ошибки');
     } else if (error.code === '28P01') {
       console.error('❌ Ошибка аутентификации. Проверьте правильность DATABASE_URL.');
+      console.error('⚠️ Сервер продолжит работу, но запросы к базе данных будут возвращать ошибки');
     } else if (error.code === '3D000') {
       console.error('❌ База данных не существует. Проверьте имя базы данных в DATABASE_URL.');
+      console.error('⚠️ Сервер продолжит работу, но запросы к базе данных будут возвращать ошибки');
     }
-    process.exit(1);
+    // НЕ завершаем процесс - сервер должен продолжать работать для обработки OPTIONS запросов
   }
 }
 
-startServer();
+// Инициализируем подключение к базе данных в фоне
+initializeDatabaseConnection();

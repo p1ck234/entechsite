@@ -94,7 +94,6 @@ const pool = new pg_1.Pool({
     connectionString: databaseUrl,
 });
 const PORT = parseInt(process.env.PORT || '3001', 10);
-app.use((0, helmet_1.default)());
 const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, '') || '';
 const allowedOrigins = process.env.NODE_ENV === 'production'
     ? [
@@ -127,24 +126,34 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
 console.log('🌐 Allowed CORS origins:', allowedOrigins);
 app.options('*', (req, res) => {
     const origin = req.headers.origin;
+    console.log('🔍 OPTIONS preflight request from:', origin);
     if (!origin) {
+        console.log('✅ No origin, allowing');
         return res.sendStatus(204);
     }
     const normalizedOrigin = origin.replace(/\/$/, '');
     const isAllowed = allowedOrigins.includes(origin) ||
         allowedOrigins.includes(normalizedOrigin) ||
         allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin);
+    console.log('🔍 Origin check:', {
+        origin,
+        normalizedOrigin,
+        isAllowed,
+        allowedOrigins
+    });
     if (isAllowed) {
-        res.header('Access-Control-Allow-Origin', origin);
-        res.header('Access-Control-Allow-Credentials', 'true');
-        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
-        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-        res.header('Access-Control-Max-Age', '86400');
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+        res.setHeader('Access-Control-Max-Age', '86400');
+        console.log('✅ CORS preflight allowed for:', origin);
         return res.sendStatus(204);
     }
     else {
-        console.warn('⚠️ Blocked CORS preflight from:', origin);
-        return res.sendStatus(403);
+        console.warn('❌ CORS preflight BLOCKED for:', origin);
+        console.warn('   Allowed origins:', allowedOrigins);
+        return res.status(403).json({ error: 'CORS not allowed' });
     }
 });
 app.use((req, res, next) => {
@@ -157,11 +166,11 @@ app.use((req, res, next) => {
         allowedOrigins.includes(normalizedOrigin) ||
         allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin);
     if (isAllowed) {
-        res.header('Access-Control-Allow-Origin', origin);
-        res.header('Access-Control-Allow-Credentials', 'true');
-        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
-        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-        res.header('Access-Control-Expose-Headers', 'Content-Length, Content-Type');
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Type');
     }
     else {
         console.warn('⚠️ Blocked CORS request from:', origin);
@@ -190,6 +199,10 @@ app.use((0, cors_1.default)({
     exposedHeaders: ['Content-Length', 'Content-Type'],
     preflightContinue: false,
     optionsSuccessStatus: 204
+}));
+app.use((0, helmet_1.default)({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginEmbedderPolicy: false
 }));
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ extended: true }));
@@ -223,7 +236,15 @@ process.on('SIGTERM', async () => {
     await pool.end();
     process.exit(0);
 });
-async function startServer() {
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log('✅ Server is ready to accept requests (database connection will be established in background)');
+}).on('error', (err) => {
+    console.error('❌ Server error:', err);
+    process.exit(1);
+});
+async function initializeDatabaseConnection() {
     try {
         console.log('🔗 Попытка подключения к базе данных...');
         if (databaseUrl) {
@@ -235,16 +256,10 @@ async function startServer() {
         await pool.query('SELECT 1');
         console.log('✅ Подключение к базе данных установлено');
         await (0, db_init_1.initializeDatabase)(pool);
-        app.listen(PORT, '0.0.0.0', () => {
-            console.log(`🚀 Server running on port ${PORT}`);
-            console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-        }).on('error', (err) => {
-            console.error('❌ Server error:', err);
-            process.exit(1);
-        });
+        console.log('✅ База данных инициализирована');
     }
     catch (error) {
-        console.error('❌ Ошибка при запуске сервера:', error.message);
+        console.error('❌ Ошибка при подключении к базе данных:', error.message);
         if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
             console.error('\n❌ Не удалось подключиться к базе данных!');
             console.error('\n📝 Инструкция по настройке DATABASE_URL в Railway:');
@@ -254,15 +269,17 @@ async function startServer() {
             console.error('   4. Значение: ${{Postgres.DATABASE_URL}}');
             console.error('      (замените "Postgres" на имя вашего PostgreSQL сервиса)');
             console.error('   5. Или используйте "Raw Editor" для просмотра всех переменных');
+            console.error('\n⚠️ Сервер продолжит работу, но запросы к базе данных будут возвращать ошибки');
         }
         else if (error.code === '28P01') {
             console.error('❌ Ошибка аутентификации. Проверьте правильность DATABASE_URL.');
+            console.error('⚠️ Сервер продолжит работу, но запросы к базе данных будут возвращать ошибки');
         }
         else if (error.code === '3D000') {
             console.error('❌ База данных не существует. Проверьте имя базы данных в DATABASE_URL.');
+            console.error('⚠️ Сервер продолжит работу, но запросы к базе данных будут возвращать ошибки');
         }
-        process.exit(1);
     }
 }
-startServer();
+initializeDatabaseConnection();
 //# sourceMappingURL=index.js.map
