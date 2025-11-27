@@ -158,6 +158,35 @@ async function initializeDatabase(pool) {
         }
         else {
             console.log('✅ Таблицы уже существуют');
+            console.log('🔍 Проверка существующих колонок...');
+            await pool.query(`
+            DO $$
+            BEGIN
+              IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'employees' AND column_name = 'status'
+              ) THEN
+                ALTER TABLE employees ADD COLUMN status VARCHAR(20) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED'));
+                -- Существующие сотрудники считаем одобренными
+                UPDATE employees SET status = 'APPROVED' WHERE status IS NULL;
+              END IF;
+            END $$;
+          `);
+            await pool.query(`
+            DO $$
+            BEGIN
+              IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'employees' AND column_name = 'telegram_id'
+              ) THEN
+                ALTER TABLE employees ADD COLUMN telegram_id BIGINT;
+                -- Добавляем уникальный индекс только если колонка была создана
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_telegram_id ON employees(telegram_id) WHERE telegram_id IS NOT NULL;
+                console.log('✅ Колонка telegram_id добавлена');
+              END IF;
+            END $$;
+          `);
+            console.log('✅ Проверка колонок завершена');
         }
         console.log('✅ База данных готова к работе');
     }
