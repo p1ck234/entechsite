@@ -54,14 +54,17 @@ if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
         }
     }
     if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
-        console.error('⚠️ DATABASE_URL не настроен!');
-        console.error('\n📊 Доступные переменные PostgreSQL:');
+        const railwayInternalUrl = 'postgresql://postgres:fMRvspHdgKpSjCIPQDizWQFwpYPNNtJf@postgres.railway.internal:5432/railway';
+        console.warn('⚠️ DATABASE_URL не найден в переменных окружения');
+        console.warn('📦 Используем fallback Railway internal URL');
+        databaseUrl = railwayInternalUrl;
+        console.log('\n📊 Доступные переменные PostgreSQL:');
         const pgVars = ['PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE'];
         pgVars.forEach(key => {
             const value = process.env[key];
-            console.error(`   ${key}: ${value ? '✓ установлена' : '✗ не установлена'}`);
+            console.log(`   ${key}: ${value ? '✓ установлена' : '✗ не установлена'}`);
         });
-        console.error('\n📋 Все переменные, содержащие "DATABASE" или "POSTGRES":');
+        console.log('\n📋 Все переменные, содержащие "DATABASE" или "POSTGRES":');
         const dbRelatedVars = Object.keys(process.env).filter(key => key.toUpperCase().includes('DATABASE') ||
             key.toUpperCase().includes('POSTGRES') ||
             key.toUpperCase().includes('PG'));
@@ -71,30 +74,23 @@ if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
                 const masked = value && value.length > 30
                     ? `${value.substring(0, 15)}...${value.substring(value.length - 10)}`
                     : (value || '<empty>');
-                console.error(`   ${key}: ${masked}`);
+                console.log(`   ${key}: ${masked}`);
             });
         }
         else {
-            console.error('   (переменные не найдены)');
+            console.log('   (переменные не найдены)');
         }
-        console.error('\n📝 Решение для Railway:');
-        console.error('   1. Убедитесь, что PostgreSQL сервис добавлен в проект');
-        console.error('   2. В backend сервисе → Variables → DATABASE_URL');
-        console.error('   3. Попробуйте эти варианты (по очереди):');
-        console.error('      - ${{Postgres.DATABASE_URL}}');
-        console.error('      - ${{PostgreSQL.DATABASE_URL}}');
-        console.error('      - ${{Database.DATABASE_URL}}');
-        console.error('      - ${{Postgresql.DATABASE_URL}}');
-        console.error('   4. Или используйте "Raw Editor" чтобы увидеть все доступные переменные');
-        console.error('\n⚠️ Сервер запустится, но подключение к базе данных будет недоступно');
-        databaseUrl = 'postgresql://localhost:5432/entechsite';
+    }
+    else {
+        console.log('✅ DATABASE_URL найден в переменных окружения');
     }
 }
 const app = (0, express_1.default)();
 const pool = new pg_1.Pool({
-    connectionString: databaseUrl,
+    connectionString: databaseUrl || 'postgresql://localhost:5432/entechsite',
 });
 const PORT = parseInt(process.env.PORT || '3001', 10);
+console.log(`🔧 PORT from environment: ${process.env.PORT}, using: ${PORT}`);
 const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, '') || '';
 const allowedOrigins = process.env.NODE_ENV === 'production'
     ? [
@@ -125,14 +121,25 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
         'https://t.me'
     ];
 console.log('🌐 Allowed CORS origins:', allowedOrigins);
+app.use((req, res, next) => {
+    console.log(`📥 ${req.method} ${req.path}`, {
+        origin: req.headers.origin,
+        'user-agent': req.headers['user-agent']?.substring(0, 50),
+        timestamp: new Date().toISOString()
+    });
+    next();
+});
 app.options('*', (req, res) => {
     const origin = req.headers.origin;
     console.log('🔍 OPTIONS preflight request:', {
         origin,
         path: req.path,
-        method: req.method
+        method: req.method,
+        'access-control-request-method': req.headers['access-control-request-method'],
+        'access-control-request-headers': req.headers['access-control-request-headers']
     });
     if (!origin) {
+        console.log('⚠️ OPTIONS request without origin');
         return res.sendStatus(204);
     }
     const normalizedOrigin = origin.replace(/\/$/, '');
@@ -153,6 +160,7 @@ app.options('*', (req, res) => {
     }
     else {
         console.warn('❌ OPTIONS blocked for:', origin);
+        console.warn('   Allowed origins:', allowedOrigins);
         return res.status(403).json({ error: 'CORS not allowed' });
     }
 });
