@@ -31,14 +31,18 @@ const Login: React.FC = () => {
           setLoading(false);
         }
       };
-      handleTelegramLogin();
+      // Небольшая задержка чтобы компонент успел отрендериться
+      setTimeout(() => {
+        handleTelegramLogin();
+      }, 100);
     }
   }, [isTelegram, initData, loginTelegram, navigate]);
 
 
   // Если это Telegram, показываем загрузку или результат
   if (isTelegram) {
-    if (loading) {
+    // Показываем загрузку по умолчанию если нет ошибки
+    if (loading || (!error && !successMessage)) {
       return (
         <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
           <div className="text-center">
@@ -209,8 +213,52 @@ const Login: React.FC = () => {
     );
   }
 
-  // Fallback (не должно доходить сюда)
-  return null;
+  // Fallback - показываем форму входа
+  return (
+    <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
+      <div className="w-full max-w-md">
+        <div className="glass-card rounded-2xl p-8 shadow-2xl text-center">
+          <div className="mb-4">
+            <Logo size="lg" />
+          </div>
+          <h2 className="text-2xl font-bold text-pastel-800 mb-4">
+            Вход через Telegram
+          </h2>
+          <p className="text-pastel-600 mb-6">
+            Войдите в систему используя свой Telegram аккаунт
+          </p>
+          
+          {loading && (
+            <div className="mb-4">
+              <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-pastel-600">Авторизация...</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+              {error}
+            </div>
+          )}
+
+          {/* Telegram OAuth Widget */}
+          <div className="flex justify-center mb-4">
+            <div
+              className="telegram-login-widget"
+              data-telegram-login={import.meta.env.VITE_TELEGRAM_BOT_NAME || 'your_bot_name'}
+              data-size="large"
+              data-onauth="onTelegramAuth(user)"
+              data-request-access="write"
+            ></div>
+          </div>
+
+          <p className="text-pastel-600 text-sm mt-4">
+            После нажатия кнопки вы будете перенаправлены на страницу авторизации Telegram
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Login;

@@ -4,10 +4,19 @@ import App from './App.tsx'
 import { TelegramProvider } from './contexts/TelegramContext.tsx'
 import './index.css'
 
+// Обработка глобальных ошибок
+window.addEventListener('error', (event) => {
+  console.error('Global error:', event.error);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled promise rejection:', event.reason);
+});
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <TelegramProvider>
-    <App />
+      <App />
     </TelegramProvider>
   </React.StrictMode>,
 )
