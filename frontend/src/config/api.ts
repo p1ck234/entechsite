@@ -13,17 +13,20 @@ function getApiUrl(): string {
   }
 
   // 3. Определяем по текущему домену
-  const hostname = window.location.hostname;
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
   
   // Если это production домен
-  if (hostname.includes('railway.app') || hostname.includes('entech.p1ck23.ru')) {
-    // Пытаемся определить backend URL
-    if (hostname.includes('frontend')) {
-      // Frontend на Railway - backend обычно на другом поддомене
+  if (hostname.includes('railway.app') || hostname.includes('entech.p1ck23.ru') || hostname.includes('p1ck23.ru')) {
+    // Всегда используем backend URL на Railway
+    return 'https://entechsite-backend-production.up.railway.app/api';
+  }
+  
+  // Если открыто через Telegram (t.me или web.telegram.org)
+  if (typeof window !== 'undefined') {
+    const referrer = document.referrer;
+    if (referrer.includes('t.me') || referrer.includes('telegram.org')) {
       return 'https://entechsite-backend-production.up.railway.app/api';
     }
-    // Если это основной домен
-    return 'https://entechsite-backend-production.up.railway.app/api';
   }
 
   // 4. По умолчанию для разработки

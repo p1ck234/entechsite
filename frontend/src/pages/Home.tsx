@@ -24,6 +24,12 @@ const Home: React.FC = () => {
           await loginTelegram(initData);
           navigate('/home');
         } catch (err: any) {
+          // Если нужна регистрация - перенаправляем на /login (там покажется форма регистрации)
+          if (err.response?.data?.needsRegistration || 
+              (err.response?.status === 403 && err.response?.data?.message?.includes('не зарегистрирован'))) {
+            navigate('/login');
+            return;
+          }
           // Если ошибка авторизации, перенаправляем на /login для показа ошибки
           console.error('Telegram login error:', err);
           navigate('/login');
