@@ -108,8 +108,11 @@ const pool = new Pool({
   connectionString: databaseUrl || 'postgresql://localhost:5432/entechsite',
 });
 
+// Railway автоматически устанавливает PORT, но если его нет, используем 3001
+// В Railway PORT всегда должен быть установлен
 const PORT = parseInt(process.env.PORT || '3001', 10);
-console.log(`🔧 PORT from environment: ${process.env.PORT}, using: ${PORT}`);
+console.log(`🔧 PORT from environment: ${process.env.PORT || 'NOT SET'}, using: ${PORT}`);
+console.log(`🔧 All environment variables:`, Object.keys(process.env).filter(k => k.includes('PORT') || k.includes('NODE') || k.includes('RAILWAY')));
 
 // CORS должен быть ПЕРЕД helmet, иначе helmet может блокировать заголовки
 // Сначала настраиваем CORS
@@ -135,8 +138,8 @@ const baseOrigins = [
   'https://t.me'
 ];
 
-// Добавляем FRONTEND_URL если он указан
-if (frontendUrl) {
+// Добавляем FRONTEND_URL если он указан и еще не в списке
+if (frontendUrl && !baseOrigins.includes(frontendUrl)) {
   baseOrigins.push(frontendUrl);
 }
 
@@ -310,13 +313,43 @@ process.on('SIGTERM', async () => {
 
 // Запускаем сервер СРАЗУ, чтобы он мог обрабатывать запросы (включая OPTIONS)
 // Подключение к базе данных будет выполнено асинхронно
-app.listen(PORT, '0.0.0.0', () => {
+// В Railway сервер ДОЛЖЕН слушать на 0.0.0.0 и порту из переменной PORT
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📊 Railway PORT: ${process.env.PORT || 'NOT SET'}`);
+  console.log(`📊 Server listening on: 0.0.0.0:${PORT}`);
   console.log('✅ Server is ready to accept requests (database connection will be established in background)');
+  
+  // Проверяем, что сервер действительно слушает
+  const address = server.address();
+  if (address) {
+    const addrStr = typeof address === 'string' ? address : `${address.address}:${address.port}`;
+    console.log(`✅ Server address: ${addrStr}`);
+    console.log(`✅ Server is listening and ready to accept connections`);
+  }
+  
+  // Health check endpoint для Railway
+  console.log(`✅ Health check available at: http://0.0.0.0:${PORT}/api/health`);
 }).on('error', (err: any) => {
   console.error('❌ Server error:', err);
+  console.error('❌ Error code:', err.code);
+  console.error('❌ Error message:', err.message);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use`);
+  }
   process.exit(1);
+});
+
+// Обработка ошибок сервера
+server.on('clientError', (err: any, socket: any) => {
+  console.error('❌ Client error:', err.message);
+  socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+});
+
+// Логируем, когда сервер закрывается
+server.on('close', () => {
+  console.log('⚠️ Server closed');
 });
 
 // Initialize database in background

@@ -90,7 +90,8 @@ const pool = new pg_1.Pool({
     connectionString: databaseUrl || 'postgresql://localhost:5432/entechsite',
 });
 const PORT = parseInt(process.env.PORT || '3001', 10);
-console.log(`🔧 PORT from environment: ${process.env.PORT}, using: ${PORT}`);
+console.log(`🔧 PORT from environment: ${process.env.PORT || 'NOT SET'}, using: ${PORT}`);
+console.log(`🔧 All environment variables:`, Object.keys(process.env).filter(k => k.includes('PORT') || k.includes('NODE') || k.includes('RAILWAY')));
 const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, '') || '';
 console.log('🔧 FRONTEND_URL from env:', process.env.FRONTEND_URL);
 console.log('🔧 Normalized frontendUrl:', frontendUrl);
@@ -107,7 +108,7 @@ const baseOrigins = [
     'https://telegram.org',
     'https://t.me'
 ];
-if (frontendUrl) {
+if (frontendUrl && !baseOrigins.includes(frontendUrl)) {
     baseOrigins.push(frontendUrl);
 }
 const allowedOrigins = process.env.NODE_ENV === 'production'
@@ -233,13 +234,34 @@ process.on('SIGTERM', async () => {
     await pool.end();
     process.exit(0);
 });
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`📊 Railway PORT: ${process.env.PORT || 'NOT SET'}`);
+    console.log(`📊 Server listening on: 0.0.0.0:${PORT}`);
     console.log('✅ Server is ready to accept requests (database connection will be established in background)');
+    const address = server.address();
+    if (address) {
+        const addrStr = typeof address === 'string' ? address : `${address.address}:${address.port}`;
+        console.log(`✅ Server address: ${addrStr}`);
+        console.log(`✅ Server is listening and ready to accept connections`);
+    }
+    console.log(`✅ Health check available at: http://0.0.0.0:${PORT}/api/health`);
 }).on('error', (err) => {
     console.error('❌ Server error:', err);
+    console.error('❌ Error code:', err.code);
+    console.error('❌ Error message:', err.message);
+    if (err.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${PORT} is already in use`);
+    }
     process.exit(1);
+});
+server.on('clientError', (err, socket) => {
+    console.error('❌ Client error:', err.message);
+    socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+});
+server.on('close', () => {
+    console.log('⚠️ Server closed');
 });
 async function initializeDatabaseConnection() {
     try {
