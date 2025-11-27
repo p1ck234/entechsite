@@ -27,5 +27,8 @@ export default defineConfig({
         ? 'https://entechsite-backend-production.up.railway.app/api'
         : 'http://localhost:3001/api')
     ),
+    'import.meta.env.VITE_TELEGRAM_BOT_NAME': JSON.stringify(
+      process.env.VITE_TELEGRAM_BOT_NAME || 'entechsite_bot'
+    ),
   },
 })

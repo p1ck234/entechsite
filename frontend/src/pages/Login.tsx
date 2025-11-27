@@ -57,27 +57,43 @@ const Login: React.FC = () => {
       }
     };
 
-    // Загружаем скрипт Telegram OAuth Widget если его еще нет
-    const existingScript = document.querySelector('script[src*="telegram-widget.js"]');
-    if (!existingScript) {
-      const script = document.createElement('script');
-      script.src = 'https://telegram.org/js/telegram-widget.js?22';
-      script.async = true;
-      document.head.appendChild(script);
-    }
-
     // Создаем виджет после небольшой задержки, чтобы скрипт успел загрузиться
     const initWidget = () => {
       const container = document.getElementById('telegram-login-container');
-      if (container && !container.querySelector('script[data-telegram-login]')) {
-        const widgetScript = document.createElement('script');
-        widgetScript.src = 'https://telegram.org/js/telegram-widget.js?22';
-        widgetScript.setAttribute('data-telegram-login', import.meta.env.VITE_TELEGRAM_BOT_NAME || 'your_bot_name');
-        widgetScript.setAttribute('data-size', 'large');
-        widgetScript.setAttribute('data-onauth', 'onTelegramAuth(user)');
-        widgetScript.setAttribute('data-request-access', 'write');
-        widgetScript.async = true;
-        container.appendChild(widgetScript);
+      if (!container) return;
+      
+      // Очищаем контейнер перед добавлением виджета
+      container.innerHTML = '';
+      
+      const botName = import.meta.env.VITE_TELEGRAM_BOT_NAME || 'entechsite_bot';
+      
+      // Логируем для отладки
+      console.log('🤖 Telegram Bot Name:', botName);
+      console.log('🔍 import.meta.env.VITE_TELEGRAM_BOT_NAME:', import.meta.env.VITE_TELEGRAM_BOT_NAME);
+      
+      // Проверяем что имя бота указано
+      if (!botName || botName === 'your_bot_name') {
+        setError('Telegram бот не настроен. Обратитесь к администратору.');
+        return;
+      }
+      
+      // Создаем div для виджета (скрипт автоматически превратит его в кнопку)
+      const widgetDiv = document.createElement('div');
+      widgetDiv.setAttribute('data-telegram-login', botName);
+      widgetDiv.setAttribute('data-size', 'large');
+      widgetDiv.setAttribute('data-onauth', 'onTelegramAuth(user)');
+      widgetDiv.setAttribute('data-request-access', 'write');
+      container.appendChild(widgetDiv);
+      
+      // Загружаем скрипт виджета если его еще нет
+      if (!document.querySelector('script[src*="telegram-widget.js"]')) {
+        const script = document.createElement('script');
+        script.src = 'https://telegram.org/js/telegram-widget.js?22';
+        script.async = true;
+        script.onerror = () => {
+          setError('Не удалось загрузить Telegram виджет. Проверьте подключение к интернету.');
+        };
+        document.head.appendChild(script);
       }
     };
 
