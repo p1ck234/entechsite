@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import Login from './pages/Login';
+import RegisterTelegram from './pages/RegisterTelegram';
 import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
 import Courses from './pages/Courses';
@@ -38,6 +39,7 @@ const AppRoutes: React.FC = () => {
       {/* Public routes */}
       <Route path="/" element={<Home />} />
       <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/home" replace />} />
+      <Route path="/register" element={!isAuthenticated ? <RegisterTelegram /> : <Navigate to="/home" replace />} />
       
       {/* Protected routes with Layout */}
       <Route element={

@@ -42,9 +42,25 @@ export async function initializeDatabase(pool: Pool) {
           telegram VARCHAR(100),
           photo VARCHAR(500),
           is_active BOOLEAN DEFAULT true,
+          status VARCHAR(20) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+      `);
+      
+      // Добавляем колонку status если её нет (для существующих баз)
+      await pool.query(`
+        DO $$ 
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'employees' AND column_name = 'status'
+          ) THEN
+            ALTER TABLE employees ADD COLUMN status VARCHAR(20) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED'));
+            -- Существующие сотрудники считаем одобренными
+            UPDATE employees SET status = 'APPROVED' WHERE status IS NULL;
+          END IF;
+        END $$;
       `);
 
       await pool.query(`

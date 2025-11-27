@@ -64,6 +64,18 @@ export const authAPI = {
     return response.data;
   },
 
+  registerTelegram: async (initData: string, firstName: string, lastName: string, position?: string, department?: string, phone?: string): Promise<AuthResponse> => {
+    const response = await api.post('/auth/register-telegram', { 
+      initData, 
+      firstName, 
+      lastName, 
+      position, 
+      department, 
+      phone 
+    });
+    return response.data;
+  },
+
   getCurrentUser: async (): Promise<{ user: User }> => {
     const response = await api.get('/auth/me');
     return response.data;
@@ -334,6 +346,21 @@ export const usersAPI = {
 
   changeUserPassword: async (email: string, newPassword: string): Promise<{ message: string; email: string }> => {
     const response = await api.put('/users/password-by-email', { email, newPassword });
+    return response.data;
+  },
+
+  getPendingRegistrations: async (): Promise<{ registrations: any[] }> => {
+    const response = await api.get('/users/pending-registrations');
+    return response.data;
+  },
+
+  approveRegistration: async (id: string): Promise<{ message: string; employee: any }> => {
+    const response = await api.post(`/users/approve-registration/${id}`);
+    return response.data;
+  },
+
+  rejectRegistration: async (id: string): Promise<{ message: string; employee: any }> => {
+    const response = await api.post(`/users/reject-registration/${id}`);
     return response.data;
   },
 };

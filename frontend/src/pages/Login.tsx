@@ -21,6 +21,11 @@ const Login: React.FC = () => {
           await loginTelegram(initData);
           navigate('/home');
         } catch (err: any) {
+          // Если нужна регистрация - перенаправляем на страницу регистрации
+          if (err.response?.data?.needsRegistration || err.response?.status === 403) {
+            navigate('/register');
+            return;
+          }
           setError(err.message || 'Ошибка авторизации через Telegram');
           setLoading(false);
         }

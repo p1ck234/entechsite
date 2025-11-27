@@ -98,6 +98,130 @@ router.get('/', authenticateToken, requireAdmin, async (req: any, res: any) => {
   }
 });
 
+// Get pending registration requests (Admin only)
+router.get('/pending-registrations', authenticateToken, requireAdmin, async (req: any, res: any) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, first_name, last_name, middle_name, position, department, email, phone, telegram, status, created_at
+       FROM employees 
+       WHERE status = 'PENDING' 
+       ORDER BY created_at DESC`
+    );
+
+    res.json({ registrations: result.rows });
+  } catch (error) {
+    console.error('Get pending registrations error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Approve registration (Admin only)
+router.post('/approve-registration/:id', authenticateToken, requireAdmin, async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+
+    // Проверяем, существует ли заявка
+    const employeeResult = await pool.query(
+      'SELECT * FROM employees WHERE id = $1',
+      [id]
+    );
+
+    if (employeeResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Заявка не найдена' });
+    }
+
+    const employee = employeeResult.rows[0];
+
+    if (employee.status !== 'PENDING') {
+      return res.status(400).json({ message: `Заявка уже обработана. Текущий статус: ${employee.status}` });
+    }
+
+    // Обновляем статус на APPROVED и активируем сотрудника
+    await pool.query(
+      'UPDATE employees SET status = $1, is_active = $2 WHERE id = $3',
+      ['APPROVED', true, id]
+    );
+
+    // Создаем пользователя, если его еще нет
+    const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [employee.email]);
+    
+    if (userResult.rows.length === 0) {
+      const randomPassword = Math.random().toString(36).slice(-12);
+      const hashedPassword = await bcrypt.hash(randomPassword, 12);
+      
+      await pool.query(
+        'INSERT INTO users (email, password, role) VALUES ($1, $2, $3)',
+        [employee.email, hashedPassword, 'USER']
+      );
+    }
+
+    console.log('✅ Заявка одобрена:', {
+      employeeId: id,
+      email: employee.email,
+      telegram: employee.telegram
+    });
+
+    res.json({ 
+      message: 'Заявка успешно одобрена',
+      employee: {
+        ...employee,
+        status: 'APPROVED',
+        is_active: true
+      }
+    });
+  } catch (error) {
+    console.error('Approve registration error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Reject registration (Admin only)
+router.post('/reject-registration/:id', authenticateToken, requireAdmin, async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+
+    // Проверяем, существует ли заявка
+    const employeeResult = await pool.query(
+      'SELECT * FROM employees WHERE id = $1',
+      [id]
+    );
+
+    if (employeeResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Заявка не найдена' });
+    }
+
+    const employee = employeeResult.rows[0];
+
+    if (employee.status !== 'PENDING') {
+      return res.status(400).json({ message: `Заявка уже обработана. Текущий статус: ${employee.status}` });
+    }
+
+    // Обновляем статус на REJECTED
+    await pool.query(
+      'UPDATE employees SET status = $1, is_active = $2 WHERE id = $3',
+      ['REJECTED', false, id]
+    );
+
+    console.log('❌ Заявка отклонена:', {
+      employeeId: id,
+      email: employee.email,
+      telegram: employee.telegram
+    });
+
+    res.json({ 
+      message: 'Заявка отклонена',
+      employee: {
+        ...employee,
+        status: 'REJECTED',
+        is_active: false
+      }
+    });
+  } catch (error) {
+    console.error('Reject registration error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 // Get user by ID (Admin only)
 router.get('/:id', authenticateToken, requireAdmin, async (req: any, res: any) => {
   try {

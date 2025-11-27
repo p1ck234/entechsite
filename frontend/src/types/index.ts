@@ -78,6 +78,9 @@ export interface AuthResponse {
   message: string;
   user: User;
   token: string;
+  approved?: boolean;
+  employee?: Employee;
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
 export interface ApiResponse<T> {
