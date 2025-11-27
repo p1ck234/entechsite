@@ -91,11 +91,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Возвращаем полный ответ для обработки isNewUser
       return response;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Ошибка входа через Telegram';
-      // Если сотрудник не найден, показываем понятное сообщение
-      if (error.response?.status === 403) {
-        throw new Error('Доступ запрещен. Обратитесь к администратору для добавления в систему.');
+      // Если заявка на регистрацию создана автоматически - возвращаем специальную ошибку
+      if (error.response?.status === 403 && 
+          (error.response?.data?.needsRegistration || 
+           error.response?.data?.status === 'PENDING')) {
+        // Заявка создана автоматически - показываем сообщение от сервера
+        const serverMessage = error.response?.data?.message || 
+          'Ваша заявка на регистрацию отправлена. Ожидайте подтверждения администратора.';
+        const customError: any = new Error(serverMessage);
+        customError.needsRegistration = true;
+        customError.status = 'PENDING';
+        customError.registrationId = error.response?.data?.registrationId;
+        throw customError;
       }
+      
+      const errorMessage = error.response?.data?.message || 'Ошибка входа через Telegram';
       throw new Error(errorMessage);
     }
   };

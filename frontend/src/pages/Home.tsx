@@ -24,15 +24,32 @@ const Home: React.FC = () => {
           await loginTelegram(initData);
           navigate('/home');
         } catch (err: any) {
-          // Если нужна регистрация - перенаправляем на /login (там покажется форма регистрации)
-          if (err.response?.data?.needsRegistration || 
-              (err.response?.status === 403 && err.response?.data?.message?.includes('не зарегистрирован'))) {
-            navigate('/login');
+          // Если заявка на регистрацию создана автоматически - перенаправляем на /login с сообщением
+          if (err.needsRegistration || 
+              err.status === 'PENDING' ||
+              err.response?.data?.needsRegistration || 
+              err.response?.data?.status === 'PENDING' ||
+              (err.response?.status === 403 && (
+                err.response?.data?.message?.includes('заявка') ||
+                err.response?.data?.message?.includes('ожидайте') ||
+                err.response?.data?.message?.includes('подтверждения')
+              ))) {
+            // Перенаправляем на /login, где будет показано сообщение о созданной заявке
+            navigate('/login', { 
+              state: { 
+                message: err.message || err.response?.data?.message || 
+                  'Ваша заявка на регистрацию отправлена. Ожидайте подтверждения администратора.' 
+              } 
+            });
             return;
           }
           // Если ошибка авторизации, перенаправляем на /login для показа ошибки
           console.error('Telegram login error:', err);
-          navigate('/login');
+          navigate('/login', { 
+            state: { 
+              message: err.message || 'Ошибка авторизации через Telegram' 
+            } 
+          });
         }
       };
       handleTelegramLogin();

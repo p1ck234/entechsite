@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTelegram } from '../contexts/TelegramContext';
 import { API_BASE_URL } from '../config/api';
@@ -9,10 +9,20 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
   const { loginTelegram } = useAuth();
   const { isTelegram, initData } = useTelegram();
   const widgetContainerRef = useRef<HTMLDivElement>(null);
   const widgetInitializedRef = useRef(false);
+  
+  // Показываем сообщение из state (например, после перенаправления с Home)
+  useEffect(() => {
+    if (location.state?.message) {
+      setError(location.state.message);
+      // Очищаем state после показа сообщения
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, navigate]);
 
   // Автоматическая авторизация в Mini App через initData
   useEffect(() => {
@@ -25,18 +35,21 @@ const Login: React.FC = () => {
           navigate('/home');
         } catch (err: any) {
           console.error('Telegram Mini App login error:', err);
-          const errorMessage = err.message || 'Ошибка авторизации';
+          const errorMessage = err.response?.data?.message || err.message || 'Ошибка авторизации';
           
-          // Если нужна регистрация - показываем сообщение
+          // Если заявка на регистрацию создана - показываем информативное сообщение
           if (err.response?.data?.needsRegistration || 
               err.response?.data?.status === 'PENDING' ||
               errorMessage.includes('заявка') ||
-              errorMessage.includes('ожидайте')) {
+              errorMessage.includes('ожидайте') ||
+              errorMessage.includes('подтверждения')) {
             setError(errorMessage);
+            setLoading(false);
+            // Не перенаправляем, остаемся на странице логина с сообщением
           } else {
             setError(errorMessage);
+            setLoading(false);
           }
-          setLoading(false);
         }
       };
       
@@ -54,9 +67,9 @@ const Login: React.FC = () => {
     // Создаем глобальную функцию для обработки OAuth callback
     (window as any).onTelegramAuth = async (user: any) => {
       try {
-        setLoading(true);
-        setError('');
-        
+    setLoading(true);
+    setError('');
+
         // Используем API_BASE_URL из config/api.ts
         const apiUrl = API_BASE_URL;
         
@@ -92,12 +105,12 @@ const Login: React.FC = () => {
         // Используем window.location для надежного редиректа
         // Это гарантирует полную перезагрузку страницы и обновление AuthContext
         window.location.href = '/home';
-      } catch (err: any) {
+    } catch (err: any) {
         console.error('Telegram OAuth error:', err);
         setError(err.message || 'Ошибка авторизации через Telegram');
-        setLoading(false);
-      }
-    };
+      setLoading(false);
+    }
+  };
 
     const botName = import.meta.env.VITE_TELEGRAM_BOT_NAME || 'entechsite_bot';
     
@@ -250,9 +263,9 @@ const Login: React.FC = () => {
                 {!loading && !error && !widgetInitializedRef.current && (
                   <div className="text-pastel-500 text-sm absolute">
                     Загрузка кнопки входа...
-                  </div>
-                )}
               </div>
+                )}
+            </div>
 
               <p className="text-pastel-600 text-sm mt-4">
                 После нажатия кнопки вы будете перенаправлены на страницу авторизации Telegram, где нужно будет ввести номер телефона и подтвердить код

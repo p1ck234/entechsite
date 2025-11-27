@@ -311,12 +311,51 @@ router.post('/telegram', [
         let employee;
         let userEmail;
         if (employeeResult.rows.length === 0) {
-            return res.status(403).json({
-                message: 'Вы не зарегистрированы в системе. Обратитесь к администратору для добавления в систему.',
-                telegramUsername: telegramUsername || null,
-                telegramId: telegramId,
-                needsRegistration: true
-            });
+            console.log('📝 Пользователь не найден, создаем заявку на регистрацию...');
+            const usernameNormalized = telegramUsername ? (telegramUsername.startsWith('@') ? telegramUsername.substring(1) : telegramUsername) : null;
+            const userEmail = usernameNormalized ? `${usernameNormalized}@telegram.local` : `telegram_${telegramId}@telegram.local`;
+            try {
+                const newEmployeeResult = await pool.query(`INSERT INTO employees (
+            first_name, last_name, position, department, email, phone, 
+            telegram, telegram_id, is_active, status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`, [
+                    telegramUser.first_name || 'Пользователь',
+                    telegramUser.last_name || 'Telegram',
+                    'Сотрудник',
+                    'Общий отдел',
+                    userEmail,
+                    '+7 (000) 000-00-00',
+                    usernameNormalized,
+                    telegramId,
+                    false,
+                    'PENDING'
+                ]);
+                console.log('✅ Заявка на регистрацию создана:', newEmployeeResult.rows[0].id);
+                console.log('📧 Email:', userEmail);
+                console.log('🆔 Telegram ID:', telegramId);
+                console.log('👤 Telegram username:', usernameNormalized);
+                return res.status(403).json({
+                    message: 'Ваша заявка на регистрацию отправлена. Ожидайте подтверждения администратора.',
+                    telegramUsername: telegramUsername || null,
+                    telegramId: telegramId,
+                    needsRegistration: true,
+                    status: 'PENDING',
+                    registrationId: newEmployeeResult.rows[0].id
+                });
+            }
+            catch (error) {
+                console.error('❌ Ошибка при создании заявки:', error);
+                if (error.code === '23505') {
+                    return res.status(403).json({
+                        message: 'Заявка на регистрацию уже отправлена. Ожидайте подтверждения администратора.',
+                        telegramUsername: telegramUsername || null,
+                        telegramId: telegramId,
+                        needsRegistration: true,
+                        status: 'PENDING'
+                    });
+                }
+                throw error;
+            }
         }
         employee = employeeResult.rows[0];
         userEmail = employee.email;
@@ -327,7 +366,17 @@ router.post('/telegram', [
                 telegramUsername: telegramUsername || null
             });
         }
-        if (!employee.is_active && employee.status !== 'PENDING') {
+        if (employee.status === 'PENDING') {
+            return res.status(403).json({
+                message: 'Ваша заявка на регистрацию ожидает подтверждения администратора.',
+                telegramUsername: telegramUsername || null,
+                telegramId: telegramId,
+                needsRegistration: true,
+                status: 'PENDING',
+                registrationId: employee.id
+            });
+        }
+        if (!employee.is_active) {
             return res.status(403).json({
                 message: 'Ваш аккаунт деактивирован. Обратитесь к администратору.',
                 telegramUsername: telegramUsername || null
