@@ -3,11 +3,14 @@ import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, Employees
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+console.log('🔗 API Base URL:', API_BASE_URL);
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000, // 30 секунд таймаут
 });
 
 // Request interceptor to add auth token
@@ -24,10 +27,21 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle auth errors
+// Response interceptor to handle auth errors and network errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Логируем все ошибки для отладки
+    console.error('API Error:', {
+      message: error.message,
+      code: error.code,
+      response: error.response?.data,
+      status: error.response?.status,
+      url: error.config?.url,
+      baseURL: error.config?.baseURL,
+      fullURL: error.config?.baseURL + error.config?.url
+    });
+
     if (error.response?.status === 401) {
       console.log('Unauthorized access, redirecting to login');
       localStorage.removeItem('token');
@@ -35,6 +49,18 @@ api.interceptors.response.use(
       // Use replace to avoid back button issues
       window.location.replace('/login');
     }
+    
+    // Обработка сетевых ошибок
+    if (!error.response) {
+      if (error.code === 'ECONNABORTED') {
+        error.message = 'Превышено время ожидания. Проверьте подключение к интернету.';
+      } else if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        error.message = `Ошибка сети. Не удалось подключиться к серверу. URL: ${error.config?.baseURL || API_BASE_URL}`;
+      } else {
+        error.message = `Ошибка подключения: ${error.message || 'Неизвестная ошибка'}`;
+      }
+    }
+    
     return Promise.reject(error);
   }
 );

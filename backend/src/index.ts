@@ -118,25 +118,47 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
       'https://entech.p1ck23.ru', 
       'http://entech.p1ck23.ru',
       'https://entechsite-production.up.railway.app',
+      'https://entechsite-frontend-production.up.railway.app',
       process.env.FRONTEND_URL,
       'https://web.telegram.org',
       'https://webk.telegram.org',
-      'https://webz.telegram.org'
+      'https://webz.telegram.org',
+      'https://telegram.org',
+      'https://t.me'
     ].filter((origin): origin is string => Boolean(origin)) // Убираем undefined значения с правильной типизацией
   : [
       'http://localhost:5173',
       'http://localhost:3000',
       'https://entech.p1ck23.ru',
       'https://entechsite-production.up.railway.app',
+      'https://entechsite-frontend-production.up.railway.app',
       'https://entechsite-backend-production.up.railway.app',
       'https://web.telegram.org',
       'https://webk.telegram.org',
-      'https://webz.telegram.org'
+      'https://webz.telegram.org',
+      'https://telegram.org',
+      'https://t.me'
     ];
 
+console.log('🌐 Allowed CORS origins:', allowedOrigins);
+
 app.use(cors({
-  origin: allowedOrigins,
-  credentials: true
+  origin: (origin, callback) => {
+    // Разрешаем запросы без origin (например, из мобильных приложений или Postman)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn('⚠️ Blocked CORS request from:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json({ limit: '10mb' }));

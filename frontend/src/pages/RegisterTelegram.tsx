@@ -48,6 +48,15 @@ const RegisterTelegram: React.FC = () => {
     }
 
     try {
+      console.log('📤 Отправка запроса на регистрацию:', {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        position: formData.position,
+        department: formData.department,
+        phone: formData.phone,
+        hasInitData: !!initData
+      });
+
       const response = await authAPI.registerTelegram(
         initData,
         formData.firstName,
@@ -56,6 +65,8 @@ const RegisterTelegram: React.FC = () => {
         formData.department,
         formData.phone
       );
+      
+      console.log('✅ Ответ от сервера:', response);
 
       if (response.approved) {
         // Первый пользователь - сразу авторизован
@@ -71,23 +82,39 @@ const RegisterTelegram: React.FC = () => {
         });
       }
     } catch (err: any) {
-      console.error('Registration error:', err);
-      const errorMessage = err.response?.data?.message 
-        || err.response?.data?.error 
-        || err.message 
-        || 'Ошибка при регистрации';
+      console.error('❌ Registration error:', err);
+      console.error('Error details:', {
+        message: err.message,
+        code: err.code,
+        response: err.response,
+        config: err.config
+      });
       
-      // Показываем детальную информацию об ошибке
-      let detailedError = errorMessage;
-      if (err.response?.data) {
-        if (err.response.data.errors) {
-          detailedError = err.response.data.errors.map((e: any) => e.msg || e.message).join(', ');
-        } else if (err.response.data.error) {
-          detailedError = `${errorMessage}: ${err.response.data.error}`;
+      let errorMessage = 'Ошибка при регистрации';
+      
+      // Обработка сетевых ошибок
+      if (!err.response) {
+        if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+          errorMessage = 'Превышено время ожидания. Проверьте подключение к интернету.';
+        } else if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
+          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+          errorMessage = `Ошибка сети. Не удалось подключиться к серверу.\n\nПроверьте:\n1. URL API: ${apiUrl}\n2. Доступность сервера\n3. Настройки CORS на сервере`;
+        } else {
+          errorMessage = `Ошибка подключения: ${err.message || 'Неизвестная ошибка'}`;
+        }
+      } else {
+        // Ошибка от сервера
+        errorMessage = err.response?.data?.message 
+          || err.response?.data?.error 
+          || err.message 
+          || 'Ошибка при регистрации';
+        
+        if (err.response.data?.errors && Array.isArray(err.response.data.errors)) {
+          errorMessage = err.response.data.errors.map((e: any) => e.msg || e.message || e).join(', ');
         }
       }
       
-      setError(detailedError);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
