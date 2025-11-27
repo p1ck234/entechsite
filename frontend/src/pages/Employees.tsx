@@ -293,6 +293,10 @@ const Employees: React.FC = () => {
                       <Phone className="w-4 h-4" />
                       <a 
                         href={`tel:${employee.phone.replace(/[^\d+]/g, '')}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.location.href = `tel:${employee.phone.replace(/[^\d+]/g, '')}`;
+                        }}
                         className="text-primary-600 hover:text-primary-700 hover:underline transition-colors"
                       >
                         {employee.phone}
@@ -303,6 +307,13 @@ const Employees: React.FC = () => {
                         <MessageCircle className="w-4 h-4" />
                         <a
                           href={`https://t.me/${employee.telegram.replace('@', '')}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const telegramUsername = employee.telegram?.replace('@', '') || '';
+                            if (telegramUsername) {
+                              window.open(`https://t.me/${telegramUsername}`, '_blank');
+                            }
+                          }}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-primary-600 hover:text-primary-700 hover:underline transition-colors"

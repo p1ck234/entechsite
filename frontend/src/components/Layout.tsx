@@ -196,9 +196,13 @@ const Layout: React.FC = () => {
             {navigation.map((item) => {
               const Icon = item.icon;
               // Сокращаем длинные названия для мобильных
-              const shortName = item.name.length > 12 
+              let shortName = item.name.length > 12 
                 ? item.name.split(' ').map(w => w[0]).join('') 
                 : item.name;
+              // Делаем "Ак" большими буквами
+              if (shortName === 'Ак' || shortName === 'ак') {
+                shortName = 'АК';
+              }
               return (
                 <button
                   key={item.name}
