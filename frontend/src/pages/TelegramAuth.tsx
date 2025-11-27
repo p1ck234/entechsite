@@ -12,6 +12,11 @@ const TelegramAuth: React.FC = () => {
 
   // Обработчик Telegram OAuth Widget (только для веба)
   useEffect(() => {
+    // Если это Mini App, не инициализируем виджет
+    if (isTelegram) {
+      return;
+    }
+
     // Создаем глобальную функцию для обработки OAuth callback
     (window as any).onTelegramAuth = async (user: any) => {
       try {
@@ -83,6 +88,8 @@ const TelegramAuth: React.FC = () => {
       const container = widgetContainerRef.current;
       if (!container) {
         console.error('❌ Container ref not found');
+        // Повторяем попытку через небольшую задержку
+        setTimeout(initWidget, 200);
         return;
       }
 
@@ -156,14 +163,14 @@ const TelegramAuth: React.FC = () => {
     // Инициализируем виджет после небольшой задержки, чтобы контейнер точно был в DOM
     const timeoutId = setTimeout(() => {
       initWidget();
-    }, 100);
+    }, 300);
 
     return () => {
       clearTimeout(timeoutId);
       delete (window as any).onTelegramAuth;
       widgetInitializedRef.current = false;
     };
-  }, []);
+  }, [isTelegram]);
 
   // Показываем форму входа с кнопкой Telegram OAuth (только для веба)
   return (
