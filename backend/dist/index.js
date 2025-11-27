@@ -54,7 +54,7 @@ if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
         }
     }
     if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
-        console.error('❌ DATABASE_URL не настроен!');
+        console.error('⚠️ DATABASE_URL не настроен!');
         console.error('\n📊 Доступные переменные PostgreSQL:');
         const pgVars = ['PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE'];
         pgVars.forEach(key => {
@@ -86,7 +86,8 @@ if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
         console.error('      - ${{Database.DATABASE_URL}}');
         console.error('      - ${{Postgresql.DATABASE_URL}}');
         console.error('   4. Или используйте "Raw Editor" чтобы увидеть все доступные переменные');
-        process.exit(1);
+        console.error('\n⚠️ Сервер запустится, но подключение к базе данных будет недоступно');
+        databaseUrl = 'postgresql://localhost:5432/entechsite';
     }
 }
 const app = (0, express_1.default)();
@@ -124,6 +125,37 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
         'https://t.me'
     ];
 console.log('🌐 Allowed CORS origins:', allowedOrigins);
+app.options('*', (req, res) => {
+    const origin = req.headers.origin;
+    console.log('🔍 OPTIONS preflight request:', {
+        origin,
+        path: req.path,
+        method: req.method
+    });
+    if (!origin) {
+        return res.sendStatus(204);
+    }
+    const normalizedOrigin = origin.replace(/\/$/, '');
+    const isAllowed = allowedOrigins.includes(origin) ||
+        allowedOrigins.includes(normalizedOrigin) ||
+        allowedOrigins.some(allowed => {
+            const normalizedAllowed = allowed.replace(/\/$/, '');
+            return normalizedAllowed === normalizedOrigin;
+        });
+    if (isAllowed) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+        res.setHeader('Access-Control-Max-Age', '86400');
+        console.log('✅ OPTIONS allowed for:', origin);
+        return res.sendStatus(204);
+    }
+    else {
+        console.warn('❌ OPTIONS blocked for:', origin);
+        return res.status(403).json({ error: 'CORS not allowed' });
+    }
+});
 app.use((0, cors_1.default)({
     origin: (origin, callback) => {
         if (!origin) {

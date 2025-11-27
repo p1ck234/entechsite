@@ -66,7 +66,7 @@ if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
   }
   
   if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
-    console.error('❌ DATABASE_URL не настроен!');
+    console.error('⚠️ DATABASE_URL не настроен!');
     console.error('\n📊 Доступные переменные PostgreSQL:');
     const pgVars = ['PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE'];
     pgVars.forEach(key => {
@@ -101,7 +101,9 @@ if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
     console.error('      - ${{Database.DATABASE_URL}}');
     console.error('      - ${{Postgresql.DATABASE_URL}}');
     console.error('   4. Или используйте "Raw Editor" чтобы увидеть все доступные переменные');
-    process.exit(1);
+    console.error('\n⚠️ Сервер запустится, но подключение к базе данных будет недоступно');
+    // НЕ завершаем процесс - сервер должен запуститься для обработки CORS запросов
+    databaseUrl = 'postgresql://localhost:5432/entechsite'; // Временный URL для инициализации Pool
   }
 }
 
@@ -147,6 +149,44 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
     ];
 
 console.log('🌐 Allowed CORS origins:', allowedOrigins);
+
+// Явная обработка OPTIONS запросов ПЕРЕД всеми другими middleware
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  console.log('🔍 OPTIONS preflight request:', {
+    origin,
+    path: req.path,
+    method: req.method
+  });
+  
+  if (!origin) {
+    return res.sendStatus(204);
+  }
+  
+  // Нормализуем origin
+  const normalizedOrigin = origin.replace(/\/$/, '');
+  
+  // Проверяем, разрешен ли origin
+  const isAllowed = allowedOrigins.includes(origin) || 
+                   allowedOrigins.includes(normalizedOrigin) || 
+                   allowedOrigins.some(allowed => {
+                     const normalizedAllowed = allowed.replace(/\/$/, '');
+                     return normalizedAllowed === normalizedOrigin;
+                   });
+  
+  if (isAllowed) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    console.log('✅ OPTIONS allowed for:', origin);
+    return res.sendStatus(204);
+  } else {
+    console.warn('❌ OPTIONS blocked for:', origin);
+    return res.status(403).json({ error: 'CORS not allowed' });
+  }
+});
 
 // Упрощенная и надежная CORS конфигурация
 // Используем только один cors middleware, но с правильной настройкой
