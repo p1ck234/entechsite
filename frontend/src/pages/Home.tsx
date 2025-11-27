@@ -90,7 +90,7 @@ const Home: React.FC = () => {
             </div>
 
             {/* Сетка 3×3 с текстами */}
-            <div className="relative z-10 h-full grid grid-cols-3 gap-1 sm:gap-2 md:gap-4 px-1 py-1 sm:px-2 sm:py-2 md:px-4 md:py-4 text-[9px] xs:text-[10px] sm:text-[12px] md:text-[15px] lg:text-[17px] font-semibold leading-tight">
+            <div className="relative z-10 h-full grid grid-cols-3 gap-1 sm:gap-2 md:gap-4 px-1 py-1 sm:px-2 sm:py-2 md:px-4 md:py-4 text-[10px] xs:text-[11px] sm:text-[13px] md:text-[16px] lg:text-[18px] font-semibold leading-tight">
               {/* Верхний левый блок */}
               <div className="flex items-center justify-center">
                 <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default text-center">
@@ -134,7 +134,7 @@ const Home: React.FC = () => {
 
               {/* Центр – ENTECH GROUP */}
               <div className="flex items-center justify-center w-full h-full p-1 sm:p-2">
-                <div className="transition-all duration-300 hover:scale-110 cursor-default flex items-center justify-center w-full h-full aspect-square max-w-[80%] max-h-[80%]">
+                <div className="transition-all duration-300 hover:scale-110 cursor-default flex items-center justify-center w-full h-full aspect-square max-w-[90%] max-h-[90%]">
                   <Logo size="lg" showText={false} className="w-full h-full object-contain" />
                 </div>
               </div>

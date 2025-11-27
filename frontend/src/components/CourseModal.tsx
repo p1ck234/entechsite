@@ -68,12 +68,38 @@ const CourseModal: React.FC<CourseModalProps> = ({ course, onClose }) => {
     });
   };
 
+  // Блокируем прокрутку body при открытом попапе
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ touchAction: 'none' }}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+    <div 
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" 
+      style={{ touchAction: 'none', overflow: 'hidden' }}
+      onTouchMove={(e) => {
+        // Предотвращаем прокрутку фона
+        const target = e.target as HTMLElement;
+        if (!target.closest('.modal-content')) {
+          e.preventDefault();
+        }
+      }}
+    >
+      <div 
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
+        onClick={onClose}
+        style={{ touchAction: 'none' }}
+      />
       
-      <div className="relative w-full max-w-2xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl" style={{ touchAction: 'pan-y' }}>
-        <div className="glass-card rounded-t-2xl sm:rounded-2xl p-6 pb-8">
+      <div 
+        className="relative w-full max-w-2xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl modal-content" 
+        style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="glass-card rounded-t-2xl sm:rounded-2xl p-6 pb-24 sm:pb-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-pastel-800">
               {course ? 'Редактировать курс' : 'Добавить курс'}

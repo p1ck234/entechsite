@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTelegram } from '../contexts/TelegramContext';
 import { employeesAPI, usersAPI } from '../api/client';
 import { Employee, EmployeesResponse } from '../types';
-import { Search, Edit, Trash2, Phone, Mail, MessageCircle, RotateCcw, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Search, Edit, Trash2, Phone, Mail, MessageCircle, RotateCcw, CheckCircle, XCircle, Clock, Copy, Check } from 'lucide-react';
 import EmployeeModal from '../components/EmployeeModal';
 import ImageWithLoader from '../components/ImageWithLoader';
 
 const Employees: React.FC = () => {
   const { isAdmin } = useAuth();
+  const { isTelegram, webApp } = useTelegram();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -18,6 +20,7 @@ const Employees: React.FC = () => {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showInactive, setShowInactive] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'active' | 'pending' | 'rejected'>('active');
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // Ensure showInactive is always false for non-admin users
   useEffect(() => {
@@ -136,6 +139,31 @@ const Employees: React.FC = () => {
     setShowModal(false);
     setEditingEmployee(null);
     fetchEmployees();
+  };
+
+  const handleCopy = async (text: string, fieldId: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(fieldId);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      // Fallback для старых браузеров
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setCopiedField(fieldId);
+        setTimeout(() => setCopiedField(null), 2000);
+      } catch (err) {
+        console.error('Fallback copy failed:', err);
+      }
+      document.body.removeChild(textArea);
+    }
   };
 
   return (
@@ -285,41 +313,133 @@ const Employees: React.FC = () => {
                   )}
                   
                   <div className="space-y-2">
-                    <div className="flex items-center space-x-2 text-sm text-pastel-600">
-                      <Mail className="w-4 h-4" />
-                      <span className="truncate">{employee.email}</span>
-                    </div>
-                    <div className="flex items-center space-x-2 text-sm text-pastel-600">
-                      <Phone className="w-4 h-4" />
-                      <a 
-                        href={`tel:${employee.phone.replace(/[^\d+]/g, '')}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.location.href = `tel:${employee.phone.replace(/[^\d+]/g, '')}`;
-                        }}
-                        className="text-primary-600 hover:text-primary-700 hover:underline transition-colors"
-                      >
-                        {employee.phone}
-                      </a>
-                    </div>
-                    {employee.telegram && (
-                      <div className="flex items-center space-x-2 text-sm text-pastel-600">
-                        <MessageCircle className="w-4 h-4" />
-                        <a
-                          href={`https://t.me/${employee.telegram.replace('@', '')}`}
+                    <div className="flex items-center justify-between group">
+                      <div className="flex items-center space-x-2 text-sm text-pastel-600 flex-1 min-w-0">
+                        <Mail className="w-4 h-4 flex-shrink-0" />
+                        <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            const telegramUsername = employee.telegram?.replace('@', '') || '';
-                            if (telegramUsername) {
-                              window.open(`https://t.me/${telegramUsername}`, '_blank');
+                            if (isTelegram && webApp) {
+                              // В Telegram Mini App используем openLink для открытия почтового клиента
+                              try {
+                                webApp.openLink(`mailto:${employee.email}`);
+                              } catch (error) {
+                                console.error('Error opening email link:', error);
+                              }
+                            } else {
+                              // В обычном браузере используем стандартный способ
+                              window.location.href = `mailto:${employee.email}`;
                             }
                           }}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary-600 hover:text-primary-700 hover:underline transition-colors"
+                          className="text-primary-600 hover:text-primary-700 hover:underline transition-colors text-left truncate"
                         >
-                          {employee.telegram}
-                        </a>
+                          {employee.email}
+                        </button>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopy(employee.email, `email-${employee.id}`);
+                        }}
+                        className="ml-2 p-1 text-pastel-400 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Скопировать email"
+                      >
+                        {copiedField === `email-${employee.id}` ? (
+                          <Check className="w-3.5 h-3.5 text-green-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between group">
+                      <div className="flex items-center space-x-2 text-sm text-pastel-600 flex-1 min-w-0">
+                        <Phone className="w-4 h-4 flex-shrink-0" />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const phoneNumber = employee.phone.replace(/[^\d+]/g, '');
+                            
+                            if (isTelegram && webApp) {
+                              // В Telegram Mini App используем openLink для открытия телефонного приложения
+                              try {
+                                webApp.openLink(`tel:${phoneNumber}`);
+                              } catch (error) {
+                                console.error('Error opening phone link:', error);
+                                // Fallback: открываем Telegram-чат с номером телефона
+                                const telegramPhoneLink = `https://t.me/+${phoneNumber}`;
+                                webApp.openTelegramLink(telegramPhoneLink);
+                              }
+                            } else {
+                              // В обычном браузере используем стандартный способ
+                              window.location.href = `tel:${phoneNumber}`;
+                            }
+                          }}
+                          className="text-primary-600 hover:text-primary-700 hover:underline transition-colors text-left"
+                        >
+                          {employee.phone}
+                        </button>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopy(employee.phone, `phone-${employee.id}`);
+                        }}
+                        className="ml-2 p-1 text-pastel-400 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Скопировать телефон"
+                      >
+                        {copiedField === `phone-${employee.id}` ? (
+                          <Check className="w-3.5 h-3.5 text-green-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                    {employee.telegram && (
+                      <div className="flex items-center justify-between group">
+                        <div className="flex items-center space-x-2 text-sm text-pastel-600 flex-1 min-w-0">
+                          <MessageCircle className="w-4 h-4 flex-shrink-0" />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const telegramUsername = employee.telegram?.replace('@', '') || '';
+                              if (telegramUsername) {
+                                if (isTelegram && webApp) {
+                                  // В Telegram Mini App используем openTelegramLink
+                                  try {
+                                    webApp.openTelegramLink(`https://t.me/${telegramUsername}`);
+                                  } catch (error) {
+                                    console.error('Error opening Telegram link:', error);
+                                    // Fallback: используем openLink
+                                    webApp.openLink(`https://t.me/${telegramUsername}`);
+                                  }
+                                } else {
+                                  // В обычном браузере используем window.open
+                                  window.open(`https://t.me/${telegramUsername}`, '_blank');
+                                }
+                              }
+                            }}
+                            className="text-primary-600 hover:text-primary-700 hover:underline transition-colors text-left"
+                          >
+                            {employee.telegram}
+                          </button>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const telegramToCopy = employee.telegram?.startsWith('@') 
+                              ? employee.telegram 
+                              : `@${employee.telegram}`;
+                            handleCopy(telegramToCopy, `telegram-${employee.id}`);
+                          }}
+                          className="ml-2 p-1 text-pastel-400 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
+                          title="Скопировать Telegram"
+                        >
+                          {copiedField === `telegram-${employee.id}` ? (
+                            <Check className="w-3.5 h-3.5 text-green-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
                       </div>
                     )}
                   </div>

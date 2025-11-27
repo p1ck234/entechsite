@@ -199,9 +199,12 @@ const Layout: React.FC = () => {
               let shortName = item.name.length > 12 
                 ? item.name.split(' ').map(w => w[0]).join('') 
                 : item.name;
-              // Делаем "Ак" большими буквами
+              // Делаем "Ак" и "Км" большими буквами
               if (shortName === 'Ак' || shortName === 'ак') {
                 shortName = 'АК';
+              }
+              if (shortName === 'Км' || shortName === 'км') {
+                shortName = 'КМ';
               }
               return (
                 <button
