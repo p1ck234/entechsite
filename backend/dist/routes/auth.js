@@ -311,67 +311,11 @@ router.post('/telegram', [
         let employee;
         let userEmail;
         if (employeeResult.rows.length === 0) {
-            console.log('👤 Пользователь не найден - создаем автоматически');
-            if (!telegramUsername) {
-                return res.status(400).json({
-                    message: 'Для входа необходим Telegram username. Установите его в настройках Telegram.'
-                });
-            }
-            const telegramNormalized = telegramUsername.startsWith('@')
-                ? telegramUsername.substring(1)
-                : telegramUsername;
-            const usersCount = await pool.query('SELECT COUNT(*) as count FROM users');
-            const totalUsers = parseInt(usersCount.rows[0].count);
-            const userRole = totalUsers === 0 ? 'ADMIN' : 'USER';
-            const employeeStatus = totalUsers === 0 ? 'APPROVED' : 'PENDING';
-            const isActive = totalUsers === 0 ? true : false;
-            userEmail = `${telegramNormalized}@telegram.local`;
-            const randomPassword = Math.random().toString(36).slice(-12);
-            const hashedPassword = await bcryptjs_1.default.hash(randomPassword, 12);
-            const userResult = await pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING *', [userEmail, hashedPassword, userRole]);
-            console.log(`✅ Создан пользователь: ${userEmail} (${userRole})`);
-            const newEmployeeResult = await pool.query(`INSERT INTO employees (first_name, last_name, position, department, email, phone, telegram, is_active, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`, [
-                telegramUser.first_name || 'Пользователь',
-                telegramUser.last_name || 'Telegram',
-                userRole === 'ADMIN' ? 'Администратор' : 'Сотрудник',
-                userRole === 'ADMIN' ? 'IT-Отдел' : 'Общий отдел',
-                userEmail,
-                '+7 (000) 000-00-00',
-                telegramNormalized,
-                isActive,
-                employeeStatus
-            ]);
-            employee = newEmployeeResult.rows[0];
-            console.log(`✅ Создан сотрудник: ${telegramNormalized} (${employeeStatus})`);
-            if (userRole === 'ADMIN') {
-                const token = jsonwebtoken_1.default.sign({ userId: userResult.rows[0].id, email: userEmail, role: userRole, telegramId }, process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-change-this-in-production', { expiresIn: '30d' });
-                return res.json({
-                    message: 'Добро пожаловать! Вы стали первым администратором.',
-                    user: {
-                        id: userResult.rows[0].id,
-                        email: userEmail,
-                        role: userRole,
-                        telegramId: telegramId,
-                        telegramUser: telegramUser
-                    },
-                    token,
-                    isNewUser: true
-                });
-            }
-            const token = jsonwebtoken_1.default.sign({ userId: userResult.rows[0].id, email: userEmail, role: userRole, telegramId }, process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-change-this-in-production', { expiresIn: '30d' });
-            return res.json({
-                message: 'Добро пожаловать! Ваш аккаунт создан. Администратор подтвердит ваш доступ.',
-                user: {
-                    id: userResult.rows[0].id,
-                    email: userEmail,
-                    role: userRole,
-                    telegramId: telegramId,
-                    telegramUser: telegramUser
-                },
-                token,
-                isNewUser: true,
-                needsApproval: true
+            return res.status(403).json({
+                message: 'Вы не зарегистрированы в системе. Обратитесь к администратору для добавления в систему.',
+                telegramUsername: telegramUsername || null,
+                telegramId: telegramId,
+                needsRegistration: true
             });
         }
         employee = employeeResult.rows[0];
@@ -421,6 +365,100 @@ router.post('/telegram', [
     }
     catch (error) {
         console.error('Telegram login error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+router.post('/telegram-oauth', [
+    (0, express_validator_1.body)('id').isInt(),
+    (0, express_validator_1.body)('first_name').notEmpty(),
+    (0, express_validator_1.body)('auth_date').isInt(),
+    (0, express_validator_1.body)('hash').notEmpty(),
+], async (req, res) => {
+    try {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        const { id, first_name, last_name, username, photo_url, auth_date, hash } = req.body;
+        console.log('🔍 Telegram OAuth авторизация:', {
+            id,
+            username,
+            first_name,
+            last_name
+        });
+        const searchVariants = [];
+        if (username) {
+            const usernameNormalized = username.startsWith('@')
+                ? username.substring(1)
+                : username;
+            searchVariants.push(usernameNormalized);
+            searchVariants.push(`@${usernameNormalized}`);
+        }
+        searchVariants.push(`${id}`);
+        const placeholders = searchVariants.map((_, i) => `telegram = $${i + 1}`).join(' OR ');
+        const sqlQuery = `SELECT * FROM employees WHERE (${placeholders}) AND is_active = true AND status = 'APPROVED'`;
+        const employeeResult = await pool.query(sqlQuery, searchVariants);
+        if (employeeResult.rows.length === 0) {
+            return res.status(403).json({
+                message: 'Вы не зарегистрированы в системе. Обратитесь к администратору для добавления в систему.',
+                telegramUsername: username || null,
+                telegramId: id,
+                needsRegistration: true
+            });
+        }
+        const employee = employeeResult.rows[0];
+        const userEmail = employee.email;
+        if (employee.status === 'REJECTED') {
+            return res.status(403).json({
+                message: 'Ваш аккаунт был отклонен администратором. Обратитесь к администратору.',
+                status: 'REJECTED',
+                telegramUsername: username || null
+            });
+        }
+        if (!employee.is_active && employee.status !== 'PENDING') {
+            return res.status(403).json({
+                message: 'Ваш аккаунт деактивирован. Обратитесь к администратору.',
+                telegramUsername: username || null
+            });
+        }
+        console.log('✅ Найден сотрудник:', {
+            id: employee.id,
+            email: employee.email,
+            telegram: employee.telegram,
+            status: employee.status
+        });
+        let userResult = await pool.query('SELECT * FROM users WHERE email = $1', [userEmail]);
+        let user;
+        if (userResult.rows.length === 0) {
+            const randomPassword = Math.random().toString(36).slice(-12);
+            const hashedPassword = await bcryptjs_1.default.hash(randomPassword, 10);
+            const insertResult = await pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING *', [userEmail, hashedPassword, 'USER']);
+            user = insertResult.rows[0];
+        }
+        else {
+            user = userResult.rows[0];
+        }
+        const token = jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, role: user.role, telegramId: id }, process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-change-this-in-production', { expiresIn: '30d' });
+        res.json({
+            message: 'Telegram OAuth login successful',
+            user: {
+                id: user.id,
+                email: user.email,
+                role: user.role,
+                telegramId: id,
+                telegramUser: {
+                    id,
+                    first_name,
+                    last_name,
+                    username,
+                    photo_url
+                }
+            },
+            token
+        });
+    }
+    catch (error) {
+        console.error('Telegram OAuth error:', error);
         res.status(500).json({ message: 'Internal server error' });
     }
 });

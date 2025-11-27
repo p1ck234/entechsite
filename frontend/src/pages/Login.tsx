@@ -22,25 +22,12 @@ const Login: React.FC = () => {
           setError('');
           setSuccessMessage('');
           
-          const response = await loginTelegram(initData);
-          
-          // Если это новый пользователь - показываем сообщение
-          if (response.isNewUser) {
-            if (response.needsApproval) {
-              setSuccessMessage('Ваш аккаунт создан! Администратор подтвердит ваш доступ.');
-            } else {
-              setSuccessMessage('Добро пожаловать! Вы стали первым администратором.');
-            }
-            // Небольшая задержка чтобы показать сообщение
-            setTimeout(() => {
-              navigate('/home');
-            }, 2000);
-          } else {
-            navigate('/home');
-          }
+          await loginTelegram(initData);
+          navigate('/home');
         } catch (err: any) {
           console.error('Login error:', err);
-          setError(err.message || 'Ошибка авторизации через Telegram');
+          const errorMessage = err.response?.data?.message || err.message || 'Ошибка авторизации через Telegram';
+          setError(errorMessage);
           setLoading(false);
         }
       };
@@ -108,7 +95,72 @@ const Login: React.FC = () => {
     }
   }
 
-  // Если не Telegram - показываем сообщение
+  // Обработчик Telegram OAuth Widget
+  useEffect(() => {
+    if (isTelegram) return; // Не загружаем виджет если это Mini App
+
+    // Создаем глобальную функцию для обработки OAuth callback
+    (window as any).onTelegramAuth = async (user: any) => {
+      try {
+        setLoading(true);
+        setError('');
+        
+        // Получаем API URL
+        const apiUrl = import.meta.env.VITE_API_URL || 
+          (window.location.hostname.includes('railway.app') || window.location.hostname.includes('p1ck23.ru')
+            ? 'https://entechsite-backend-production.up.railway.app/api'
+            : 'http://localhost:3001/api');
+        
+        // Отправляем данные на backend
+        const response = await fetch(`${apiUrl}/auth/telegram-oauth`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id: user.id,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            username: user.username,
+            photo_url: user.photo_url,
+            auth_date: user.auth_date,
+            hash: user.hash,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Ошибка авторизации');
+        }
+
+        // Сохраняем токен и пользователя
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        // Перенаправляем на главную
+        navigate('/home');
+      } catch (err: any) {
+        console.error('Telegram OAuth error:', err);
+        setError(err.message || 'Ошибка авторизации через Telegram');
+        setLoading(false);
+      }
+    };
+
+    // Загружаем скрипт Telegram OAuth Widget если его еще нет
+    if (!document.querySelector('script[src*="telegram-widget.js"]')) {
+      const script = document.createElement('script');
+      script.src = 'https://telegram.org/js/telegram-widget.js?22';
+      script.async = true;
+      document.head.appendChild(script);
+    }
+
+    return () => {
+      delete (window as any).onTelegramAuth;
+    };
+  }, [navigate, isTelegram]);
+
+  // Если не Telegram Mini App - показываем OAuth Widget
   if (!isTelegram) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
@@ -118,19 +170,39 @@ const Login: React.FC = () => {
               <Logo size="lg" />
             </div>
             <h2 className="text-2xl font-bold text-pastel-800 mb-4">
-              Вход только через Telegram
+              Вход через Telegram
             </h2>
             <p className="text-pastel-600 mb-6">
-              Для входа в систему откройте приложение через Telegram бота
+              Войдите в систему используя свой Telegram аккаунт
             </p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
-              <p className="font-semibold mb-2">Как войти:</p>
-              <ol className="list-decimal list-inside space-y-1 text-left">
-                <li>Откройте Telegram бота</li>
-                <li>Нажмите на кнопку меню или Mini App</li>
-                <li>Авторизация произойдет автоматически</li>
-              </ol>
+            
+            {loading && (
+              <div className="mb-4">
+                <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-pastel-600">Авторизация...</p>
+              </div>
+            )}
+
+            {error && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                {error}
+              </div>
+            )}
+
+            {/* Telegram OAuth Widget */}
+            <div className="flex justify-center mb-4">
+              <div
+                className="telegram-login-widget"
+                data-telegram-login={import.meta.env.VITE_TELEGRAM_BOT_NAME || 'your_bot_name'}
+                data-size="large"
+                data-onauth="onTelegramAuth(user)"
+                data-request-access="write"
+              ></div>
             </div>
+
+            <p className="text-pastel-600 text-sm mt-4">
+              После нажатия кнопки вы будете перенаправлены на страницу авторизации Telegram
+            </p>
           </div>
         </div>
       </div>
