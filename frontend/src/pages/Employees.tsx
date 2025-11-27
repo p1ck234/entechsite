@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { employeesAPI } from '../api/client';
+import { employeesAPI, usersAPI } from '../api/client';
 import { Employee, EmployeesResponse } from '../types';
-import { Search, Edit, Trash2, Phone, Mail, MessageCircle, UserPlus, RotateCcw, Lock, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Search, Edit, Trash2, Phone, Mail, MessageCircle, RotateCcw, Lock, CheckCircle, XCircle, Clock } from 'lucide-react';
 import EmployeeModal from '../components/EmployeeModal';
-import UserModal from '../components/UserModal';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import ImageWithLoader from '../components/ImageWithLoader';
 
@@ -110,6 +109,30 @@ const Employees: React.FC = () => {
   const handleEdit = (employee: Employee) => {
     setEditingEmployee(employee);
     setShowModal(true);
+  };
+
+  const handleApprove = async (id: string) => {
+    if (!isAdmin) return;
+    if (window.confirm('Вы уверены, что хотите одобрить эту заявку?')) {
+      try {
+        await usersAPI.approveRegistration(id);
+        fetchEmployees(); // Refresh data
+      } catch (error) {
+        console.error('Error approving registration:', error);
+      }
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    if (!isAdmin) return;
+    if (window.confirm('Вы уверены, что хотите отклонить эту заявку?')) {
+      try {
+        await usersAPI.rejectRegistration(id);
+        fetchEmployees(); // Refresh data
+      } catch (error) {
+        console.error('Error rejecting registration:', error);
+      }
+    }
   };
 
   const handleModalClose = () => {
