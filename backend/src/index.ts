@@ -148,23 +148,58 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
 
 console.log('🌐 Allowed CORS origins:', allowedOrigins);
 
+// CORS middleware - должен быть ДО других middleware
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Разрешаем запросы без origin
+  if (!origin) {
+    return next();
+  }
+  
+  // Нормализуем origin (убираем слэш в конце для сравнения)
+  const normalizedOrigin = origin.replace(/\/$/, '');
+  
+  // Проверяем, разрешен ли origin
+  const isAllowed = allowedOrigins.includes(origin) || 
+                   allowedOrigins.includes(normalizedOrigin) || 
+                   allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin);
+  
+  if (isAllowed) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Expose-Headers', 'Content-Length, Content-Type');
+  } else {
+    console.warn('⚠️ Blocked CORS request from:', origin);
+    console.warn('   Allowed origins:', allowedOrigins);
+  }
+  
+  // Обрабатываем preflight запросы
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  
+  next();
+});
+
+// Также используем cors middleware для дополнительной поддержки
 app.use(cors({
   origin: (origin, callback) => {
-    // Разрешаем запросы без origin (например, из мобильных приложений или Postman)
+    // Разрешаем запросы без origin
     if (!origin) {
       return callback(null, true);
     }
     
-    // Нормализуем origin (убираем слэш в конце для сравнения)
+    // Нормализуем origin
     const normalizedOrigin = origin.replace(/\/$/, '');
     
-    // Проверяем точное совпадение или вариант с/без слэша
+    // Проверяем разрешен ли origin
     if (allowedOrigins.includes(origin) || allowedOrigins.includes(normalizedOrigin) || 
         allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin)) {
       callback(null, true);
     } else {
-      console.warn('⚠️ Blocked CORS request from:', origin);
-      console.warn('   Allowed origins:', allowedOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -175,9 +210,6 @@ app.use(cors({
   preflightContinue: false,
   optionsSuccessStatus: 204
 }));
-
-// Явно обрабатываем OPTIONS запросы для CORS preflight
-app.options('*', cors());
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));

@@ -125,6 +125,31 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
         'https://t.me'
     ];
 console.log('🌐 Allowed CORS origins:', allowedOrigins);
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (!origin) {
+        return next();
+    }
+    const normalizedOrigin = origin.replace(/\/$/, '');
+    const isAllowed = allowedOrigins.includes(origin) ||
+        allowedOrigins.includes(normalizedOrigin) ||
+        allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin);
+    if (isAllowed) {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+        res.header('Access-Control-Expose-Headers', 'Content-Length, Content-Type');
+    }
+    else {
+        console.warn('⚠️ Blocked CORS request from:', origin);
+        console.warn('   Allowed origins:', allowedOrigins);
+    }
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+    }
+    next();
+});
 app.use((0, cors_1.default)({
     origin: (origin, callback) => {
         if (!origin) {
@@ -136,8 +161,6 @@ app.use((0, cors_1.default)({
             callback(null, true);
         }
         else {
-            console.warn('⚠️ Blocked CORS request from:', origin);
-            console.warn('   Allowed origins:', allowedOrigins);
             callback(new Error('Not allowed by CORS'));
         }
     },
@@ -148,7 +171,6 @@ app.use((0, cors_1.default)({
     preflightContinue: false,
     optionsSuccessStatus: 204
 }));
-app.options('*', (0, cors_1.default)());
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ extended: true }));
 app.use('/api/auth', auth_1.default);

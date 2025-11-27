@@ -49,8 +49,11 @@ const Login: React.FC = () => {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         
-        // Используем navigate вместо window.location для правильной работы в React Router
-        navigate('/home', { replace: true });
+        console.log('✅ Авторизация успешна, перенаправление на главную...');
+        
+        // Используем window.location для надежного редиректа
+        // Это гарантирует полную перезагрузку страницы и обновление AuthContext
+        window.location.href = '/home';
       } catch (err: any) {
         console.error('Telegram OAuth error:', err);
         setError(err.message || 'Ошибка авторизации через Telegram');
@@ -193,15 +196,18 @@ const Login: React.FC = () => {
           )}
 
           {/* Telegram OAuth Widget */}
+          {/* Используем dangerouslySetInnerHTML чтобы React не трогал содержимое */}
           <div 
-            ref={widgetContainerRef}
             className="flex justify-center mb-4 min-h-[50px]" 
-            id="telegram-login-container"
             style={{ minHeight: '50px' }}
           >
-            {/* Виджет будет добавлен скриптом */}
+            <div 
+              ref={widgetContainerRef}
+              id="telegram-login-container"
+              suppressHydrationWarning
+            />
             {!loading && !error && !widgetInitializedRef.current && (
-              <div className="text-pastel-500 text-sm">
+              <div className="text-pastel-500 text-sm absolute">
                 Загрузка кнопки входа...
               </div>
             )}
