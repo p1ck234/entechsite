@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useTelegram } from '../contexts/TelegramContext';
 import { API_BASE_URL } from '../config/api';
 import Logo from '../components/Logo';
@@ -7,17 +6,9 @@ import Logo from '../components/Logo';
 const TelegramAuth: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const navigate = useNavigate();
   const { isTelegram } = useTelegram();
   const widgetContainerRef = useRef<HTMLDivElement>(null);
   const widgetInitializedRef = useRef(false);
-
-  // Если это Mini App, перенаправляем на /login
-  useEffect(() => {
-    if (isTelegram) {
-      navigate('/login', { replace: true });
-    }
-  }, [isTelegram, navigate]);
 
   // Обработчик Telegram OAuth Widget (только для веба)
   useEffect(() => {
@@ -177,15 +168,24 @@ const TelegramAuth: React.FC = () => {
       delete (window as any).onTelegramAuth;
       widgetInitializedRef.current = false;
     };
-  }, [isTelegram, navigate]);
+  }, [isTelegram]);
 
-  // Если это Mini App, показываем сообщение о перенаправлении
+  // Если это Mini App, показываем сообщение
   if (isTelegram) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-pastel-600">Перенаправление...</p>
+        <div className="w-full max-w-md">
+          <div className="glass-card rounded-2xl p-8 shadow-2xl text-center">
+            <div className="mb-4">
+              <Logo size="lg" />
+            </div>
+            <h2 className="text-2xl font-bold text-pastel-800 mb-4">
+              Telegram Mini App
+            </h2>
+            <p className="text-pastel-600 mb-6">
+              Эта страница предназначена для веб-авторизации. Для авторизации в Telegram Mini App используйте страницу /login
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -241,14 +241,6 @@ const TelegramAuth: React.FC = () => {
             После нажатия кнопки вы будете перенаправлены на страницу авторизации Telegram, где нужно будет ввести номер телефона и подтвердить код
           </p>
 
-          <div className="mt-6 pt-6 border-t border-pastel-200">
-            <button
-              onClick={() => navigate('/login')}
-              className="text-pastel-600 hover:text-pastel-800 text-sm transition-colors"
-            >
-              ← Вернуться к входу
-            </button>
-          </div>
         </div>
       </div>
     </div>

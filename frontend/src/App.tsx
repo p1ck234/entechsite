@@ -39,7 +39,7 @@ const AppRoutes: React.FC = () => {
       {/* Public routes */}
       <Route path="/" element={<Home />} />
       <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/home" replace />} />
-      <Route path="/auth/telegram" element={!isAuthenticated ? <TelegramAuth /> : <Navigate to="/home" replace />} />
+      <Route path="/auth" element={!isAuthenticated ? <TelegramAuth /> : <Navigate to="/home" replace />} />
       
       {/* Protected routes with Layout */}
       <Route element={

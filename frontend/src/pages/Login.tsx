@@ -85,25 +85,17 @@ const Login: React.FC = () => {
             </div>
           )}
 
-          {/* Кнопка для веб-авторизации через Telegram */}
-          {!isTelegram && (
-            <>
-              <button
-                onClick={() => navigate('/auth/telegram')}
-                className="w-full btn-primary py-3 text-lg font-medium mb-4"
-              >
-                Войти через Telegram
-              </button>
-              <p className="text-pastel-600 text-sm">
-                После нажатия кнопки вы будете перенаправлены на страницу авторизации Telegram, где нужно будет ввести номер телефона и подтвердить код
-              </p>
-            </>
-          )}
-
           {/* Сообщение для Mini App */}
           {isTelegram && !loading && !error && (
             <p className="text-pastel-600 text-sm mt-4">
               Если авторизация не выполнилась автоматически, обратитесь к администратору
+            </p>
+          )}
+
+          {/* Сообщение для веба */}
+          {!isTelegram && (
+            <p className="text-pastel-600 text-sm mt-4">
+              Эта страница предназначена для Telegram Mini App. Для веб-авторизации используйте страницу /auth
             </p>
           )}
         </div>
