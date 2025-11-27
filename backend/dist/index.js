@@ -125,6 +125,28 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
         'https://t.me'
     ];
 console.log('🌐 Allowed CORS origins:', allowedOrigins);
+app.options('*', (req, res) => {
+    const origin = req.headers.origin;
+    if (!origin) {
+        return res.sendStatus(204);
+    }
+    const normalizedOrigin = origin.replace(/\/$/, '');
+    const isAllowed = allowedOrigins.includes(origin) ||
+        allowedOrigins.includes(normalizedOrigin) ||
+        allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin);
+    if (isAllowed) {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+        res.header('Access-Control-Max-Age', '86400');
+        return res.sendStatus(204);
+    }
+    else {
+        console.warn('⚠️ Blocked CORS preflight from:', origin);
+        return res.sendStatus(403);
+    }
+});
 app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (!origin) {
@@ -145,9 +167,6 @@ app.use((req, res, next) => {
         console.warn('⚠️ Blocked CORS request from:', origin);
         console.warn('   Allowed origins:', allowedOrigins);
     }
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(204);
-    }
     next();
 });
 app.use((0, cors_1.default)({
@@ -161,6 +180,7 @@ app.use((0, cors_1.default)({
             callback(null, true);
         }
         else {
+            console.warn('⚠️ CORS blocked origin:', origin);
             callback(new Error('Not allowed by CORS'));
         }
     },

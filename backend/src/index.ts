@@ -149,6 +149,36 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
 console.log('🌐 Allowed CORS origins:', allowedOrigins);
 
 // CORS middleware - должен быть ДО других middleware
+// Обрабатываем OPTIONS запросы (preflight) ПЕРВЫМИ
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  
+  if (!origin) {
+    return res.sendStatus(204);
+  }
+  
+  // Нормализуем origin
+  const normalizedOrigin = origin.replace(/\/$/, '');
+  
+  // Проверяем, разрешен ли origin
+  const isAllowed = allowedOrigins.includes(origin) || 
+                   allowedOrigins.includes(normalizedOrigin) || 
+                   allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin);
+  
+  if (isAllowed) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Max-Age', '86400'); // 24 часа
+    return res.sendStatus(204);
+  } else {
+    console.warn('⚠️ Blocked CORS preflight from:', origin);
+    return res.sendStatus(403);
+  }
+});
+
+// Основной CORS middleware для всех остальных запросов
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   
@@ -176,11 +206,6 @@ app.use((req, res, next) => {
     console.warn('   Allowed origins:', allowedOrigins);
   }
   
-  // Обрабатываем preflight запросы
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
-  
   next();
 });
 
@@ -200,6 +225,7 @@ app.use(cors({
         allowedOrigins.some(allowed => allowed.replace(/\/$/, '') === normalizedOrigin)) {
       callback(null, true);
     } else {
+      console.warn('⚠️ CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
