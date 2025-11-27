@@ -123,6 +123,8 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
       'http://entech.p1ck23.ru',
       'https://entechsite-production.up.railway.app',
       'https://entechsite-frontend-production.up.railway.app',
+      'https://entechsite-backend-production.up.railway.app',
+      'https://oauth.telegram.org', // Для Telegram OAuth Widget
       frontendUrl, // Нормализованный URL без слэша
       'https://web.telegram.org',
       'https://webk.telegram.org',

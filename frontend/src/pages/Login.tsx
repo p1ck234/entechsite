@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config/api';
 import Logo from '../components/Logo';
@@ -7,6 +7,8 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const widgetContainerRef = useRef<HTMLDivElement>(null);
+  const widgetInitializedRef = useRef(false);
 
   // Обработчик Telegram OAuth Widget
   useEffect(() => {
@@ -69,35 +71,42 @@ const Login: React.FC = () => {
       return;
     }
 
-    // Инициализация виджета
+    // Инициализация виджета - используем useRef чтобы избежать конфликтов с React
     const initWidget = () => {
-      const container = document.getElementById('telegram-login-container');
+      // Проверяем, не инициализирован ли уже виджет
+      if (widgetInitializedRef.current) {
+        console.log('✅ Widget already initialized');
+        return;
+      }
+
+      const container = widgetContainerRef.current;
       if (!container) {
-        console.error('❌ Container not found');
+        console.error('❌ Container ref not found');
         return;
       }
       
-      // Проверяем, не создан ли уже виджет (iframe или script)
-      if (container.querySelector('iframe[id*="telegram-login"], script[data-telegram-login]')) {
+      // Проверяем, не создан ли уже виджет (iframe)
+      if (container.querySelector('iframe[id*="telegram-login"]')) {
         console.log('✅ Widget already exists');
+        widgetInitializedRef.current = true;
         return;
       }
       
       // Очищаем контейнер только если там нет виджета
       const existingWidget = container.querySelector('iframe[id*="telegram-login"]');
       if (!existingWidget) {
-        container.innerHTML = '';
+        // Используем безопасный способ очистки
+        while (container.firstChild) {
+          container.removeChild(container.firstChild);
+        }
       } else {
+        widgetInitializedRef.current = true;
         return; // Виджет уже есть
       }
       
       console.log('✅ Creating Telegram widget with bot name:', botName);
       
-      // Упрощаем return_to URL - используем только путь без данных
-      const returnTo = window.location.origin + '/login';
-      
       // Создаем script тег с атрибутами (правильный способ для Telegram Widget)
-      // Telegram Widget автоматически найдет все script теги с data-telegram-login
       const widgetScript = document.createElement('script');
       widgetScript.type = 'text/javascript';
       widgetScript.async = true;
@@ -106,29 +115,17 @@ const Login: React.FC = () => {
       widgetScript.setAttribute('data-size', 'large');
       widgetScript.setAttribute('data-onauth', 'onTelegramAuth(user)');
       widgetScript.setAttribute('data-request-access', 'write');
-      // Упрощаем return_to - используем только origin + путь
-      widgetScript.setAttribute('data-auth-url', returnTo);
       
       widgetScript.onload = () => {
         console.log('✅ Telegram widget script loaded');
+        widgetInitializedRef.current = true;
         // Проверяем через небольшую задержку, появилась ли кнопка
         setTimeout(() => {
-          const widgetButton = container.querySelector('iframe, a, button');
+          const widgetButton = container.querySelector('iframe[id*="telegram-login"]');
           if (widgetButton) {
             console.log('✅ Widget button found:', widgetButton);
           } else {
             console.warn('⚠️ Widget script loaded but button not found');
-            console.log('Container HTML:', container.innerHTML);
-            // Пробуем еще раз через задержку
-            setTimeout(() => {
-              const widgetButton2 = container.querySelector('iframe, a, button');
-              if (widgetButton2) {
-                console.log('✅ Widget button found on retry:', widgetButton2);
-              } else {
-                console.error('❌ Widget button still not found after retry');
-                setError('Кнопка входа не загрузилась. Попробуйте открыть приложение в обычном браузере.');
-              }
-            }, 2000);
           }
         }, 1000);
       };
@@ -136,37 +133,28 @@ const Login: React.FC = () => {
       widgetScript.onerror = () => {
         console.error('❌ Failed to load Telegram widget script');
         setError('Не удалось загрузить Telegram виджет. Проверьте подключение к интернету.');
+        widgetInitializedRef.current = false;
       };
       
-      container.appendChild(widgetScript);
-      console.log('✅ Widget script element added to container');
-      console.log('Container after append:', container.innerHTML.substring(0, 200));
+      // Безопасно добавляем скрипт
+      try {
+        container.appendChild(widgetScript);
+        console.log('✅ Widget script element added to container');
+      } catch (err) {
+        console.error('❌ Error appending widget script:', err);
+        widgetInitializedRef.current = false;
+      }
     };
 
-    // Инициализируем виджет сразу
-    initWidget();
-    
-    // Дополнительные попытки на случай если контейнер еще не готов
+    // Инициализируем виджет после небольшой задержки, чтобы контейнер точно был в DOM
     const timeoutId = setTimeout(() => {
-      const container = document.getElementById('telegram-login-container');
-      if (container && !container.querySelector('script[data-telegram-login]')) {
-        console.log('🔄 Retrying widget initialization (1s delay)...');
-        initWidget();
-      }
-    }, 1000);
-    
-    const timeoutId2 = setTimeout(() => {
-      const container = document.getElementById('telegram-login-container');
-      if (container && !container.querySelector('script[data-telegram-login]')) {
-        console.log('🔄 Retrying widget initialization (3s delay)...');
-        initWidget();
-      }
-    }, 3000);
+      initWidget();
+    }, 100);
 
     return () => {
       clearTimeout(timeoutId);
-      clearTimeout(timeoutId2);
       delete (window as any).onTelegramAuth;
+      widgetInitializedRef.current = false;
     };
   }, [navigate]);
 
@@ -201,12 +189,13 @@ const Login: React.FC = () => {
 
           {/* Telegram OAuth Widget */}
           <div 
+            ref={widgetContainerRef}
             className="flex justify-center mb-4 min-h-[50px]" 
             id="telegram-login-container"
             style={{ minHeight: '50px' }}
           >
             {/* Виджет будет добавлен скриптом */}
-            {!loading && !error && (
+            {!loading && !error && !widgetInitializedRef.current && (
               <div className="text-pastel-500 text-sm">
                 Загрузка кнопки входа...
               </div>
