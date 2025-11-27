@@ -12,11 +12,6 @@ const TelegramAuth: React.FC = () => {
 
   // Обработчик Telegram OAuth Widget (только для веба)
   useEffect(() => {
-    // Если это Mini App, не показываем OAuth Widget
-    if (isTelegram) {
-      return;
-    }
-
     // Создаем глобальную функцию для обработки OAuth callback
     (window as any).onTelegramAuth = async (user: any) => {
       try {
@@ -168,30 +163,9 @@ const TelegramAuth: React.FC = () => {
       delete (window as any).onTelegramAuth;
       widgetInitializedRef.current = false;
     };
-  }, [isTelegram]);
+  }, []);
 
-  // Если это Mini App, показываем сообщение
-  if (isTelegram) {
-    return (
-      <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
-        <div className="w-full max-w-md">
-          <div className="glass-card rounded-2xl p-8 shadow-2xl text-center">
-            <div className="mb-4">
-              <Logo size="lg" />
-            </div>
-            <h2 className="text-2xl font-bold text-pastel-800 mb-4">
-              Telegram Mini App
-            </h2>
-            <p className="text-pastel-600 mb-6">
-              Эта страница предназначена для веб-авторизации. Для авторизации в Telegram Mini App используйте страницу /login
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Показываем форму входа с кнопкой Telegram OAuth
+  // Показываем форму входа с кнопкой Telegram OAuth (только для веба)
   return (
     <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
       <div className="w-full max-w-md">
@@ -220,22 +194,30 @@ const TelegramAuth: React.FC = () => {
             </div>
           )}
 
-          {/* Telegram OAuth Widget - только для браузера */}
-          <div
-            className="flex justify-center mb-4 min-h-[50px]"
-            style={{ minHeight: '50px' }}
-          >
-            <div
-              ref={widgetContainerRef}
-              id="telegram-login-container"
-              suppressHydrationWarning
-            />
-            {!loading && !error && !widgetInitializedRef.current && (
-              <div className="text-pastel-500 text-sm absolute">
-                Загрузка кнопки входа...
+          {/* Telegram OAuth Widget - только для веба */}
+          {!isTelegram && (
+            <>
+              <div
+                className="flex justify-center mb-4 min-h-[50px]"
+                style={{ minHeight: '50px' }}
+              >
+                <div
+                  ref={widgetContainerRef}
+                  id="telegram-login-container"
+                  suppressHydrationWarning
+                />
+                {!loading && !error && !widgetInitializedRef.current && (
+                  <div className="text-pastel-500 text-sm absolute">
+                    Загрузка кнопки входа...
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+
+              <p className="text-pastel-600 text-sm mt-4">
+                После нажатия кнопки вы будете перенаправлены на страницу авторизации Telegram, где нужно будет ввести номер телефона и подтвердить код
+              </p>
+            </>
+          )}
 
           <p className="text-pastel-600 text-sm mt-4">
             После нажатия кнопки вы будете перенаправлены на страницу авторизации Telegram, где нужно будет ввести номер телефона и подтвердить код
