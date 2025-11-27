@@ -212,7 +212,20 @@ app.use('/api/users', users_1.default);
 app.use('/api/events', events_1.default);
 app.use('/api/calendar', calendar_1.default);
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+    res.json({
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        port: PORT,
+        environment: process.env.NODE_ENV || 'development'
+    });
+});
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        port: PORT,
+        environment: process.env.NODE_ENV || 'development'
+    });
 });
 app.use((err, req, res, next) => {
     console.error(err.stack);
