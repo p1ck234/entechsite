@@ -117,36 +117,41 @@ console.log(`🔧 PORT from environment: ${process.env.PORT}, using: ${PORT}`);
 // Нормализуем FRONTEND_URL (убираем слэш в конце)
 const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, '') || '';
 
+console.log('🔧 FRONTEND_URL from env:', process.env.FRONTEND_URL);
+console.log('🔧 Normalized frontendUrl:', frontendUrl);
+
+// Базовый список разрешенных origins
+const baseOrigins = [
+  'https://entech.p1ck23.ru', 
+  'http://entech.p1ck23.ru',
+  'https://entechsite-production.up.railway.app',
+  'https://entechsite-frontend-production.up.railway.app',
+  'https://entechsite-backend-production.up.railway.app',
+  'https://oauth.telegram.org', // Для Telegram OAuth Widget
+  'https://web.telegram.org',
+  'https://webk.telegram.org',
+  'https://webz.telegram.org',
+  'https://telegram.org',
+  'https://t.me'
+];
+
+// Добавляем FRONTEND_URL если он указан
+if (frontendUrl) {
+  baseOrigins.push(frontendUrl);
+}
+
 const allowedOrigins = process.env.NODE_ENV === 'production' 
-  ? [
-      'https://entech.p1ck23.ru', 
-      'http://entech.p1ck23.ru',
-      'https://entechsite-production.up.railway.app',
-      'https://entechsite-frontend-production.up.railway.app',
-      'https://entechsite-backend-production.up.railway.app',
-      'https://oauth.telegram.org', // Для Telegram OAuth Widget
-      frontendUrl, // Нормализованный URL без слэша
-      'https://web.telegram.org',
-      'https://webk.telegram.org',
-      'https://webz.telegram.org',
-      'https://telegram.org',
-      'https://t.me'
-    ].filter((origin): origin is string => Boolean(origin)) // Убираем undefined и пустые значения
+  ? baseOrigins
   : [
       'http://localhost:5173',
       'http://localhost:3000',
-      'https://entech.p1ck23.ru',
-      'https://entechsite-production.up.railway.app',
-      'https://entechsite-frontend-production.up.railway.app',
-      'https://entechsite-backend-production.up.railway.app',
-      'https://web.telegram.org',
-      'https://webk.telegram.org',
-      'https://webz.telegram.org',
-      'https://telegram.org',
-      'https://t.me'
+      ...baseOrigins
     ];
 
-console.log('🌐 Allowed CORS origins:', allowedOrigins);
+// Убираем дубликаты и пустые значения
+const uniqueOrigins = Array.from(new Set(allowedOrigins.filter((origin): origin is string => Boolean(origin))));
+
+console.log('🌐 Allowed CORS origins:', uniqueOrigins);
 
 // Явная обработка OPTIONS запросов ПЕРЕД всеми другими middleware
 // Логируем ВСЕ запросы для отладки (даже в production)
@@ -178,10 +183,10 @@ app.options('*', (req, res) => {
   // Нормализуем origin
   const normalizedOrigin = origin.replace(/\/$/, '');
   
-  // Проверяем, разрешен ли origin
-  const isAllowed = allowedOrigins.includes(origin) || 
-                   allowedOrigins.includes(normalizedOrigin) || 
-                   allowedOrigins.some(allowed => {
+  // Проверяем, разрешен ли origin (используем uniqueOrigins)
+  const isAllowed = uniqueOrigins.includes(origin) || 
+                   uniqueOrigins.includes(normalizedOrigin) || 
+                   uniqueOrigins.some(allowed => {
                      const normalizedAllowed = allowed.replace(/\/$/, '');
                      return normalizedAllowed === normalizedOrigin;
                    });
@@ -196,8 +201,13 @@ app.options('*', (req, res) => {
     return res.sendStatus(204);
   } else {
     console.warn('❌ OPTIONS blocked for:', origin);
-    console.warn('   Allowed origins:', allowedOrigins);
-    return res.status(403).json({ error: 'CORS not allowed' });
+    console.warn('   Normalized:', normalizedOrigin);
+    console.warn('   Allowed origins:', uniqueOrigins);
+    // Все равно отправляем заголовки для отладки
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    return res.status(403).json({ error: 'CORS not allowed', origin, allowedOrigins: uniqueOrigins });
   }
 });
 
@@ -213,10 +223,10 @@ app.use(cors({
     // Нормализуем origin (убираем слэш в конце)
     const normalizedOrigin = origin.replace(/\/$/, '');
     
-    // Проверяем, разрешен ли origin
-    const isAllowed = allowedOrigins.includes(origin) || 
-                     allowedOrigins.includes(normalizedOrigin) || 
-                     allowedOrigins.some(allowed => {
+    // Проверяем, разрешен ли origin (используем uniqueOrigins)
+    const isAllowed = uniqueOrigins.includes(origin) || 
+                     uniqueOrigins.includes(normalizedOrigin) || 
+                     uniqueOrigins.some(allowed => {
                        const normalizedAllowed = allowed.replace(/\/$/, '');
                        return normalizedAllowed === normalizedOrigin;
                      });
@@ -227,7 +237,7 @@ app.use(cors({
     } else {
       console.warn('❌ CORS blocked for:', origin);
       console.warn('   Normalized:', normalizedOrigin);
-      console.warn('   Allowed origins:', allowedOrigins);
+      console.warn('   Allowed origins:', uniqueOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },
