@@ -15,6 +15,7 @@ const lessons_1 = __importDefault(require("./routes/lessons"));
 const users_1 = __importDefault(require("./routes/users"));
 const events_1 = __importDefault(require("./routes/events"));
 const calendar_1 = __importDefault(require("./routes/calendar"));
+const bots_1 = __importDefault(require("./routes/bots"));
 const db_init_1 = require("./utils/db-init");
 dotenv_1.default.config();
 let databaseUrl = process.env.DATABASE_URL;
@@ -211,6 +212,7 @@ app.use('/api/lessons', lessons_1.default);
 app.use('/api/users', users_1.default);
 app.use('/api/events', events_1.default);
 app.use('/api/calendar', calendar_1.default);
+app.use('/api/bots', bots_1.default);
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'OK',
