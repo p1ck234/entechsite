@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Bot, Copy, Check, Plus, Edit, Trash2 } from 'lucide-react';
+import { Bot, Copy, Check, Plus, Edit, Trash2, MessageCircle } from 'lucide-react';
 import { TelegramBot } from '../types';
 import { botsAPI } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import { useTelegram } from '../contexts/TelegramContext';
 import BotModal from '../components/BotModal';
 
 const Bots: React.FC = () => {
   const { isAdmin } = useAuth();
+  const { isTelegram, webApp } = useTelegram();
   const [bots, setBots] = useState<TelegramBot[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -118,23 +120,48 @@ const Bots: React.FC = () => {
                     
                     <div className="flex items-center justify-between group">
                       <div className="flex items-center space-x-2 text-sm text-pastel-600 flex-1 min-w-0">
-                        <span className="text-primary-600 font-medium">
+                        <MessageCircle className="w-4 h-4 flex-shrink-0" />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const telegramUsername = bot.username.replace('@', '');
+                            if (telegramUsername) {
+                              if (isTelegram && webApp) {
+                                // В Telegram Mini App используем openTelegramLink
+                                try {
+                                  webApp.openTelegramLink(`https://t.me/${telegramUsername}`);
+                                } catch (error) {
+                                  console.error('Error opening Telegram link:', error);
+                                  // Fallback: используем openLink
+                                  webApp.openLink(`https://t.me/${telegramUsername}`);
+                                }
+                              } else {
+                                // В обычном браузере используем window.open
+                                window.open(`https://t.me/${telegramUsername}`, '_blank');
+                              }
+                            }
+                          }}
+                          className="text-primary-600 hover:text-primary-700 hover:underline transition-colors text-left font-medium"
+                        >
                           @{bot.username}
-                        </span>
+                        </button>
                       </div>
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleCopy(bot.username, `bot-${bot.id}`);
+                            const telegramToCopy = bot.username.startsWith('@') 
+                              ? bot.username 
+                              : `@${bot.username}`;
+                            handleCopy(telegramToCopy, `bot-${bot.id}`);
                           }}
                           className="p-1 text-pastel-400 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
                           title="Скопировать тег бота"
                         >
                           {copiedField === `bot-${bot.id}` ? (
-                            <Check className="w-4 h-4 text-green-600" />
+                            <Check className="w-3.5 h-3.5 text-green-600" />
                           ) : (
-                            <Copy className="w-4 h-4" />
+                            <Copy className="w-3.5 h-3.5" />
                           )}
                         </button>
                         {isAdmin && (

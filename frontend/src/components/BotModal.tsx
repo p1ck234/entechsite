@@ -77,114 +77,132 @@ const BotModal: React.FC<BotModalProps> = ({ bot, onClose, onSuccess }) => {
     <div 
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" 
       style={{ touchAction: 'none', overflow: 'hidden' }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose();
+      onTouchMove={(e) => {
+        // Предотвращаем прокрутку фона
+        const target = e.target as HTMLElement;
+        if (!target.closest('.modal-content')) {
+          e.preventDefault();
         }
       }}
     >
       <div 
-        className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] sm:max-h-[90vh] overflow-y-auto pb-24 sm:pb-8"
-        style={{ touchAction: 'pan-y' }}
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
+        onClick={onClose}
+        style={{ touchAction: 'none' }}
+      />
+      
+      <div 
+        className="relative w-full max-w-2xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl modal-content" 
+        style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-white border-b border-pastel-200 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-pastel-800">
-            {bot ? 'Редактировать бота' : 'Добавить бота'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-pastel-100 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5 text-pastel-600" />
-          </button>
-        </div>
+        <div className="glass-card rounded-t-2xl sm:rounded-2xl p-6 pb-24 sm:pb-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-pastel-800">
+              {bot ? 'Редактировать бота' : 'Добавить бота'}
+            </h2>
+            <button
+              onClick={onClose}
+              className="p-2 text-pastel-400 hover:text-pastel-600 hover:bg-pastel-100 rounded-lg transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
               {error}
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-pastel-700 mb-2">
-              Название бота *
-            </label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              className="input-field"
-              placeholder="Например: ENTECH Site Bot"
-            />
-          </div>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label htmlFor="name" className="block text-sm font-medium text-pastel-700 mb-2">
+                  Название бота *
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  required
+                  className="input-field"
+                  placeholder="Например: ENTECH Site Bot"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-pastel-700 mb-2">
-              Username бота (без @) *
-            </label>
-            <input
-              type="text"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              required
-              className="input-field"
-              placeholder="Например: entechsite_bot"
-            />
-            <p className="text-xs text-pastel-500 mt-1">
-              Введите username без символа @
-            </p>
-          </div>
+              <div className="md:col-span-2">
+                <label htmlFor="username" className="block text-sm font-medium text-pastel-700 mb-2">
+                  Username бота (без @) *
+                </label>
+                <input
+                  id="username"
+                  type="text"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleChange}
+                  required
+                  className="input-field"
+                  placeholder="Например: entechsite_bot"
+                />
+                <p className="text-xs text-pastel-500 mt-1">
+                  Введите username без символа @
+                </p>
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-pastel-700 mb-2">
-              Описание
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows={3}
-              className="input-field"
-              placeholder="Краткое описание бота..."
-            />
-          </div>
+              <div className="md:col-span-2">
+                <label htmlFor="description" className="block text-sm font-medium text-pastel-700 mb-2">
+                  Описание
+                </label>
+                <textarea
+                  id="description"
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  rows={3}
+                  className="input-field"
+                  placeholder="Краткое описание бота..."
+                />
+              </div>
 
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              name="isActive"
-              id="isActive"
-              checked={formData.isActive}
-              onChange={handleChange}
-              className="w-4 h-4 text-primary-600 border-pastel-300 rounded focus:ring-primary-500"
-            />
-            <label htmlFor="isActive" className="ml-2 text-sm text-pastel-700">
-              Активен
-            </label>
-          </div>
+              <div className="md:col-span-2">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="isActive"
+                    id="isActive"
+                    checked={formData.isActive}
+                    onChange={handleChange}
+                    className="w-4 h-4 text-primary-600 border-pastel-300 rounded focus:ring-primary-500"
+                  />
+                  <label htmlFor="isActive" className="ml-2 text-sm text-pastel-700">
+                    Активен
+                  </label>
+                </div>
+              </div>
+            </div>
 
-          <div className="flex space-x-3 pt-4 sticky bottom-0 bg-white border-t border-pastel-200 -mx-6 px-6 py-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-pastel-300 text-pastel-700 rounded-lg hover:bg-pastel-50 transition-colors"
-            >
-              Отмена
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Сохранение...' : bot ? 'Сохранить' : 'Добавить'}
-            </button>
-          </div>
-        </form>
+            <div className="flex justify-end space-x-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="btn-secondary"
+                disabled={loading}
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Сохранение...' : (bot ? 'Обновить' : 'Создать')}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
