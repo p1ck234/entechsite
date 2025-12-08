@@ -94,9 +94,17 @@ const Login: React.FC = () => {
 
           {/* Сообщение для веба */}
           {!isTelegram && (
-            <p className="text-pastel-600 text-sm mt-4">
-              Эта страница предназначена для Telegram Mini App. Для веб-авторизации используйте страницу /auth
-            </p>
+            <div className="mt-4">
+              <p className="text-pastel-600 text-sm mb-4">
+                Эта страница предназначена для Telegram Mini App.
+              </p>
+              <button
+                onClick={() => navigate('/auth')}
+                className="w-full bg-primary-500 hover:bg-primary-600 text-white px-4 py-3 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg font-medium"
+              >
+                Войти с ПК
+              </button>
+            </div>
           )}
         </div>
       </div>

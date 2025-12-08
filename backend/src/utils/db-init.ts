@@ -161,6 +161,18 @@ export async function initializeDatabase(pool: Pool) {
         );
       `);
 
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS bots (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          username VARCHAR(100) NOT NULL UNIQUE,
+          description TEXT,
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
       // Создание индексов
       await pool.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);');
       await pool.query('CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department);');
@@ -172,6 +184,8 @@ export async function initializeDatabase(pool: Pool) {
       await pool.query('CREATE INDEX IF NOT EXISTS idx_events_active ON events(is_active);');
       await pool.query('CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date DESC);');
       await pool.query('CREATE INDEX IF NOT EXISTS idx_calendar_events_date ON calendar_events(event_date);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_bots_active ON bots(is_active);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_bots_username ON bots(username);');
 
       console.log('✅ Таблицы созданы');
     } else {
@@ -227,6 +241,33 @@ export async function initializeDatabase(pool: Pool) {
           CREATE INDEX IF NOT EXISTS idx_employees_telegram_id ON employees(telegram_id) WHERE telegram_id IS NOT NULL;
         `);
         console.log('✅ Колонка telegram_id уже существует (BIGINT)');
+      }
+      
+      // Проверяем существование таблицы bots
+      const botsTableCheck = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'bots'
+        );
+      `);
+      
+      if (!botsTableCheck.rows[0].exists) {
+        console.log('📦 Создание таблицы bots...');
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS bots (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            username VARCHAR(100) NOT NULL UNIQUE,
+            description TEXT,
+            is_active BOOLEAN DEFAULT true,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_bots_active ON bots(is_active);');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_bots_username ON bots(username);');
+        console.log('✅ Таблица bots создана');
       }
       
       console.log('✅ Проверка колонок завершена');

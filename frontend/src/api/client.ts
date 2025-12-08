@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, CalendarEvent } from '../types';
+import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, CalendarEvent, TelegramBot, PaginationInfo } from '../types';
 
 import { API_BASE_URL } from '../config/api';
 
@@ -519,6 +519,93 @@ export const calendarAPI = {
 
   deleteEvent: async (id: string): Promise<{ message: string }> => {
     const response = await api.delete(`/calendar/${id}`);
+    return response.data;
+  },
+};
+
+// Bots API
+export const botsAPI = {
+  getBots: async (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<{ bots: TelegramBot[]; pagination: PaginationInfo }> => {
+    const response = await api.get('/bots', { params });
+    
+    // Transform snake_case to camelCase
+    const transformedBots = response.data.bots.map((bot: any) => ({
+      id: String(bot.id),
+      name: bot.name,
+      username: bot.username,
+      description: bot.description,
+      isActive: bot.is_active,
+      createdAt: bot.created_at,
+      updatedAt: bot.updated_at
+    }));
+
+    return {
+      bots: transformedBots,
+      pagination: response.data.pagination
+    };
+  },
+
+  getBot: async (id: string): Promise<TelegramBot> => {
+    const response = await api.get(`/bots/${id}`);
+    const bot = response.data;
+    
+    return {
+      id: String(bot.id),
+      name: bot.name,
+      username: bot.username,
+      description: bot.description,
+      isActive: bot.is_active,
+      createdAt: bot.created_at,
+      updatedAt: bot.updated_at
+    };
+  },
+
+  createBot: async (bot: Omit<TelegramBot, 'id' | 'createdAt' | 'updatedAt'>): Promise<TelegramBot> => {
+    const response = await api.post('/bots', {
+      name: bot.name,
+      username: bot.username,
+      description: bot.description,
+      is_active: bot.isActive
+    });
+    const createdBot = response.data;
+    
+    return {
+      id: String(createdBot.id),
+      name: createdBot.name,
+      username: createdBot.username,
+      description: createdBot.description,
+      isActive: createdBot.is_active,
+      createdAt: createdBot.created_at,
+      updatedAt: createdBot.updated_at
+    };
+  },
+
+  updateBot: async (id: string, bot: Partial<TelegramBot>): Promise<TelegramBot> => {
+    const response = await api.put(`/bots/${id}`, {
+      name: bot.name,
+      username: bot.username,
+      description: bot.description,
+      is_active: bot.isActive
+    });
+    const updatedBot = response.data;
+    
+    return {
+      id: String(updatedBot.id),
+      name: updatedBot.name,
+      username: updatedBot.username,
+      description: updatedBot.description,
+      isActive: updatedBot.is_active,
+      createdAt: updatedBot.created_at,
+      updatedAt: updatedBot.updated_at
+    };
+  },
+
+  deleteBot: async (id: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/bots/${id}`);
     return response.data;
   },
 };

@@ -153,7 +153,7 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Recent Employees */}
         <div className="glass-card p-4 sm:p-6">
-          <h3 className="text-base sm:text-lg font-semibold text-pastel-800 mb-4">Недавние сотрудники</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-pastel-800 mb-4">Новые сотрудники</h3>
           <div className="space-y-3">
             {recentEmployees.length > 0 ? (
               recentEmployees.map((employee) => (

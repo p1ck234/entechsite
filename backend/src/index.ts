@@ -13,6 +13,7 @@ import lessonRoutes from './routes/lessons';
 import userRoutes from './routes/users';
 import eventRoutes from './routes/events';
 import calendarRoutes from './routes/calendar';
+import botRoutes from './routes/bots';
 import { initializeDatabase } from './utils/db-init';
 
 dotenv.config();
@@ -278,6 +279,7 @@ app.use('/api/lessons', lessonRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/calendar', calendarRoutes);
+app.use('/api/bots', botRoutes);
 
 // Health check - должен быть ДО всех других маршрутов для быстрого ответа
 app.get('/api/health', (req, res) => {

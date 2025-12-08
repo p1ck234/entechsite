@@ -12,7 +12,8 @@ import {
   LogOut,
   Settings,
   Heart,
-  Calendar
+  Calendar,
+  Bot
 } from 'lucide-react';
 import Logo from './Logo';
 
@@ -63,6 +64,7 @@ const Layout: React.FC = () => {
     { name: 'База знаний', href: '/courses', icon: BookOpen },
     { name: 'Наша жизнь', href: '/life', icon: Heart },
     { name: 'Календарь мероприятий', href: '/events', icon: Calendar },
+    { name: 'Боты', href: '/bots', icon: Bot },
   ];
 
   const handleLogout = () => {
@@ -90,7 +92,7 @@ const Layout: React.FC = () => {
           fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
-        <div className="flex h-full flex-col glass-effect">
+        <div className="flex h-full flex-col" style={{ backgroundColor: 'rgb(229, 229, 229)' }}>
           {/* Logo */}
           <div className="flex h-16 items-center justify-center border-b border-white/20 px-4">
             <Logo size="md" />

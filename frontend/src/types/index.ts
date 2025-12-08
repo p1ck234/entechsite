@@ -169,3 +169,13 @@ export interface CalendarEvent {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface TelegramBot {
+  id: string;
+  name: string;
+  username: string; // без @
+  description?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
