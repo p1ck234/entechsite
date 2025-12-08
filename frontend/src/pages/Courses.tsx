@@ -178,7 +178,7 @@ const Courses: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-pastel-800">Курсы</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-pastel-800">База знаний</h1>
           <p className="text-pastel-600 mt-1 text-sm sm:text-base">Образовательные материалы компании</p>
         </div>
         {isAdmin && (
