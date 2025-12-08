@@ -9,13 +9,26 @@ const TelegramAuth: React.FC = () => {
   const { isTelegram } = useTelegram();
   const widgetContainerRef = useRef<HTMLDivElement>(null);
   const widgetInitializedRef = useRef(false);
+  const retryCountRef = useRef(0);
 
   // Обработчик Telegram OAuth Widget (только для веба)
   useEffect(() => {
+    // Проверяем окружение более точно
+    const isInTelegramMiniApp = typeof window !== 'undefined' && !!window.Telegram?.WebApp;
+    
+    console.log('🔍 TelegramAuth Debug Info:');
+    console.log('  - isTelegram (from context):', isTelegram);
+    console.log('  - window.Telegram exists:', typeof window !== 'undefined' && !!window.Telegram);
+    console.log('  - window.Telegram.WebApp exists:', isInTelegramMiniApp);
+    console.log('  - User Agent:', typeof navigator !== 'undefined' ? navigator.userAgent : 'N/A');
+    
     // Если это Mini App, не инициализируем виджет
-    if (isTelegram) {
+    if (isTelegram || isInTelegramMiniApp) {
+      console.log('⚠️ Skipping widget initialization - Telegram Mini App detected');
       return;
     }
+    
+    console.log('✅ Initializing Telegram OAuth Widget for web browser');
 
     // Создаем глобальную функцию для обработки OAuth callback
     (window as any).onTelegramAuth = async (user: any) => {
@@ -87,11 +100,20 @@ const TelegramAuth: React.FC = () => {
 
       const container = widgetContainerRef.current;
       if (!container) {
-        console.error('❌ Container ref not found');
-        // Повторяем попытку через небольшую задержку
-        setTimeout(initWidget, 200);
+        console.error('❌ Container ref not found, retrying...', retryCountRef.current);
+        // Повторяем попытку через небольшую задержку (максимум 5 попыток)
+        if (retryCountRef.current < 5) {
+          retryCountRef.current++;
+          setTimeout(initWidget, 300);
+        } else {
+          console.error('❌ Failed to find container after 5 retries');
+          setError('Не удалось загрузить виджет авторизации. Обновите страницу.');
+        }
         return;
       }
+      
+      console.log('✅ Container found, initializing widget...');
+      retryCountRef.current = 0; // Сбрасываем счетчик при успехе
 
       // Проверяем, не создан ли уже виджет (iframe)
       if (container.querySelector('iframe[id*="telegram-login"]')) {
@@ -154,6 +176,19 @@ const TelegramAuth: React.FC = () => {
       try {
         container.appendChild(widgetScript);
         console.log('✅ Widget script element added to container');
+        console.log('🔍 Container HTML after script:', container.innerHTML.substring(0, 200));
+        
+        // Дополнительная проверка через 2 секунды
+        setTimeout(() => {
+          const iframe = container.querySelector('iframe[id*="telegram-login"]');
+          if (!iframe) {
+            console.warn('⚠️ Widget iframe still not found after 2 seconds');
+            console.log('🔍 Container children:', Array.from(container.children).map(c => c.tagName));
+            console.log('🔍 Container HTML:', container.innerHTML.substring(0, 500));
+          } else {
+            console.log('✅ Widget iframe found:', iframe);
+          }
+        }, 2000);
       } catch (err) {
         console.error('❌ Error appending widget script:', err);
         widgetInitializedRef.current = false;
@@ -161,12 +196,19 @@ const TelegramAuth: React.FC = () => {
     };
 
     // Инициализируем виджет после небольшой задержки, чтобы контейнер точно был в DOM
-    const timeoutId = setTimeout(() => {
-      initWidget();
-    }, 300);
+    // Используем requestAnimationFrame для гарантии, что DOM обновлен
+    const initTimeout = setTimeout(() => {
+      requestAnimationFrame(() => {
+        console.log('🔄 Starting widget initialization...');
+        console.log('🔍 isTelegram:', isTelegram);
+        console.log('🔍 Container ref:', widgetContainerRef.current);
+        console.log('🔍 Container in DOM:', document.getElementById('telegram-login-container'));
+        initWidget();
+      });
+    }, 500);
 
     return () => {
-      clearTimeout(timeoutId);
+      clearTimeout(initTimeout);
       delete (window as any).onTelegramAuth;
       widgetInitializedRef.current = false;
     };
@@ -202,33 +244,53 @@ const TelegramAuth: React.FC = () => {
           )}
 
           {/* Telegram OAuth Widget - только для веба */}
-          {!isTelegram && (
-            <>
-              <div
-                className="flex justify-center mb-4 min-h-[50px]"
-                style={{ minHeight: '50px' }}
-              >
+          {(() => {
+            const isInTelegramMiniApp = typeof window !== 'undefined' && !!window.Telegram?.WebApp;
+            const shouldShowWidget = !isTelegram && !isInTelegramMiniApp;
+            
+            if (!shouldShowWidget) {
+              return (
+                <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800">
+                  <p className="font-semibold mb-1">⚠️ Обнаружен Telegram Mini App</p>
+                  <p className="text-sm">
+                    Эта страница предназначена для авторизации в обычном браузере. 
+                    Для авторизации в Telegram Mini App используйте страницу{' '}
+                    <a href="/login" className="underline font-semibold">/login</a>
+                  </p>
+                  <p className="text-xs mt-2 text-yellow-700">
+                    Debug: isTelegram={String(isTelegram)}, hasWebApp={String(isInTelegramMiniApp)}
+                  </p>
+                </div>
+              );
+            }
+            
+            return (
+              <>
                 <div
-                  ref={widgetContainerRef}
-                  id="telegram-login-container"
-                  suppressHydrationWarning
-                />
-                {!loading && !error && !widgetInitializedRef.current && (
-                  <div className="text-pastel-500 text-sm absolute">
-                    Загрузка кнопки входа...
-                  </div>
-                )}
-              </div>
+                  className="flex justify-center mb-4 min-h-[50px] relative"
+                  style={{ minHeight: '50px' }}
+                >
+                  <div
+                    ref={widgetContainerRef}
+                    id="telegram-login-container"
+                    suppressHydrationWarning
+                    style={{ minHeight: '50px', minWidth: '200px' }}
+                  />
+                  {!loading && !error && !widgetInitializedRef.current && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="text-pastel-500 text-sm">
+                        Загрузка кнопки входа...
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-              <p className="text-pastel-600 text-sm mt-4">
-                После нажатия кнопки вы будете перенаправлены на страницу авторизации Telegram, где нужно будет ввести номер телефона и подтвердить код
-              </p>
-            </>
-          )}
-
-          <p className="text-pastel-600 text-sm mt-4">
-            После нажатия кнопки вы будете перенаправлены на страницу авторизации Telegram, где нужно будет ввести номер телефона и подтвердить код
-          </p>
+                <p className="text-pastel-600 text-sm mt-4">
+                  После нажатия кнопки вы будете перенаправлены на страницу авторизации Telegram, где нужно будет ввести номер телефона и подтвердить код
+                </p>
+              </>
+            );
+          })()}
 
         </div>
       </div>
