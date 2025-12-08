@@ -77,100 +77,73 @@ const Home: React.FC = () => {
       <div className={`w-full ${isInsideLayout ? 'h-full' : 'max-w-7xl'} flex items-center justify-center`}>
         {/* Основной блок */}
         <div className={`relative ${isInsideLayout ? 'w-full h-full' : 'flex-1'} flex items-center justify-center`}>
-          {/* Серый прямоугольник как на картинке */}
-          <div className={`relative ${isInsideLayout ? 'w-full h-full rounded-none' : 'w-full max-w-5xl aspect-[16/9] rounded-[32px]'} bg-[#b9bbbf] ${isInsideLayout ? '' : 'shadow-2xl'} border border-white/30 overflow-hidden`}>
-            {/* Светящиеся линии (крест) */}
-            <div className="absolute inset-0 pointer-events-none">
-              {/* Горизонтальные */}
-              <div className="absolute top-[32.5%] left-[7%] right-[7%] h-[4px] bg-white rounded-full shadow-[0_0_20px_rgba(255,255,255,0.9)]" />
-              <div className="absolute top-[66%] left-[7%] right-[7%] h-[4px] bg-white rounded-full shadow-[0_0_20px_rgba(255,255,255,0.9)]" />
-              {/* Вертикальные */}
-              <div className="absolute left-[33%] top-[7%] bottom-[7%] w-[4px] bg-white rounded-full shadow-[0_0_20px_rgba(255,255,255,0.9)]" />
-              <div className="absolute left-[66%] top-[7%] bottom-[7%] w-[4px] bg-white rounded-full shadow-[0_0_20px_rgba(255,255,255,0.9)]" />
-            </div>
-
-            {/* Сетка 3×3 с текстами */}
-            <div className="relative z-10 h-full grid grid-cols-3 gap-1 sm:gap-2 md:gap-4 px-1 py-1 sm:px-2 sm:py-2 md:px-4 md:py-4 text-[10px] xs:text-[11px] sm:text-[13px] md:text-[16px] lg:text-[18px] font-semibold leading-tight">
-              {/* Верхний левый блок */}
-              <div className="flex items-center justify-center lg:items-start lg:justify-start lg:pt-4">
-                <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default text-center lg:text-left">
-                  МЫ СОЗДАЕМ АТМОСФЕРУ,<br />
-                  В КОТОРОЙ<br />
-                  ХОЧЕТСЯ<br />
-                  РАБОТАТЬ
-                </p>
-              </div>
-
-              {/* Верхний центр */}
-              <div className="flex items-center justify-center lg:items-start lg:justify-center lg:pt-4">
-                <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default text-center">
-                  МЫ ВСЕГДА<br />
-                  ГОТОВЫ К<br />
-                  НОВЫМ<br />
-                  РЕШЕНИЯМ
-                </p>
-              </div>
-
-              {/* Верхний правый блок */}
-              <div className="flex items-center justify-center lg:items-start lg:justify-end lg:pt-4">
-                <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default text-center lg:text-right">
-                  МЫ НЕ БОИМСЯ ОШИБОК,<br />
-                  ДЛЯ НАС ЭТО<br />
-                  ВОЗМОЖНОСТЬ<br />
-                  СТАТЬ ЛУЧШЕ
-                </p>
-              </div>
-
-              {/* Средний левый блок */}
-              <div className="flex items-center justify-center lg:items-center lg:justify-start">
-                <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default text-center lg:text-left">
-                  СВОБОДА<br />
-                  ОБЩЕНИЯ<br />
-                  БЕЗ РАМОК —<br />
-                  НАША ФОРМА<br />
-                  СУБОРДИНАЦИИ
-                </p>
-              </div>
-
-              {/* Центр – ENTECH GROUP */}
-              <div className="flex items-center justify-center w-full h-full p-1 sm:p-2">
-                <div className="transition-all duration-300 hover:scale-110 cursor-default flex items-center justify-center w-full h-full">
-                  <Logo size="lg" showText={false} className="w-full h-full max-w-full max-h-full object-contain" />
+          {/* Серый прямоугольник с вертикальным списком ценностей */}
+          <div className={`relative ${isInsideLayout ? 'w-full h-full rounded-none' : 'w-full max-w-3xl rounded-[32px]'} bg-[#b9bbbf] ${isInsideLayout ? '' : 'shadow-2xl'} border border-white/30 overflow-y-auto`}>
+            <div className="relative z-10 flex flex-col items-center px-4 sm:px-6 md:px-8 py-6 sm:py-8 md:py-12 space-y-6 sm:space-y-8 md:space-y-10">
+              {/* Логотип сверху */}
+              <div className="flex items-center justify-center mb-4 sm:mb-6">
+                <div className="transition-all duration-300 hover:scale-110 cursor-default">
+                  <Logo size="lg" showText={false} className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 object-contain" />
                 </div>
               </div>
 
-              {/* Средний правый блок */}
-              <div className="flex items-center justify-center lg:items-center lg:justify-end">
-                <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default text-center lg:text-right">
-                  МЫ СМЕЛО<br />
-                  ПРИНИМАЕМ РЕШЕНИЯ
-                </p>
-              </div>
+              {/* Список ценностей */}
+              <div className="w-full space-y-4 sm:space-y-5 md:space-y-6 text-sm sm:text-base md:text-lg lg:text-xl font-semibold leading-relaxed">
+                {/* Ценность 1 */}
+                <div className="text-center">
+                  <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default">
+                    МЫ СОЗДАЕМ АТМОСФЕРУ, В КОТОРОЙ ХОЧЕТСЯ РАБОТАТЬ
+                  </p>
+                </div>
 
-              {/* Нижний левый блок */}
-              <div className="flex items-center justify-center lg:items-end lg:justify-start lg:pb-4">
-                <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default text-center lg:text-left">
-                  НАША СИЛА<br />
-                  В КОМАНДЕ
-                </p>
-              </div>
+                {/* Ценность 2 */}
+                <div className="text-center">
+                  <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default">
+                    МЫ ВСЕГДА ГОТОВЫ К НОВЫМ РЕШЕНИЯМ
+                  </p>
+                </div>
 
-              {/* Нижний центр */}
-              <div className="flex items-center justify-center lg:items-end lg:justify-center lg:pb-4">
-                <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default text-center">
-                  МЫ НЕ ИЩЕМ<br />
-                  ВИНОВНЫХ,<br />
-                  А ИЩЕМ<br />
-                  РЕШЕНИЕ
-                </p>
-              </div>
+                {/* Ценность 3 */}
+                <div className="text-center">
+                  <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default">
+                    МЫ НЕ БОИМСЯ ОШИБОК, ДЛЯ НАС ЭТО ВОЗМОЖНОСТЬ СТАТЬ ЛУЧШЕ
+                  </p>
+                </div>
 
-              {/* Нижний правый блок */}
-              <div className="flex items-center justify-center lg:items-end lg:justify-end lg:pb-4">
-                <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default text-center lg:text-right">
-                  И НЕСЕМ ОТВЕТСТВЕННОСТЬ<br />
-                  ЗА НИХ
-                </p>
+                {/* Ценность 4 */}
+                <div className="text-center">
+                  <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default">
+                    СВОБОДА ОБЩЕНИЯ БЕЗ РАМОК — НАША ФОРМА СУБОРДИНАЦИИ
+                  </p>
+                </div>
+
+                {/* Ценность 5 */}
+                <div className="text-center">
+                  <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default">
+                    МЫ СМЕЛО ПРИНИМАЕМ РЕШЕНИЯ
+                  </p>
+                </div>
+
+                {/* Ценность 6 */}
+                <div className="text-center">
+                  <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default">
+                    НАША СИЛА В КОМАНДЕ
+                  </p>
+                </div>
+
+                {/* Ценность 7 */}
+                <div className="text-center">
+                  <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default">
+                    МЫ НЕ ИЩЕМ ВИНОВНЫХ, А ИЩЕМ РЕШЕНИЕ
+                  </p>
+                </div>
+
+                {/* Ценность 8 */}
+                <div className="text-center">
+                  <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default">
+                    И НЕСЕМ ОТВЕТСТВЕННОСТЬ ЗА НИХ
+                  </p>
+                </div>
               </div>
             </div>
           </div>
