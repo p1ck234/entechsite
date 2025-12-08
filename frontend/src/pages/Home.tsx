@@ -83,7 +83,7 @@ const Home: React.FC = () => {
               {/* Логотип сверху */}
               <div className="flex items-center justify-center mb-4 sm:mb-6">
                 <div className="transition-all duration-300 hover:scale-110 cursor-default">
-                  <Logo size="lg" showText={false} className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 object-contain" />
+                  <Logo size="lg" showText={true} />
                 </div>
               </div>
 
