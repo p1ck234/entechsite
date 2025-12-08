@@ -198,22 +198,30 @@ const Layout: React.FC = () => {
             {navigation.map((item) => {
               const Icon = item.icon;
               // Сокращаем длинные названия для мобильных
-              let shortName = item.name.length > 12 
-                ? item.name.split(' ').map(w => w[0]).join('') 
-                : item.name;
-              // Делаем "Ак" и "Км" большими буквами
-              if (shortName === 'Ак' || shortName === 'ак') {
+              let shortName = item.name;
+              
+              // Специальные сокращения для конкретных пунктов
+              if (item.name === 'Адресная книга') {
                 shortName = 'АК';
-              }
-              if (shortName === 'Км' || shortName === 'км') {
+              } else if (item.name === 'Календарь мероприятий') {
                 shortName = 'КМ';
+              } else if (item.name === 'База знаний') {
+                shortName = 'БЗ';
+              } else if (item.name === 'Наша жизнь') {
+                shortName = 'НЖ';
+              } else if (item.name === 'Боты') {
+                shortName = 'Б';
+              } else if (item.name.length > 8) {
+                // Для остальных длинных названий берем первые буквы слов
+                shortName = item.name.split(' ').map(w => w[0]).join('');
               }
+              
               return (
                 <button
                   key={item.name}
                   onClick={() => navigate(item.href)}
                   className={`
-                    flex flex-col items-center justify-center flex-1 min-w-[60px] h-full transition-colors px-1
+                    flex flex-col items-center justify-center flex-1 min-w-[50px] h-full transition-colors px-0.5
                     ${isActive(item.href)
                       ? 'text-primary-600'
                       : 'text-pastel-600'
@@ -222,7 +230,7 @@ const Layout: React.FC = () => {
                   title={item.name}
                 >
                   <Icon className="w-5 h-5 mb-0.5 flex-shrink-0" />
-                  <span className="text-[10px] leading-tight text-center">{shortName}</span>
+                  <span className="text-[9px] leading-tight text-center font-medium">{shortName}</span>
                 </button>
               );
             })}
