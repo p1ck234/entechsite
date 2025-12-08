@@ -92,8 +92,8 @@ const Home: React.FC = () => {
             {/* Сетка 3×3 с текстами */}
             <div className="relative z-10 h-full grid grid-cols-3 gap-1 sm:gap-2 md:gap-4 px-1 py-1 sm:px-2 sm:py-2 md:px-4 md:py-4 text-[10px] xs:text-[11px] sm:text-[13px] md:text-[16px] lg:text-[18px] font-semibold leading-tight">
               {/* Верхний левый блок */}
-              <div className="flex items-center justify-center">
-                <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default text-center">
+              <div className="flex items-center justify-center lg:items-start lg:justify-start lg:pt-4">
+                <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default text-center lg:text-left">
                   МЫ СОЗДАЕМ АТМОСФЕРУ,<br />
                   В КОТОРОЙ<br />
                   ХОЧЕТСЯ<br />
@@ -102,7 +102,7 @@ const Home: React.FC = () => {
               </div>
 
               {/* Верхний центр */}
-              <div className="flex items-center justify-center">
+              <div className="flex items-center justify-center lg:items-start lg:justify-center lg:pt-4">
                 <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default text-center">
                   МЫ ВСЕГДА<br />
                   ГОТОВЫ К<br />
@@ -112,8 +112,8 @@ const Home: React.FC = () => {
               </div>
 
               {/* Верхний правый блок */}
-              <div className="flex items-center justify-center">
-                <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default text-center">
+              <div className="flex items-center justify-center lg:items-start lg:justify-end lg:pt-4">
+                <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default text-center lg:text-right">
                   МЫ НЕ БОИМСЯ ОШИБОК,<br />
                   ДЛЯ НАС ЭТО<br />
                   ВОЗМОЖНОСТЬ<br />
@@ -122,8 +122,8 @@ const Home: React.FC = () => {
               </div>
 
               {/* Средний левый блок */}
-              <div className="flex items-center justify-center">
-                <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default text-center">
+              <div className="flex items-center justify-center lg:items-center lg:justify-start">
+                <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default text-center lg:text-left">
                   СВОБОДА<br />
                   ОБЩЕНИЯ<br />
                   БЕЗ РАМОК —<br />
@@ -134,29 +134,29 @@ const Home: React.FC = () => {
 
               {/* Центр – ENTECH GROUP */}
               <div className="flex items-center justify-center w-full h-full p-1 sm:p-2">
-                <div className="transition-all duration-300 hover:scale-110 cursor-default flex items-center justify-center w-full h-full aspect-square max-w-[90%] max-h-[90%]">
-                  <Logo size="lg" showText={false} className="w-full h-full object-contain" />
+                <div className="transition-all duration-300 hover:scale-110 cursor-default flex items-center justify-center w-full h-full">
+                  <Logo size="lg" showText={false} className="w-full h-full max-w-full max-h-full object-contain" />
                 </div>
               </div>
 
               {/* Средний правый блок */}
-              <div className="flex items-center justify-center">
-                <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default text-center">
+              <div className="flex items-center justify-center lg:items-center lg:justify-end">
+                <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default text-center lg:text-right">
                   МЫ СМЕЛО<br />
                   ПРИНИМАЕМ РЕШЕНИЯ
                 </p>
               </div>
 
               {/* Нижний левый блок */}
-              <div className="flex items-center justify-center">
-                <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default text-center">
+              <div className="flex items-center justify-center lg:items-end lg:justify-start lg:pb-4">
+                <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default text-center lg:text-left">
                   НАША СИЛА<br />
                   В КОМАНДЕ
                 </p>
               </div>
 
               {/* Нижний центр */}
-              <div className="flex items-center justify-center">
+              <div className="flex items-center justify-center lg:items-end lg:justify-center lg:pb-4">
                 <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default text-center">
                   МЫ НЕ ИЩЕМ<br />
                   ВИНОВНЫХ,<br />
@@ -166,8 +166,8 @@ const Home: React.FC = () => {
               </div>
 
               {/* Нижний правый блок */}
-              <div className="flex items-center justify-center">
-                <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default text-center">
+              <div className="flex items-center justify-center lg:items-end lg:justify-end lg:pb-4">
+                <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default text-center lg:text-right">
                   И НЕСЕМ ОТВЕТСТВЕННОСТЬ<br />
                   ЗА НИХ
                 </p>
