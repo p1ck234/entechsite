@@ -287,19 +287,12 @@ const TelegramAuth: React.FC = () => {
                   className="flex justify-center mb-4 min-h-[50px] relative"
                   style={{ minHeight: '50px' }}
                 >
-                  <div
-                    ref={widgetContainerRef}
-                    id="telegram-login-container"
-                    suppressHydrationWarning
-                    style={{ minHeight: '50px', minWidth: '200px' }}
-                  />
-                  {!loading && !error && !widgetInitializedRef.current && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="text-pastel-500 text-sm">
-                        Загрузка кнопки входа...
-                      </div>
-                    </div>
-                  )}
+                <div
+                  ref={widgetContainerRef}
+                  id="telegram-login-container"
+                  suppressHydrationWarning
+                  style={{ minHeight: '50px', minWidth: '200px' }}
+                />
                 </div>
 
                 <p className="text-pastel-600 text-sm mt-4">
