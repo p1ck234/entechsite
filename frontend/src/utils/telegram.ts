@@ -126,10 +126,22 @@ declare global {
 }
 
 /**
- * Проверяет, запущено ли приложение в Telegram
+ * Проверяет, запущено ли приложение в Telegram Mini App
+ * В обычном браузере скрипт telegram-web-app.js может создать объект,
+ * но initData будет пустым или отсутствовать
  */
 export const isTelegramWebApp = (): boolean => {
-  return typeof window !== 'undefined' && !!window.Telegram?.WebApp;
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  
+  const webApp = window.Telegram?.WebApp;
+  if (!webApp) {
+    return false;
+  }
+  
+  // В Mini App всегда есть initData, в обычном браузере его нет
+  return !!webApp.initData && webApp.initData.length > 0;
 };
 
 /**

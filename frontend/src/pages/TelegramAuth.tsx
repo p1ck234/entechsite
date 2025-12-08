@@ -14,17 +14,27 @@ const TelegramAuth: React.FC = () => {
   // Обработчик Telegram OAuth Widget (только для веба)
   useEffect(() => {
     // Проверяем окружение более точно
-    const isInTelegramMiniApp = typeof window !== 'undefined' && !!window.Telegram?.WebApp;
+    // Виджет OAuth работает только в обычных браузерах, не в Telegram Mini App
+    const hasTelegramWebApp = typeof window !== 'undefined' && !!window.Telegram?.WebApp;
+    const initData = hasTelegramWebApp ? window.Telegram?.WebApp?.initData : null;
+    const hasInitData = !!initData && initData.length > 0;
+    const isInMiniApp = hasTelegramWebApp && hasInitData; // Mini App всегда имеет initData
     
     console.log('🔍 TelegramAuth Debug Info:');
     console.log('  - isTelegram (from context):', isTelegram);
     console.log('  - window.Telegram exists:', typeof window !== 'undefined' && !!window.Telegram);
-    console.log('  - window.Telegram.WebApp exists:', isInTelegramMiniApp);
+    console.log('  - window.Telegram.WebApp exists:', hasTelegramWebApp);
+    console.log('  - initData:', initData ? `${initData.substring(0, 50)}...` : 'null/empty');
+    console.log('  - has initData:', hasInitData);
+    console.log('  - isInMiniApp:', isInMiniApp);
     console.log('  - User Agent:', typeof navigator !== 'undefined' ? navigator.userAgent : 'N/A');
+    console.log('  - window.location:', typeof window !== 'undefined' ? window.location.href : 'N/A');
     
-    // Если это Mini App, не инициализируем виджет
-    if (isTelegram || isInTelegramMiniApp) {
+    // Если это Mini App (есть initData), не инициализируем виджет
+    // Виджет OAuth не работает в Mini App, только в обычных браузерах
+    if (isTelegram || isInMiniApp) {
       console.log('⚠️ Skipping widget initialization - Telegram Mini App detected');
+      console.log('💡 OAuth Widget работает только в обычных браузерах. Для Mini App используйте /login');
       return;
     }
     
@@ -245,20 +255,27 @@ const TelegramAuth: React.FC = () => {
 
           {/* Telegram OAuth Widget - только для веба */}
           {(() => {
-            const isInTelegramMiniApp = typeof window !== 'undefined' && !!window.Telegram?.WebApp;
-            const shouldShowWidget = !isTelegram && !isInTelegramMiniApp;
+            // Более точная проверка: Mini App всегда имеет initData
+            const hasTelegramWebApp = typeof window !== 'undefined' && !!window.Telegram?.WebApp;
+            const initData = hasTelegramWebApp ? window.Telegram?.WebApp?.initData : null;
+            const hasInitData = !!initData && initData.length > 0;
+            const isInMiniApp = hasTelegramWebApp && hasInitData;
+            const shouldShowWidget = !isTelegram && !isInMiniApp;
             
             if (!shouldShowWidget) {
               return (
                 <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800">
                   <p className="font-semibold mb-1">⚠️ Обнаружен Telegram Mini App</p>
+                  <p className="text-sm mb-2">
+                    Виджет Telegram OAuth работает только в обычных браузерах (Chrome, Safari, Firefox), 
+                    а не в Telegram Mini App.
+                  </p>
                   <p className="text-sm">
-                    Эта страница предназначена для авторизации в обычном браузере. 
                     Для авторизации в Telegram Mini App используйте страницу{' '}
                     <a href="/login" className="underline font-semibold">/login</a>
                   </p>
                   <p className="text-xs mt-2 text-yellow-700">
-                    Debug: isTelegram={String(isTelegram)}, hasWebApp={String(isInTelegramMiniApp)}
+                    Debug: isTelegram={String(isTelegram)}, hasWebApp={String(hasTelegramWebApp)}, hasInitData={String(hasInitData)}
                   </p>
                 </div>
               );
