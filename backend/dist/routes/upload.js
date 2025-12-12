@@ -9,9 +9,12 @@ const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const auth_1 = require("../middleware/auth");
 const router = express_1.default.Router();
-const uploadsDir = path_1.default.join(__dirname, '../../uploads');
+const uploadsDir = process.env.NODE_ENV === 'production'
+    ? path_1.default.join(__dirname, '../uploads')
+    : path_1.default.join(__dirname, '../../uploads');
 if (!fs_1.default.existsSync(uploadsDir)) {
     fs_1.default.mkdirSync(uploadsDir, { recursive: true });
+    console.log(`📁 Создана папка для загрузок: ${uploadsDir}`);
 }
 const storage = multer_1.default.diskStorage({
     destination: (req, file, cb) => {
@@ -41,11 +44,31 @@ const upload = (0, multer_1.default)({
     },
     fileFilter: fileFilter
 });
-router.post('/', auth_1.authenticateToken, upload.single('photo'), (req, res) => {
+router.post('/', auth_1.authenticateToken, (req, res, next) => {
+    upload.single('photo')(req, res, (err) => {
+        if (err) {
+            console.error('Multer error:', err);
+            if (err instanceof multer_1.default.MulterError) {
+                if (err.code === 'LIMIT_FILE_SIZE') {
+                    return res.status(400).json({ message: 'Размер файла превышает 5MB' });
+                }
+                return res.status(400).json({ message: err.message || 'Ошибка при загрузке файла' });
+            }
+            return res.status(400).json({ message: err.message || 'Ошибка при загрузке файла' });
+        }
+        next();
+    });
+}, (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ message: 'Файл не был загружен' });
         }
+        console.log('File uploaded:', {
+            filename: req.file.filename,
+            size: req.file.size,
+            mimetype: req.file.mimetype,
+            path: req.file.path
+        });
         const fileUrl = `/api/uploads/${req.file.filename}`;
         res.json({
             message: 'Файл успешно загружен',

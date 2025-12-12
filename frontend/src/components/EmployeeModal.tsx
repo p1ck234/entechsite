@@ -116,15 +116,22 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
       // Загружаем файл
       const result = await uploadAPI.uploadPhoto(file);
       
-      // Устанавливаем URL загруженного файла
-      const photoUrl = `${API_BASE_URL}${result.url}`;
+      // result.url уже содержит /api/uploads/filename, добавляем только базовый URL
+      const photoUrl = result.url.startsWith('http') 
+        ? result.url 
+        : `${API_BASE_URL}${result.url}`;
+      
       setFormData({
         ...formData,
         photo: photoUrl,
       });
       setPreview(photoUrl);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Ошибка при загрузке файла');
+      console.error('Upload error:', err);
+      const errorMessage = err.response?.data?.message 
+        || err.message 
+        || 'Ошибка при загрузке файла';
+      setError(errorMessage);
     } finally {
       setUploading(false);
     }

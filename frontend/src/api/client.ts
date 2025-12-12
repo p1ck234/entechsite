@@ -626,11 +626,8 @@ export const uploadAPI = {
     const formData = new FormData();
     formData.append('photo', file);
     
-    const response = await uploadApi.post('/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    // НЕ устанавливаем Content-Type вручную - axios сам установит правильный boundary
+    const response = await uploadApi.post('/upload', formData);
     
     return response.data;
   },

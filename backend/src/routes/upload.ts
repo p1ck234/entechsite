@@ -53,11 +53,32 @@ const upload = multer({
 });
 
 // Роут для загрузки изображения
-router.post('/', authenticateToken, upload.single('photo'), (req: any, res: any) => {
+router.post('/', authenticateToken, (req: any, res: any, next: any) => {
+  upload.single('photo')(req, res, (err: any) => {
+    if (err) {
+      console.error('Multer error:', err);
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ message: 'Размер файла превышает 5MB' });
+        }
+        return res.status(400).json({ message: err.message || 'Ошибка при загрузке файла' });
+      }
+      return res.status(400).json({ message: err.message || 'Ошибка при загрузке файла' });
+    }
+    next();
+  });
+}, (req: any, res: any) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'Файл не был загружен' });
     }
+
+    console.log('File uploaded:', {
+      filename: req.file.filename,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+      path: req.file.path
+    });
 
     // Возвращаем URL для доступа к файлу
     const fileUrl = `/api/uploads/${req.file.filename}`;

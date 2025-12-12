@@ -216,7 +216,13 @@ app.use('/api/events', events_1.default);
 app.use('/api/calendar', calendar_1.default);
 app.use('/api/bots', bots_1.default);
 app.use('/api/upload', upload_1.default);
-const uploadsDir = path_1.default.join(__dirname, '../uploads');
+const uploadsDir = process.env.NODE_ENV === 'production'
+    ? path_1.default.join(__dirname, '../uploads')
+    : path_1.default.join(__dirname, '../../uploads');
+if (!require('fs').existsSync(uploadsDir)) {
+    require('fs').mkdirSync(uploadsDir, { recursive: true });
+    console.log(`📁 Создана папка для загрузок: ${uploadsDir}`);
+}
 app.use('/api/uploads', express_1.default.static(uploadsDir));
 app.get('/api/health', (req, res) => {
     res.json({

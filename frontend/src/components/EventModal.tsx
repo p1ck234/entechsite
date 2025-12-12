@@ -111,14 +111,22 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose }) => {
       // Загружаем файл
       const result = await uploadAPI.uploadPhoto(file);
       
+      // result.url уже содержит /api/uploads/filename, добавляем только базовый URL
+      const photoUrl = result.url.startsWith('http') 
+        ? result.url 
+        : `${API_BASE_URL}${result.url}`;
+      
       // Добавляем URL загруженного файла в список превью
-      const photoUrl = `${API_BASE_URL}${result.url}`;
       setFormData({
         ...formData,
         previewImages: [...formData.previewImages, photoUrl],
       });
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Ошибка при загрузке файла');
+      console.error('Upload error:', err);
+      const errorMessage = err.response?.data?.message 
+        || err.message 
+        || 'Ошибка при загрузке файла';
+      setError(errorMessage);
     } finally {
       setUploading(false);
       if (fileInputRef.current) {
