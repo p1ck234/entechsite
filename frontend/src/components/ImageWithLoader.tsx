@@ -12,29 +12,12 @@ interface ImageWithLoaderProps {
 const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt, className = '', onError }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [currentSrc, setCurrentSrc] = useState<string>('');
 
   // Нормализуем URL для Google Drive ссылок
-  const normalizedSrc = useMemo(() => normalizeImageUrl(src), [src]);
-  
-  // Генерируем альтернативный URL для Google Drive
-  const alternativeSrc = useMemo(() => {
-    if (!src || !src.includes('lh3.google.com')) return null;
-    const match = src.match(/lh3\.google\.com\/[^/]+\/d\/([^=]+)/);
-    if (match) {
-      const fileId = match[1];
-      // Альтернативный формат через googleusercontent.com
-      return `https://lh3.googleusercontent.com/d/${fileId}=s0`;
-    }
-    return null;
+  const normalizedSrc = useMemo(() => {
+    if (!src) return '';
+    return normalizeImageUrl(src);
   }, [src]);
-
-  // Устанавливаем текущий источник при изменении normalizedSrc
-  useEffect(() => {
-    setCurrentSrc(normalizedSrc);
-    setLoading(true);
-    setError(false);
-  }, [normalizedSrc]);
 
   const handleLoad = () => {
     setLoading(false);
@@ -42,20 +25,22 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt, className =
   };
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    // Если есть альтернативный URL и мы еще не пробовали его, пробуем его
-    if (alternativeSrc && currentSrc === normalizedSrc && !error) {
-      setCurrentSrc(alternativeSrc);
-      setLoading(true);
-      return;
-    }
-    
-    // Если альтернативный URL тоже не сработал или его нет, показываем ошибку
     setLoading(false);
     setError(true);
     if (onError) {
       onError(e);
     }
   };
+
+  // Сбрасываем состояние при изменении src
+  useEffect(() => {
+    setLoading(true);
+    setError(false);
+  }, [src]);
+
+  if (!src) {
+    return null;
+  }
 
   return (
     <div className="relative w-full h-full">
@@ -70,11 +55,12 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt, className =
         </div>
       ) : (
         <img
-          src={currentSrc || normalizedSrc}
+          src={normalizedSrc}
           alt={alt}
           className={`${className} ${loading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
           onLoad={handleLoad}
           onError={handleError}
+          loading="lazy"
         />
       )}
     </div>
