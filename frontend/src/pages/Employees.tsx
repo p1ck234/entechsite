@@ -10,7 +10,6 @@ import ImageWithLoader from '../components/ImageWithLoader';
 // Компонент для отображения аватара сотрудника с fallback на инициалы
 const EmployeeAvatar: React.FC<{ employee: Employee }> = ({ employee }) => {
   const [imageError, setImageError] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
 
   // Если нет фото - сразу показываем инициалы
   if (!employee.photo) {
