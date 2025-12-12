@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
+import { normalizeImageUrl } from '../utils/imageUtils';
 
 interface ImageWithLoaderProps {
   src: string;
@@ -11,6 +12,9 @@ interface ImageWithLoaderProps {
 const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt, className = '', onError }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+
+  // Нормализуем URL для Google Drive ссылок
+  const normalizedSrc = useMemo(() => normalizeImageUrl(src), [src]);
 
   const handleLoad = () => {
     setLoading(false);
@@ -37,7 +41,7 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt, className =
         </div>
       ) : (
         <img
-          src={src}
+          src={normalizedSrc}
           alt={alt}
           className={`${className} ${loading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
           onLoad={handleLoad}

@@ -27,7 +27,7 @@ const UserModal: React.FC<UserModalProps> = ({ onClose }) => {
   const [error, setError] = useState('');
 
   const departments = [
-    'IT-Отдел', 'Отдел продаж', 'Отдел финансистов', 'Отдел стройки', 'Отдел производства', 'Отдел управления и планирование'
+    'IT-Отдел', 'Отдел продаж', 'Отдел финансистов', 'Отдел стройки', 'Отдел производства', 'Отдел управления и планирование', 'Отдел поиска персонала'
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {
