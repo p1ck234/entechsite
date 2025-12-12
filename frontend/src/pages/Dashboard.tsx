@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { employeesAPI, coursesAPI } from '../api/client';
 import { Users, BookOpen, TrendingUp, Clock } from 'lucide-react';
@@ -7,7 +6,6 @@ import { Employee, Course } from '../types';
 
 const Dashboard: React.FC = () => {
   const { user, isAdmin } = useAuth();
-  const location = useLocation();
   const [stats, setStats] = useState({
     totalEmployees: 0,
     totalCourses: 0,
@@ -25,8 +23,7 @@ const Dashboard: React.FC = () => {
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
-        // Fetch current employee info - принудительно обновляем данные
-        // Добавляем timestamp для предотвращения кеширования
+        // Fetch current employee info
         try {
           const employee = await employeesAPI.getCurrentEmployee();
           if (isMounted && employee) {
@@ -87,15 +84,12 @@ const Dashboard: React.FC = () => {
       }
     };
 
-    // Обновляем данные при переходе на страницу дашборда
-    if (location.pathname === '/dashboard') {
-      fetchDashboardData();
-    }
+    fetchDashboardData();
 
     return () => {
       isMounted = false;
     };
-  }, [isAdmin, user?.email, location.pathname]);
+  }, [isAdmin, user?.email]);
 
   if (loading) {
     return (
