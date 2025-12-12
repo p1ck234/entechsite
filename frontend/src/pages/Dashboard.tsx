@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { employeesAPI, coursesAPI } from '../api/client';
 import { Users, BookOpen, TrendingUp, Clock } from 'lucide-react';
@@ -6,6 +7,7 @@ import { Employee, Course } from '../types';
 
 const Dashboard: React.FC = () => {
   const { user, isAdmin } = useAuth();
+  const location = useLocation();
   const [stats, setStats] = useState({
     totalEmployees: 0,
     totalCourses: 0,
@@ -18,56 +20,82 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchDashboardData = async () => {
+      setLoading(true);
       try {
-        // Fetch current employee info
+        // Fetch current employee info - принудительно обновляем данные
+        // Добавляем timestamp для предотвращения кеширования
         try {
           const employee = await employeesAPI.getCurrentEmployee();
-          if (employee) {
+          if (isMounted && employee) {
             setCurrentEmployee(employee);
+          } else if (isMounted) {
+            setCurrentEmployee(null);
           }
         } catch (error) {
           // Employee not found is OK, will show email as fallback
           console.error('Error fetching current employee:', error);
+          if (isMounted) {
+            setCurrentEmployee(null);
+          }
         }
 
         // Fetch employees
         const employeesResponse = await employeesAPI.getEmployees({ limit: 5 });
-        setRecentEmployees(employeesResponse.employees);
-        setStats(prev => ({ ...prev, totalEmployees: employeesResponse.pagination.total }));
+        if (isMounted) {
+          setRecentEmployees(employeesResponse.employees);
+          setStats(prev => ({ ...prev, totalEmployees: employeesResponse.pagination.total }));
+        }
 
         // Fetch courses
         const coursesResponse = await coursesAPI.getCourses({ limit: 5 });
-        setRecentCourses(coursesResponse.courses);
-        setStats(prev => ({ ...prev, totalCourses: coursesResponse.pagination.total }));
+        if (isMounted) {
+          setRecentCourses(coursesResponse.courses);
+          setStats(prev => ({ ...prev, totalCourses: coursesResponse.pagination.total }));
+        }
 
         // Fetch user progress if not admin
         if (!isAdmin) {
           const progressResponse = await coursesAPI.getUserProgress();
-          const completed = progressResponse.progress.filter(p => p.completed).length;
-          const inProgress = progressResponse.progress.filter(p => !p.completed && p.progress > 0).length;
-          setStats(prev => ({ 
-            ...prev, 
-            completedCourses: completed,
-            inProgressCourses: inProgress 
-          }));
+          if (isMounted) {
+            const completed = progressResponse.progress.filter(p => p.completed).length;
+            const inProgress = progressResponse.progress.filter(p => !p.completed && p.progress > 0).length;
+            setStats(prev => ({ 
+              ...prev, 
+              completedCourses: completed,
+              inProgressCourses: inProgress 
+            }));
+          }
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         // Set some default data to prevent blank screen
-        setStats({
-          totalEmployees: 0,
-          totalCourses: 0,
-          completedCourses: 0,
-          inProgressCourses: 0,
-        });
+        if (isMounted) {
+          setStats({
+            totalEmployees: 0,
+            totalCourses: 0,
+            completedCourses: 0,
+            inProgressCourses: 0,
+          });
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchDashboardData();
-  }, [isAdmin, user?.email]);
+    // Обновляем данные при переходе на страницу дашборда
+    if (location.pathname === '/dashboard') {
+      fetchDashboardData();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAdmin, user?.email, location.pathname]);
 
   if (loading) {
     return (

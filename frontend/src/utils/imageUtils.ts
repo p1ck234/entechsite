@@ -11,27 +11,30 @@ export function normalizeImageUrl(url: string): string {
   }
 
   // Формат: https://lh3.google.com/u/0/d/FILE_ID=w2880-h1764-iv1?auditContext=prefetch
-  // Для ссылок lh3.google.com убираем только проблемные параметры запроса
-  // Оставляем оригинальную ссылку, так как она может работать лучше в Telegram Mini App
+  // Для ссылок lh3.google.com пробуем несколько вариантов преобразования
   if (url.includes('lh3.google.com')) {
+    // Пробуем извлечь ID файла
+    const lh3Match = url.match(/lh3\.google\.com\/[^/]+\/d\/([^=]+)/);
+    if (lh3Match) {
+      const fileId = lh3Match[1];
+      
+      // Используем формат для прямого доступа через Google Drive
+      // Этот формат должен работать в Telegram Mini App
+      return `https://drive.google.com/uc?export=view&id=${fileId}`;
+    }
+    
+    // Если не удалось извлечь ID, пробуем очистить оригинальную ссылку
     try {
       const urlObj = new URL(url);
-      // Убираем параметры, которые могут блокироваться в Telegram Mini App
       urlObj.searchParams.delete('auditContext');
       urlObj.searchParams.delete('usp');
-      // Убираем iv1 из пути, если он есть (может вызывать проблемы)
-      if (urlObj.pathname.includes('iv1')) {
-        urlObj.pathname = urlObj.pathname.replace(/iv\d+/, '');
+      // Убираем iv1 из пути и заменяем на s0 для оригинального размера
+      if (urlObj.pathname.includes('=')) {
+        // Заменяем параметры размера на s0 (оригинальный размер)
+        urlObj.pathname = urlObj.pathname.replace(/=[^?]+/, '=s0');
       }
       return urlObj.toString();
     } catch {
-      // Если не удалось распарсить, пробуем извлечь ID и использовать стандартный формат
-      const lh3Match = url.match(/lh3\.google\.com\/[^/]+\/d\/([^=]+)/);
-      if (lh3Match) {
-        const fileId = lh3Match[1];
-        // Используем формат для прямого доступа к изображению
-        return `https://drive.google.com/uc?export=view&id=${fileId}`;
-      }
       return url;
     }
   }
