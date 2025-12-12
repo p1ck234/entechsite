@@ -7,6 +7,42 @@ import { Search, Edit, Trash2, Phone, Mail, MessageCircle, RotateCcw, CheckCircl
 import EmployeeModal from '../components/EmployeeModal';
 import ImageWithLoader from '../components/ImageWithLoader';
 
+// Компонент для отображения аватара сотрудника с fallback на инициалы
+const EmployeeAvatar: React.FC<{ employee: Employee }> = ({ employee }) => {
+  const [imageError, setImageError] = useState(false);
+
+  // Если нет фото или произошла ошибка загрузки - показываем инициалы
+  if (!employee.photo || imageError) {
+    return (
+      <div className="w-16 h-16 bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
+        <span className="text-white font-bold text-lg">
+          {employee.firstName?.charAt(0) || '?'}{employee.lastName?.charAt(0) || '?'}
+        </span>
+      </div>
+    );
+  }
+
+  // Если есть фото - пытаемся загрузить
+  return (
+    <div className="w-16 h-16 bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden relative">
+      <ImageWithLoader
+        src={employee.photo}
+        alt={`${employee.firstName} ${employee.lastName}`}
+        className="w-16 h-16 rounded-full object-cover"
+        onLoadError={() => {
+          setImageError(true);
+        }}
+      />
+      {/* Fallback инициалы на случай если изображение не загрузится */}
+      {imageError && (
+        <span className="text-white font-bold text-lg absolute inset-0 flex items-center justify-center">
+          {employee.firstName?.charAt(0) || '?'}{employee.lastName?.charAt(0) || '?'}
+        </span>
+      )}
+    </div>
+  );
+};
+
 const Employees: React.FC = () => {
   const { isAdmin } = useAuth();
   const { isTelegram, webApp } = useTelegram();
@@ -266,19 +302,7 @@ const Employees: React.FC = () => {
               }`}
             >
               <div className="flex items-start space-x-4">
-                <div className="w-16 h-16 bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
-                  {employee.photo ? (
-                    <ImageWithLoader
-                      src={employee.photo}
-                      alt={`${employee.firstName} ${employee.lastName}`}
-                      className="w-16 h-16 rounded-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-white font-bold text-lg">
-                      {employee.firstName?.charAt(0) || '?'}{employee.lastName?.charAt(0) || '?'}
-                    </span>
-                  )}
-                </div>
+                <EmployeeAvatar employee={employee} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2 mb-1">
                     <h3 className="text-lg font-semibold text-pastel-800 truncate">

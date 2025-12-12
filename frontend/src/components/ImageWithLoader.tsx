@@ -7,9 +7,10 @@ interface ImageWithLoaderProps {
   alt: string;
   className?: string;
   onError?: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void;
+  onLoadError?: () => void; // Callback для уведомления родителя об ошибке
 }
 
-const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt, className = '', onError }) => {
+const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt, className = '', onError, onLoadError }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -27,6 +28,10 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt, className =
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     setLoading(false);
     setError(true);
+    // Уведомляем родителя об ошибке загрузки
+    if (onLoadError) {
+      onLoadError();
+    }
     if (onError) {
       onError(e);
     }
@@ -38,8 +43,8 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt, className =
     setError(false);
   }, [src]);
 
-  if (!src) {
-    return null;
+  if (!src || error) {
+    return null; // Если ошибка или нет src, возвращаем null - родитель покажет fallback
   }
 
   return (
@@ -49,20 +54,14 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt, className =
           <Loader2 className="w-6 h-6 text-primary-500 animate-spin" />
         </div>
       )}
-      {error ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-pastel-100">
-          <span className="text-pastel-400 text-xs">Ошибка загрузки</span>
-        </div>
-      ) : (
-        <img
-          src={normalizedSrc}
-          alt={alt}
-          className={`${className} ${loading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
-          onLoad={handleLoad}
-          onError={handleError}
-          loading="lazy"
-        />
-      )}
+      <img
+        src={normalizedSrc}
+        alt={alt}
+        className={`${className} ${loading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
+        onLoad={handleLoad}
+        onError={handleError}
+        loading="lazy"
+      />
     </div>
   );
 };
