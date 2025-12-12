@@ -10,9 +10,10 @@ import ImageWithLoader from '../components/ImageWithLoader';
 // Компонент для отображения аватара сотрудника с fallback на инициалы
 const EmployeeAvatar: React.FC<{ employee: Employee }> = ({ employee }) => {
   const [imageError, setImageError] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
 
-  // Если нет фото или произошла ошибка загрузки - показываем инициалы
-  if (!employee.photo || imageError) {
+  // Если нет фото - сразу показываем инициалы
+  if (!employee.photo) {
     return (
       <div className="w-16 h-16 bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
         <span className="text-white font-bold text-lg">
@@ -22,18 +23,23 @@ const EmployeeAvatar: React.FC<{ employee: Employee }> = ({ employee }) => {
     );
   }
 
-  // Если есть фото - пытаемся загрузить
+  // Если есть фото - пытаемся загрузить, при ошибке показываем инициалы
   return (
     <div className="w-16 h-16 bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden relative">
-      <ImageWithLoader
-        src={employee.photo}
-        alt={`${employee.firstName} ${employee.lastName}`}
-        className="w-16 h-16 rounded-full object-cover"
-        onLoadError={() => {
-          setImageError(true);
-        }}
-      />
-      {/* Fallback инициалы на случай если изображение не загрузится */}
+      {!imageError ? (
+        <ImageWithLoader
+          src={employee.photo}
+          alt={`${employee.firstName} ${employee.lastName}`}
+          className="w-16 h-16 rounded-full object-cover"
+          onLoadError={() => {
+            setImageError(true);
+          }}
+          onError={() => {
+            setImageError(true);
+          }}
+        />
+      ) : null}
+      {/* Показываем инициалы если произошла ошибка загрузки */}
       {imageError && (
         <span className="text-white font-bold text-lg absolute inset-0 flex items-center justify-center">
           {employee.firstName?.charAt(0) || '?'}{employee.lastName?.charAt(0) || '?'}
