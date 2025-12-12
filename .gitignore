@@ -1,1 +1,5 @@
 node_modules
+
+# Uploaded files
+backend/uploads/
+backend/dist/uploads/
