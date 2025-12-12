@@ -11,19 +11,29 @@ const api = axios.create({
   timeout: 30000, // 30 секунд таймаут
 });
 
+// API для загрузки файлов (с FormData)
+const uploadApi = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 60000, // 60 секунд для загрузки файлов
+});
+
 // Request interceptor to add auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
+const addAuthToken = (config: any) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-);
+  return config;
+};
+
+api.interceptors.request.use(addAuthToken, (error) => {
+  return Promise.reject(error);
+});
+
+// Request interceptor для upload API
+uploadApi.interceptors.request.use(addAuthToken, (error) => {
+  return Promise.reject(error);
+});
 
 // Response interceptor to handle auth errors and network errors
 api.interceptors.response.use(
@@ -607,6 +617,31 @@ export const botsAPI = {
   deleteBot: async (id: string): Promise<{ message: string }> => {
     const response = await api.delete(`/bots/${id}`);
     return response.data;
+  },
+};
+
+// Upload API
+export const uploadAPI = {
+  uploadPhoto: async (file: File): Promise<{ url: string; filename: string; message: string }> => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    
+    const response = await uploadApi.post('/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    
+    return response.data;
+  },
+  
+  deletePhoto: async (filename: string): Promise<{ message: string }> => {
+    const response = await uploadApi.delete(`/upload/${filename}`);
+    return response.data;
+  },
+  
+  getPhotoUrl: (filename: string): string => {
+    return `${API_BASE_URL}/uploads/${filename}`;
   },
 };
 

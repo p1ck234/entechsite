@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Upload, XCircle } from 'lucide-react';
 import { Employee } from '../types';
-import { employeesAPI } from '../api/client';
+import { employeesAPI, uploadAPI } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import { API_BASE_URL } from '../config/api';
+import ImageWithLoader from './ImageWithLoader';
 
 interface EmployeeModalProps {
   employee: Employee | null;
@@ -25,6 +27,9 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const departments = [
     'IT-Отдел', 'Отдел продаж', 'Отдел финансистов', 'Отдел стройки', 'Отдел производства', 'Отдел управления и планирование', 'Отдел поиска персонала'
@@ -44,6 +49,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
         photo: employee.photo || '',
         role: (employee.userRole as 'ADMIN' | 'USER') || 'USER',
       });
+      setPreview(employee.photo || null);
     } else {
       setFormData({
         firstName: '',
@@ -57,6 +63,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
         photo: '',
         role: 'USER',
       });
+      setPreview(null);
     }
   }, [employee]);
 
@@ -84,6 +91,54 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
       ...formData,
       [e.target.name]: e.target.value,
     });
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Проверяем размер файла (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Размер файла не должен превышать 5MB');
+      return;
+    }
+
+    // Проверяем тип файла
+    if (!file.type.startsWith('image/')) {
+      setError('Разрешены только изображения');
+      return;
+    }
+
+    setUploading(true);
+    setError('');
+
+    try {
+      // Загружаем файл
+      const result = await uploadAPI.uploadPhoto(file);
+      
+      // Устанавливаем URL загруженного файла
+      const photoUrl = `${API_BASE_URL}${result.url}`;
+      setFormData({
+        ...formData,
+        photo: photoUrl,
+      });
+      setPreview(photoUrl);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Ошибка при загрузке файла');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemovePhoto = () => {
+    setFormData({
+      ...formData,
+      photo: '',
+    });
+    setPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   // Блокируем прокрутку body при открытом попапе
@@ -269,17 +324,54 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
 
               <div className="md:col-span-2">
                 <label htmlFor="photo" className="block text-sm font-medium text-pastel-700 mb-2">
-                  URL фото
+                  Фото сотрудника
                 </label>
-                <input
-                  id="photo"
-                  name="photo"
-                  type="url"
-                  value={formData.photo}
-                  onChange={handleChange}
-                  className="input-field"
-                  placeholder="https://example.com/photo.jpg"
-                />
+                
+                {/* Превью загруженного фото */}
+                {preview && (
+                  <div className="mb-3 relative inline-block">
+                    <div className="w-24 h-24 rounded-lg overflow-hidden border-2 border-pastel-200">
+                      <ImageWithLoader
+                        src={preview}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemovePhoto}
+                      className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Кнопка загрузки файла */}
+                <div className="flex items-center space-x-2">
+                  <input
+                    ref={fileInputRef}
+                    id="photo"
+                    name="photo"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <label
+                    htmlFor="photo"
+                    className="btn-secondary flex items-center space-x-2 cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>{uploading ? 'Загрузка...' : preview ? 'Изменить фото' : 'Загрузить фото'}</span>
+                  </label>
+                  {preview && (
+                    <span className="text-sm text-pastel-600">Фото загружено</span>
+                  )}
+                </div>
+                <p className="text-xs text-pastel-500 mt-1">
+                  Разрешены форматы: JPG, PNG, GIF, WEBP. Максимальный размер: 5MB
+                </p>
               </div>
 
               {isAdmin && employee && employee.userRole && (

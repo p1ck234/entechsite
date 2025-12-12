@@ -14,7 +14,9 @@ import userRoutes from './routes/users';
 import eventRoutes from './routes/events';
 import calendarRoutes from './routes/calendar';
 import botRoutes from './routes/bots';
+import uploadRoutes from './routes/upload';
 import { initializeDatabase } from './utils/db-init';
+import path from 'path';
 
 dotenv.config();
 
@@ -280,6 +282,20 @@ app.use('/api/users', userRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/bots', botRoutes);
+app.use('/api/upload', uploadRoutes);
+
+// Статическая раздача загруженных файлов
+const uploadsDir = process.env.NODE_ENV === 'production' 
+  ? path.join(__dirname, '../uploads')
+  : path.join(__dirname, '../../uploads');
+
+// Создаем папку если её нет
+if (!require('fs').existsSync(uploadsDir)) {
+  require('fs').mkdirSync(uploadsDir, { recursive: true });
+  console.log(`📁 Создана папка для загрузок: ${uploadsDir}`);
+}
+
+app.use('/api/uploads', express.static(uploadsDir));
 
 // Health check - должен быть ДО всех других маршрутов для быстрого ответа
 app.get('/api/health', (req, res) => {
