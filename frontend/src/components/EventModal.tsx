@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Plus, Trash2, Upload } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Plus, Trash2 } from 'lucide-react';
 import { Event } from '../types';
-import { eventsAPI, uploadAPI } from '../api/client';
-import { API_BASE_URL } from '../config/api';
+import { eventsAPI } from '../api/client';
 import ImageWithLoader from './ImageWithLoader';
 
 interface EventModalProps {
@@ -21,8 +20,6 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose }) => {
   const [newImageUrl, setNewImageUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (event) {
@@ -85,53 +82,6 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose }) => {
         previewImages: [...formData.previewImages, newImageUrl.trim()],
       });
       setNewImageUrl('');
-    }
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Проверяем размер файла (5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Размер файла не должен превышать 5MB');
-      return;
-    }
-
-    // Проверяем тип файла
-    if (!file.type.startsWith('image/')) {
-      setError('Разрешены только изображения');
-      return;
-    }
-
-    setUploading(true);
-    setError('');
-
-    try {
-      // Загружаем файл
-      const result = await uploadAPI.uploadPhoto(file);
-      
-      // result.url уже содержит /api/uploads/filename, добавляем только базовый URL
-      const photoUrl = result.url.startsWith('http') 
-        ? result.url 
-        : `${API_BASE_URL}${result.url}`;
-      
-      // Добавляем URL загруженного файла в список превью
-      setFormData({
-        ...formData,
-        previewImages: [...formData.previewImages, photoUrl],
-      });
-    } catch (err: any) {
-      console.error('Upload error:', err);
-      const errorMessage = err.response?.data?.message 
-        || err.message 
-        || 'Ошибка при загрузке файла';
-      setError(errorMessage);
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
     }
   };
 
@@ -256,39 +206,15 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose }) => {
 
             <div>
               <label className="block text-sm font-medium text-pastel-700 mb-2">
-                Превью изображения
+                Превью изображения (URL)
               </label>
-              
-              {/* Загрузка файла */}
-              <div className="mb-3">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  id="image-upload"
-                />
-                <label
-                  htmlFor="image-upload"
-                  className="btn-secondary inline-flex items-center space-x-2 cursor-pointer"
-                >
-                  <Upload className="w-4 h-4" />
-                  <span>{uploading ? 'Загрузка...' : 'Загрузить изображение'}</span>
-                </label>
-                <p className="text-xs text-pastel-500 mt-1">
-                  Разрешены форматы: JPG, PNG, GIF, WEBP. Максимальный размер: 5MB
-                </p>
-              </div>
-
-              {/* Добавление по URL (опционально) */}
               <div className="flex space-x-2 mb-2">
                 <input
                   type="url"
                   value={newImageUrl}
                   onChange={(e) => setNewImageUrl(e.target.value)}
                   className="input-field flex-1"
-                  placeholder="Или введите URL изображения"
+                  placeholder="https://example.com/image.jpg"
                   onKeyPress={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -302,11 +228,10 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose }) => {
                   className="btn-secondary flex items-center space-x-2"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Добавить URL</span>
+                  <span>Добавить</span>
                 </button>
               </div>
               
-              {/* Галерея превью */}
               {formData.previewImages.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
                   {formData.previewImages.map((image, index) => (
