@@ -1,9 +1,44 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Mail, User } from 'lucide-react';
+import { employeesAPI } from '../api/client';
+import type { Employee } from '../types';
 
 const Profile: React.FC = () => {
   const { user } = useAuth();
+  const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchCurrentEmployee = async () => {
+      try {
+        const employee = await employeesAPI.getCurrentEmployee();
+        if (isMounted && employee) {
+          setCurrentEmployee(employee);
+        }
+      } catch (error) {
+        console.error('Error fetching current employee in Profile:', error);
+        if (isMounted) {
+          setCurrentEmployee(null);
+        }
+      }
+    };
+
+    fetchCurrentEmployee();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const displayName = currentEmployee
+    ? `${currentEmployee.lastName || ''} ${currentEmployee.firstName || ''}`.trim() || user?.email
+    : user?.email;
+
+  const initials = currentEmployee
+    ? `${(currentEmployee.firstName || currentEmployee.lastName || '?').charAt(0).toUpperCase()}`
+    : `${user?.email.charAt(0).toUpperCase()}`;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -22,11 +57,13 @@ const Profile: React.FC = () => {
             <div className="flex items-center space-x-4">
               <div className="w-16 h-16 bg-primary-500 rounded-full flex items-center justify-center">
                 <span className="text-white font-bold text-xl">
-                  {user?.email.charAt(0).toUpperCase()}
+                  {initials}
                 </span>
               </div>
               <div>
-                <h3 className="text-lg font-medium text-pastel-800">{user?.email}</h3>
+                <h3 className="text-lg font-medium text-pastel-800">
+                  {displayName}
+                </h3>
                 <p className="text-pastel-600">
                   {user?.role === 'ADMIN' ? 'Администратор' : 'Пользователь'}
                 </p>

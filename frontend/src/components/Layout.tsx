@@ -3,6 +3,8 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTelegram } from '../contexts/TelegramContext';
 import { SITE_CONFIG } from '../config/site';
+import { employeesAPI } from '../api/client';
+import type { Employee } from '../types';
 import { 
   Users, 
   BookOpen, 
@@ -23,6 +25,7 @@ const Layout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
 
   // Обработка кнопки "Назад" в Telegram
   useEffect(() => {
@@ -50,6 +53,42 @@ const Layout: React.FC = () => {
       webApp.BackButton.offClick(handleBackButton);
     };
   }, [isTelegram, webApp, location.pathname, navigate]);
+
+  // Загружаем данные текущего сотрудника для отображения ФИО
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchCurrentEmployee = async () => {
+      try {
+        const employee = await employeesAPI.getCurrentEmployee();
+        if (isMounted && employee) {
+          setCurrentEmployee(employee);
+        }
+      } catch (error) {
+        // Если сотрудник не найден, просто показываем email
+        console.error('Error fetching current employee in Layout:', error);
+        if (isMounted) {
+          setCurrentEmployee(null);
+        }
+      }
+    };
+
+    if (isAuthenticated) {
+      fetchCurrentEmployee();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated]);
+
+  const displayName = currentEmployee
+    ? `${currentEmployee.lastName || ''} ${currentEmployee.firstName || ''}`.trim() || user?.email
+    : user?.email;
+
+  const initials = currentEmployee
+    ? `${(currentEmployee.firstName || currentEmployee.lastName || '?').charAt(0).toUpperCase()}`
+    : `${user?.email.charAt(0).toUpperCase()}`;
 
   // Redirect to login if not authenticated
   if (!isAuthenticated) {
@@ -129,12 +168,12 @@ const Layout: React.FC = () => {
             <div className="flex items-center space-x-3 mb-4">
               <div className="w-10 h-10 bg-primary-500 rounded-full flex items-center justify-center">
                 <span className="text-white font-medium text-sm">
-                  {user?.email.charAt(0).toUpperCase()}
+                  {initials}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-pastel-800 truncate">
-                  {user?.email}
+                  {displayName}
                 </p>
                 <p className="text-xs text-pastel-500">
                   {isAdmin ? 'Администратор' : 'Пользователь'}
