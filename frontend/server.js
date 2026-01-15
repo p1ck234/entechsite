@@ -1,7 +1,6 @@
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { readFileSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -9,12 +8,15 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Раздача статических файлов
-app.use(express.static(join(__dirname, 'dist')));
+const distPath = join(__dirname, 'dist');
 
-// Для SPA - все маршруты на index.html
+// Раздача статических файлов из dist
+app.use(express.static(distPath));
+
+// Для SPA - все остальные маршруты на index.html
+// express.static автоматически обработает существующие файлы и не передаст управление дальше
 app.get('*', (req, res) => {
-  res.sendFile(join(__dirname, 'dist', 'index.html'));
+  res.sendFile(join(distPath, 'index.html'));
 });
 
 app.listen(PORT, () => {
