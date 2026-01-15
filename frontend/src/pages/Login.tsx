@@ -59,7 +59,7 @@ const Login: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center gradient-bg p-4">
       <div className="w-full max-w-md">
         <div className="glass-card rounded-2xl p-8 shadow-2xl text-center">
-          <div className="mb-4">
+          <div className="mb-4 flex justify-center">
             <Logo size="lg" />
           </div>
           <h2 className="text-2xl font-bold text-pastel-800 mb-4">
