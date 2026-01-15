@@ -14,8 +14,17 @@ const distPath = join(__dirname, 'dist');
 app.use(express.static(distPath));
 
 // Для SPA - все остальные маршруты на index.html
-// express.static автоматически обработает существующие файлы и не передаст управление дальше
+// ВАЖНО: не перехватываем запросы к статическим файлам (assets, .js, .css и т.д.)
 app.get('*', (req, res) => {
+  // Если это запрос к статическому файлу, не отдаём index.html
+  if (
+    req.path.startsWith('/assets/') ||
+    req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map)$/i)
+  ) {
+    return res.status(404).send('Not found');
+  }
+
+  // Для всех остальных путей отдаём index.html (SPA роутинг)
   res.sendFile(join(distPath, 'index.html'));
 });
 
