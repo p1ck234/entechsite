@@ -383,30 +383,27 @@ const Employees: React.FC = () => {
                     <div className="flex items-center justify-between group">
                       <div className="flex items-center space-x-2 text-sm text-pastel-600 flex-1 min-w-0">
                         <Phone className="w-4 h-4 flex-shrink-0" />
-                        <button
+                        <a
+                          href={`tel:${employee.phone.replace(/[^\d+]/g, '')}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             const phoneNumber = employee.phone.replace(/[^\d+]/g, '');
-                            
+
                             if (isTelegram && webApp) {
-                              // В Telegram Mini App используем openLink для открытия телефонного приложения
+                              // В Telegram Mini App пробуем открыть звонилку через WebApp API,
+                              // если Telegram это заблокирует, сработает стандартное поведение ссылки tel:
                               try {
                                 webApp.openLink(`tel:${phoneNumber}`);
                               } catch (error) {
-                                console.error('Error opening phone link:', error);
-                                // Fallback: открываем Telegram-чат с номером телефона
-                                const telegramPhoneLink = `https://t.me/+${phoneNumber}`;
-                                webApp.openTelegramLink(telegramPhoneLink);
+                                console.error('Error opening phone link in Telegram WebApp:', error);
                               }
-                            } else {
-                              // В обычном браузере используем стандартный способ
-                              window.location.href = `tel:${phoneNumber}`;
                             }
+                            // В браузере (и как fallback в Mini App) сработает обычная tel:-ссылка
                           }}
                           className="text-primary-600 hover:text-primary-700 hover:underline transition-colors text-left"
                         >
                           {employee.phone}
-                        </button>
+                        </a>
                       </div>
                       <button
                         onClick={(e) => {
