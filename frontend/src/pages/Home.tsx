@@ -81,7 +81,7 @@ const Home: React.FC = () => {
           <div className={`relative ${isInsideLayout ? 'w-full h-full rounded-none' : 'w-full max-w-3xl rounded-[32px]'} bg-[#b9bbbf] ${isInsideLayout ? '' : 'shadow-2xl'} border border-white/30 overflow-y-auto`}>
             <div className="relative z-10 flex flex-col items-center px-4 sm:px-6 md:px-8 py-6 sm:py-8 md:py-12 space-y-6 sm:space-y-8 md:space-y-10">
               {/* Логотип сверху */}
-              <div className="flex items-center justify-center mb-4 sm:mb-6">
+              <div className="flex items-center justify-center mb-4 sm:mb-6 mt-4 sm:mt-6 md:mt-8">
                 <div className="transition-all duration-300 hover:scale-110 cursor-default">
                   <Logo size="lg" showText={true} />
                 </div>
