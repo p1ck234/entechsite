@@ -88,7 +88,7 @@ const Home: React.FC = () => {
               </div>
 
               {/* Список ценностей */}
-              <div className="w-full space-y-4 sm:space-y-5 md:space-y-6 text-sm sm:text-base md:text-lg lg:text-xl font-semibold leading-relaxed">
+              <div className="w-full space-y-4 sm:space-y-5 md:space-y-6 text-sm sm:text-base md:text-lg lg:text-xl font-semibold leading-relaxed" style={{ fontFamily: 'Raleway, sans-serif' }}>
                 {/* Ценность 1 */}
                 <div className="text-center">
                   <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default">
