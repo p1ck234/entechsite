@@ -10,8 +10,15 @@ const PORT = process.env.PORT || 3000;
 
 const distPath = join(__dirname, 'dist');
 
-// Раздача статических файлов из dist
-app.use(express.static(distPath));
+// Раздача статических файлов из dist (должно быть первым!)
+app.use(express.static(distPath, {
+  // Не отправлять index.html для статических файлов
+  index: false,
+  // Добавляем заголовки для кэширования
+  maxAge: '1y',
+  etag: true,
+  lastModified: true
+}));
 
 // Для SPA - все остальные маршруты на index.html
 // ВАЖНО: не перехватываем запросы к статическим файлам (assets, .js, .css и т.д.)
@@ -21,6 +28,7 @@ app.get('*', (req, res) => {
     req.path.startsWith('/assets/') ||
     req.path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map)$/i)
   ) {
+    console.warn(`⚠️ Статический файл не найден: ${req.path}`);
     return res.status(404).send('Not found');
   }
 
