@@ -2,7 +2,7 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "echo '=== Starting build ===' && pwd && ls -la && rm -rf dist node_modules/.vite && echo '=== Installing dependencies ===' && npm install --prefer-offline --no-audit && echo '=== Building ===' && npm run build && echo '=== Build completed ===' && echo '=== Checking dist ===' && ls -la dist/ && echo '=== Checking assets ===' && ls -la dist/assets/ && echo '=== index.html links ===' && grep -o 'src=\"/assets/[^\"]*\"' dist/index.html && grep -o 'href=\"/assets/[^\"]*\"' dist/index.html"
+    "buildCommand": "echo '=== Starting build ===' && pwd && ls -la && rm -rf dist node_modules/.vite && echo '=== Installing dependencies ===' && npm install --prefer-offline --no-audit && echo '=== Building ===' && npm run build && echo '=== Build completed ===' && echo '=== Checking dist ===' && ls -la dist/ && echo '=== Checking assets ===' && ls -la dist/assets/ && echo '=== Verifying index.html matches assets ===' && JS_FILE=$(ls dist/assets/*.js | xargs -n1 basename) && CSS_FILE=$(ls dist/assets/*.css | xargs -n1 basename) && echo 'JS file: '$JS_FILE && echo 'CSS file: '$CSS_FILE && if grep -q \"$JS_FILE\" dist/index.html && grep -q \"$CSS_FILE\" dist/index.html; then echo '✅ index.html matches assets'; else echo '❌ index.html does NOT match assets! Regenerating...' && sed -i \"s|src=\\\"/assets/[^\\\"]*\\\"|src=\\\"/assets/$JS_FILE\\\"|g\" dist/index.html && sed -i \"s|href=\\\"/assets/[^\\\"]*\\\"|href=\\\"/assets/$CSS_FILE\\\"|g\" dist/index.html && echo '✅ index.html updated'; fi"
   },
   "deploy": {
     "startCommand": "npm start",
