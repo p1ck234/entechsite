@@ -48,14 +48,31 @@ app.get('*', (req, res) => {
     console.warn(`⚠️ Статический файл не найден: ${req.path}`);
     if (existsSync(filePath)) {
       console.warn(`   Но файл существует по пути: ${filePath}`);
+      // Если файл существует, но express.static его не нашёл, отдаём вручную
+      return res.sendFile(filePath);
     } else {
       console.warn(`   Файл не существует по пути: ${filePath}`);
+      // Показываем список доступных файлов для отладки
+      try {
+        const assetsPath = join(distPath, 'assets');
+        if (existsSync(assetsPath)) {
+          const files = readdirSync(assetsPath);
+          console.warn(`   Доступные файлы: ${files.join(', ')}`);
+        }
+      } catch (err) {
+        // Игнорируем ошибки при чтении
+      }
+      return res.status(404).send('Not found');
     }
-    return res.status(404).send('Not found');
   }
 
   // Для всех остальных путей отдаём index.html (SPA роутинг)
-  res.sendFile(join(distPath, 'index.html'));
+  const indexPath = join(distPath, 'index.html');
+  if (!existsSync(indexPath)) {
+    console.error('❌ index.html не найден! Убедитесь, что выполнен npm run build');
+    return res.status(500).send('Build files not found. Please rebuild the application.');
+  }
+  res.sendFile(indexPath);
 });
 
 app.listen(PORT, () => {
