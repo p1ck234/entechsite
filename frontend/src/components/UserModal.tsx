@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { X, Eye, EyeOff } from 'lucide-react';
 import { usersAPI } from '../api/client';
+import { useTelegram } from '../contexts/TelegramContext';
 
 interface UserModalProps {
   onClose: () => void;
 }
 
 const UserModal: React.FC<UserModalProps> = ({ onClose }) => {
+  const { isTelegram } = useTelegram();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -77,11 +79,13 @@ const UserModal: React.FC<UserModalProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+    <div className={`fixed inset-0 z-50 flex items-center justify-center ${isTelegram ? 'p-0' : 'p-4'}`}>
+      {!isTelegram && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      )}
       
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="glass-card rounded-2xl p-6">
+      <div className={`relative w-full ${isTelegram ? 'h-full max-w-none max-h-none' : 'max-w-2xl max-h-[90vh]'} overflow-y-auto bg-white ${isTelegram ? 'rounded-none' : 'rounded-2xl'}`}>
+        <div className={`glass-card ${isTelegram ? 'rounded-none' : 'rounded-2xl'} p-6`}>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-pastel-800">
               Создать пользователя

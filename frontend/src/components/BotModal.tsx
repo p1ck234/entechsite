@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { TelegramBot } from '../types';
 import { botsAPI } from '../api/client';
+import { useTelegram } from '../contexts/TelegramContext';
 
 interface BotModalProps {
   bot: TelegramBot | null;
@@ -10,6 +11,7 @@ interface BotModalProps {
 }
 
 const BotModal: React.FC<BotModalProps> = ({ bot, onClose, onSuccess }) => {
+  const { isTelegram } = useTelegram();
   const [formData, setFormData] = useState({
     name: '',
     username: '',
@@ -75,7 +77,7 @@ const BotModal: React.FC<BotModalProps> = ({ bot, onClose, onSuccess }) => {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" 
+      className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center ${isTelegram ? 'p-0' : 'p-0 sm:p-4'}`}
       style={{ touchAction: 'none', overflow: 'hidden' }}
       onTouchMove={(e) => {
         // Предотвращаем прокрутку фона
@@ -85,18 +87,20 @@ const BotModal: React.FC<BotModalProps> = ({ bot, onClose, onSuccess }) => {
         }
       }}
     >
-      <div 
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm" 
-        onClick={onClose}
-        style={{ touchAction: 'none' }}
-      />
+      {!isTelegram && (
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm" 
+          onClick={onClose}
+          style={{ touchAction: 'none' }}
+        />
+      )}
       
       <div 
-        className="relative w-full max-w-2xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl modal-content" 
+        className={`relative w-full ${isTelegram ? 'h-full max-w-none max-h-none' : 'max-w-2xl max-h-[85vh] sm:max-h-[90vh]'} overflow-y-auto bg-white ${isTelegram ? 'rounded-none' : 'rounded-t-2xl sm:rounded-2xl'} modal-content`}
         style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="glass-card rounded-t-2xl sm:rounded-2xl p-6 pb-24 sm:pb-8">
+        <div className={`glass-card ${isTelegram ? 'rounded-none' : 'rounded-t-2xl sm:rounded-2xl'} p-6 ${isTelegram ? 'pb-8' : 'pb-24 sm:pb-8'}`}>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-pastel-800">
               {bot ? 'Редактировать бота' : 'Добавить бота'}
