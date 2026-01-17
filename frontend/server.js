@@ -1,7 +1,7 @@
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { existsSync, readdirSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,8 +19,20 @@ if (existsSync(distPath)) {
       const files = readdirSync(assetsPath);
       console.log('📦 Доступные файлы в dist/assets:', files);
     }
+    
+    // Проверяем содержимое index.html
+    const indexPath = join(distPath, 'index.html');
+    if (existsSync(indexPath)) {
+      const indexContent = readFileSync(indexPath, 'utf-8');
+      // Извлекаем ссылки на JS и CSS файлы
+      const jsMatch = indexContent.match(/src="\/assets\/([^"]+)"/);
+      const cssMatch = indexContent.match(/href="\/assets\/([^"]+)"/);
+      console.log('📄 index.html ссылается на:');
+      console.log('   JS:', jsMatch ? jsMatch[1] : 'не найден');
+      console.log('   CSS:', cssMatch ? cssMatch[1] : 'не найден');
+    }
   } catch (error) {
-    console.error('⚠️ Ошибка при чтении dist/assets:', error);
+    console.error('⚠️ Ошибка при чтении dist:', error);
   }
 } else {
   console.error('❌ Папка dist не найдена! Убедитесь, что выполнен npm run build');
@@ -72,6 +84,10 @@ app.get('*', (req, res) => {
     console.error('❌ index.html не найден! Убедитесь, что выполнен npm run build');
     return res.status(500).send('Build files not found. Please rebuild the application.');
   }
+  // Запрещаем кэширование index.html, чтобы всегда отдавать актуальную версию
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(indexPath);
 });
 
