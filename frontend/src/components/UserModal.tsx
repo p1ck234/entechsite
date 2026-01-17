@@ -84,8 +84,8 @@ const UserModal: React.FC<UserModalProps> = ({ onClose }) => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       )}
       
-      <div className={`${isTelegram ? 'fixed inset-0' : 'relative'} w-full ${isTelegram ? 'h-full max-w-none max-h-none' : 'max-w-2xl max-h-[90vh]'} overflow-y-auto bg-white ${isTelegram ? 'rounded-none' : 'rounded-2xl'}`} style={{ height: isTelegram ? '100%' : undefined }}>
-        <div className={`glass-card ${isTelegram ? 'rounded-none' : 'rounded-2xl'} p-6`}>
+      <div className={`${isTelegram ? 'fixed inset-0' : 'relative'} w-full ${isTelegram ? 'h-full max-w-none max-h-none' : 'max-w-2xl max-h-[90vh]'} overflow-y-auto bg-white ${isTelegram ? 'rounded-none' : 'rounded-2xl'}`} style={{ height: isTelegram ? '100vh' : undefined }}>
+        <div className={`glass-card ${isTelegram ? 'rounded-none' : 'rounded-2xl'} p-6 ${isTelegram ? 'pb-24' : ''}`}>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-pastel-800">
               Создать пользователя
