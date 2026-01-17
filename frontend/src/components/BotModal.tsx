@@ -77,9 +77,9 @@ const BotModal: React.FC<BotModalProps> = ({ bot, onClose, onSuccess }) => {
 
   return (
     <div 
-      className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center ${isTelegram ? 'p-0' : 'p-0 sm:p-4'}`}
-      style={{ touchAction: 'none', overflow: 'hidden' }}
-      onTouchMove={(e) => {
+      className={`fixed inset-0 z-50 ${isTelegram ? '' : 'flex items-end sm:items-center justify-center p-0 sm:p-4'}`}
+      style={isTelegram ? {} : { touchAction: 'none', overflow: 'hidden' }}
+      onTouchMove={isTelegram ? undefined : (e) => {
         // Предотвращаем прокрутку фона
         const target = e.target as HTMLElement;
         if (!target.closest('.modal-content')) {
@@ -96,8 +96,8 @@ const BotModal: React.FC<BotModalProps> = ({ bot, onClose, onSuccess }) => {
       )}
       
       <div 
-        className={`relative w-full ${isTelegram ? 'h-full max-w-none max-h-none' : 'max-w-2xl max-h-[85vh] sm:max-h-[90vh]'} overflow-y-auto bg-white ${isTelegram ? 'rounded-none' : 'rounded-t-2xl sm:rounded-2xl'} modal-content`}
-        style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }}
+        className={`${isTelegram ? 'fixed inset-0' : 'relative'} w-full ${isTelegram ? 'h-full max-w-none max-h-none' : 'max-w-2xl max-h-[85vh] sm:max-h-[90vh]'} overflow-y-auto bg-white ${isTelegram ? 'rounded-none' : 'rounded-t-2xl sm:rounded-2xl'} modal-content`}
+        style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch', height: isTelegram ? '100%' : undefined }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className={`glass-card ${isTelegram ? 'rounded-none' : 'rounded-t-2xl sm:rounded-2xl'} p-6 ${isTelegram ? 'pb-8' : 'pb-24 sm:pb-8'}`}>
