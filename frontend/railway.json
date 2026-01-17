@@ -2,7 +2,7 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "rm -rf dist node_modules/.vite && npm install --prefer-offline --no-audit && npm run build && echo '=== Build completed ===' && ls -la dist/assets && echo '=== index.html content ===' && head -25 dist/index.html | tail -5"
+    "buildCommand": "echo '=== Starting build ===' && pwd && ls -la && rm -rf dist node_modules/.vite && echo '=== Installing dependencies ===' && npm install --prefer-offline --no-audit && echo '=== Building ===' && npm run build && echo '=== Build completed ===' && echo '=== Checking dist ===' && ls -la dist/ && echo '=== Checking assets ===' && ls -la dist/assets/ && echo '=== index.html links ===' && grep -o 'src=\"/assets/[^\"]*\"' dist/index.html && grep -o 'href=\"/assets/[^\"]*\"' dist/index.html"
   },
   "deploy": {
     "startCommand": "npm start",

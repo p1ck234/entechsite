@@ -12,12 +12,25 @@ const PORT = process.env.PORT || 3000;
 const distPath = join(__dirname, 'dist');
 
 // Проверяем наличие dist и логируем доступные файлы при старте
+console.log('🔍 Проверка dist при старте сервера...');
+console.log('📁 Путь к dist:', distPath);
+console.log('📁 Текущая рабочая директория:', process.cwd());
+
 if (existsSync(distPath)) {
   try {
     const assetsPath = join(distPath, 'assets');
     if (existsSync(assetsPath)) {
       const files = readdirSync(assetsPath);
       console.log('📦 Доступные файлы в dist/assets:', files);
+      
+      // Проверяем, что файлы действительно существуют
+      files.forEach(file => {
+        const filePath = join(assetsPath, file);
+        const stats = existsSync(filePath) ? require('fs').statSync(filePath) : null;
+        console.log(`   ${file}: ${stats ? `${(stats.size / 1024).toFixed(2)} KB` : 'не найден'}`);
+      });
+    } else {
+      console.error('❌ Папка dist/assets не найдена!');
     }
     
     // Проверяем содержимое index.html
@@ -30,12 +43,25 @@ if (existsSync(distPath)) {
       console.log('📄 index.html ссылается на:');
       console.log('   JS:', jsMatch ? jsMatch[1] : 'не найден');
       console.log('   CSS:', cssMatch ? cssMatch[1] : 'не найден');
+      
+      // Проверяем, существуют ли файлы, на которые ссылается index.html
+      if (jsMatch) {
+        const jsPath = join(assetsPath, jsMatch[1]);
+        console.log(`   JS файл существует: ${existsSync(jsPath)}`);
+      }
+      if (cssMatch) {
+        const cssPath = join(assetsPath, cssMatch[1]);
+        console.log(`   CSS файл существует: ${existsSync(cssPath)}`);
+      }
+    } else {
+      console.error('❌ index.html не найден!');
     }
   } catch (error) {
     console.error('⚠️ Ошибка при чтении dist:', error);
   }
 } else {
   console.error('❌ Папка dist не найдена! Убедитесь, что выполнен npm run build');
+  console.error('   Искали по пути:', distPath);
 }
 
 // Раздача статических файлов из dist (должно быть первым!)
