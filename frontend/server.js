@@ -1,7 +1,7 @@
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,7 +26,7 @@ if (existsSync(distPath)) {
       // Проверяем, что файлы действительно существуют
       files.forEach(file => {
         const filePath = join(assetsPath, file);
-        const stats = existsSync(filePath) ? require('fs').statSync(filePath) : null;
+        const stats = existsSync(filePath) ? statSync(filePath) : null;
         console.log(`   ${file}: ${stats ? `${(stats.size / 1024).toFixed(2)} KB` : 'не найден'}`);
       });
     } else {
@@ -58,6 +58,45 @@ if (existsSync(distPath)) {
     }
   } catch (error) {
     console.error('⚠️ Ошибка при чтении dist:', error);
+  }
+  
+  // Если index.html ссылается на несуществующие файлы, исправляем это
+  try {
+    const indexPath = join(distPath, 'index.html');
+    const assetsPath = join(distPath, 'assets');
+    if (existsSync(indexPath) && existsSync(assetsPath)) {
+      let indexContent = readFileSync(indexPath, 'utf-8');
+      const jsMatch = indexContent.match(/src="\/assets\/([^"]+)"/);
+      const cssMatch = indexContent.match(/href="\/assets\/([^"]+)"/);
+      
+      if (jsMatch && !existsSync(join(assetsPath, jsMatch[1]))) {
+        console.warn('⚠️ index.html ссылается на несуществующий JS файл, исправляем...');
+        const files = readdirSync(assetsPath);
+        const jsFile = files.find(f => f.endsWith('.js') && f.startsWith('index-'));
+        if (jsFile) {
+          indexContent = indexContent.replace(/src="\/assets\/[^"]+"/, `src="/assets/${jsFile}"`);
+          console.log(`✅ Обновлена ссылка на JS: ${jsMatch[1]} -> ${jsFile}`);
+        }
+      }
+      
+      if (cssMatch && !existsSync(join(assetsPath, cssMatch[1]))) {
+        console.warn('⚠️ index.html ссылается на несуществующий CSS файл, исправляем...');
+        const files = readdirSync(assetsPath);
+        const cssFile = files.find(f => f.endsWith('.css') && f.startsWith('index-'));
+        if (cssFile) {
+          indexContent = indexContent.replace(/href="\/assets\/[^"]+"/, `href="/assets/${cssFile}"`);
+          console.log(`✅ Обновлена ссылка на CSS: ${cssMatch[1]} -> ${cssFile}`);
+        }
+      }
+      
+      // Если были изменения, сохраняем
+      if (jsMatch && !existsSync(join(assetsPath, jsMatch[1])) || cssMatch && !existsSync(join(assetsPath, cssMatch[1]))) {
+        writeFileSync(indexPath, indexContent, 'utf-8');
+        console.log('✅ index.html исправлен при старте сервера');
+      }
+    }
+  } catch (error) {
+    console.error('⚠️ Ошибка при исправлении index.html:', error);
   }
 } else {
   console.error('❌ Папка dist не найдена! Убедитесь, что выполнен npm run build');

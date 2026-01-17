@@ -47,6 +47,12 @@ try {
   // Сохраняем обновлённый index.html
   writeFileSync(indexPath, indexContent, 'utf-8');
   console.log('✅ index.html успешно обновлён');
+  
+  // Проверяем, что файл действительно обновлён
+  const verifyContent = readFileSync(indexPath, 'utf-8');
+  const verifyJsMatch = verifyContent.match(/src="\/assets\/([^"]+)"/);
+  const verifyCssMatch = verifyContent.match(/href="\/assets\/([^"]+)"/);
+  console.log(`✅ Проверка: index.html теперь ссылается на JS=${verifyJsMatch?.[1]}, CSS=${verifyCssMatch?.[1]}`);
 
 } catch (error) {
   console.error('❌ Ошибка при исправлении index.html:', error);
