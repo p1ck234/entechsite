@@ -86,7 +86,7 @@ const BotModal: React.FC<BotModalProps> = ({ bot, onClose, onSuccess }) => {
       }}
     >
       <div 
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm" 
         onClick={onClose}
         style={{ touchAction: 'none' }}
       />

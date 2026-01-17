@@ -133,7 +133,7 @@ const Home: React.FC = () => {
 
                 {/* Ценность 7 */}
                 <div className="text-center">
-                  <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default">
+                  <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default">
                     МЫ НЕ ИЩЕМ ВИНОВНЫХ, А ИЩЕМ РЕШЕНИЕ
                   </p>
                 </div>
