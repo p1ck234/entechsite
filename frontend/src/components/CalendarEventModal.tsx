@@ -4,6 +4,7 @@ import { CalendarEvent } from '../types';
 import { calendarAPI } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { useTelegram } from '../contexts/TelegramContext';
+import { formatRuDate, toInputDate } from '../utils/date';
 
 interface CalendarEventModalProps {
   event: CalendarEvent | null;
@@ -27,13 +28,6 @@ const CalendarEventModal: React.FC<CalendarEventModalProps> = ({ event, selected
   const [error, setError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
 
-  const formatDateForInput = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
   useEffect(() => {
     if (event) {
       // Format time to remove seconds if present
@@ -48,14 +42,14 @@ const CalendarEventModal: React.FC<CalendarEventModalProps> = ({ event, selected
       setFormData({
         title: event.title || '',
         description: event.description || '',
-        eventDate: event.eventDate ? event.eventDate.split('T')[0] : '',
+        eventDate: toInputDate(event.eventDate),
         eventTime: eventTime,
         location: event.location || '',
         isAllDay: event.isAllDay || false,
       });
       setIsEditing(isAdmin); // Для админов сразу режим редактирования, для обычных - просмотр
     } else if (selectedDate) {
-      const dateStr = formatDateForInput(selectedDate);
+      const dateStr = toInputDate(selectedDate);
       setFormData({
         title: '',
         description: '',
@@ -66,7 +60,7 @@ const CalendarEventModal: React.FC<CalendarEventModalProps> = ({ event, selected
       });
       setIsEditing(false);
     } else {
-      const today = formatDateForInput(new Date());
+      const today = toInputDate(new Date());
       setFormData({
         title: '',
         description: '',
@@ -218,11 +212,7 @@ const CalendarEventModal: React.FC<CalendarEventModalProps> = ({ event, selected
                   Дата
                 </label>
                 <div className="input-field bg-pastel-50">
-                  {new Date(formData.eventDate).toLocaleDateString('ru-RU', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
+                  {formatRuDate(formData.eventDate)}
                 </div>
               </div>
 
