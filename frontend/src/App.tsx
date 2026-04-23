@@ -5,10 +5,8 @@ import Layout from './components/Layout';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import TelegramAuth from './pages/TelegramAuth';
-import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
 import Courses from './pages/Courses';
-import Profile from './pages/Profile';
 import Life from './pages/Life';
 import Calendar from './pages/Calendar';
 import Bots from './pages/Bots';
@@ -49,13 +47,13 @@ const AppRoutes: React.FC = () => {
         </ProtectedRoute>
       }>
         <Route path="/home" element={<Home />} />
-        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/employees" element={<Employees />} />
         <Route path="/courses" element={<Courses />} />
         <Route path="/life" element={<Life />} />
         <Route path="/events" element={<Calendar />} />
         <Route path="/bots" element={<Bots />} />
-        <Route path="/profile" element={<Profile />} />
+        <Route path="/dashboard" element={<Navigate to="/home" replace />} />
+        <Route path="/profile" element={<Navigate to="/home" replace />} />
       </Route>
       
       {/* Catch all route - redirect to home if not authenticated, home (with layout) if authenticated */}

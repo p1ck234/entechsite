@@ -9,10 +9,8 @@ import {
   Users, 
   BookOpen, 
   Home, 
-  LayoutDashboard,
   Menu, 
   LogOut,
-  Settings,
   Heart,
   Calendar,
   Bot
@@ -32,7 +30,7 @@ const Layout: React.FC = () => {
     if (!isTelegram || !webApp) return;
 
     const handleBackButton = () => {
-      if (location.pathname === '/home' || location.pathname === '/dashboard') {
+      if (location.pathname === '/home') {
         // Если на главной странице, закрываем приложение
         webApp.close();
       } else {
@@ -42,7 +40,7 @@ const Layout: React.FC = () => {
     };
 
     // Показываем кнопку "Назад" если не на главной странице
-    if (location.pathname !== '/home' && location.pathname !== '/dashboard') {
+    if (location.pathname !== '/home') {
       webApp.BackButton.show();
       webApp.BackButton.onClick(handleBackButton);
     } else {
@@ -98,7 +96,6 @@ const Layout: React.FC = () => {
 
   const navigation = [
     { name: 'Главная', href: '/home', icon: Home },
-    { name: 'Дашборд', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Адресная книга', href: '/employees', icon: Users },
     { name: 'База знаний', href: '/courses', icon: BookOpen },
     { name: 'Наша жизнь', href: '/life', icon: Heart },
@@ -180,15 +177,7 @@ const Layout: React.FC = () => {
                 </p>
               </div>
             </div>
-            
             <div className="space-y-2">
-              <button
-                onClick={() => navigate('/profile')}
-                className="w-full flex items-center px-4 py-2 text-sm text-pastel-600 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <Settings className="w-4 h-4 mr-3" />
-                Профиль
-              </button>
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50/20 rounded-lg transition-colors"
