@@ -1,5 +1,4 @@
 import { Pool } from 'pg';
-import bcrypt from 'bcryptjs';
 
 export async function initializeDatabase(pool: Pool) {
   try {
@@ -273,103 +272,80 @@ export async function initializeDatabase(pool: Pool) {
       console.log('✅ Проверка колонок завершена');
     }
     
-    // Автоматическое создание первого администратора при инициализации
-    console.log('🔍 Проверка наличия администратора...');
-    
-    const ADMIN_TELEGRAM_ID = 358932815;
-    const ADMIN_TELEGRAM_USERNAME = 'p1ck23';
-    const ADMIN_EMAIL = `${ADMIN_TELEGRAM_USERNAME}@telegram.local`;
-    const ADMIN_FIRST_NAME = 'Даня';
-    const ADMIN_LAST_NAME = 'p1ck23';
-    const ADMIN_POSITION = 'Администратор';
-    const ADMIN_DEPARTMENT = 'IT-Отдел';
-    const ADMIN_PHONE = '+7 (967) 807-97-38';
-    
-    // Проверяем, есть ли уже администратор с таким Telegram ID
-    const existingAdmin = await pool.query(
-      'SELECT * FROM employees WHERE telegram_id = $1 OR (telegram = $2 OR telegram = $3)',
-      [ADMIN_TELEGRAM_ID, ADMIN_TELEGRAM_USERNAME, `@${ADMIN_TELEGRAM_USERNAME}`]
-    );
-    
-    if (existingAdmin.rows.length === 0) {
-      // Администратора нет - создаем
-      console.log('👤 Создание первого администратора...');
-      
-      // Проверяем, есть ли уже пользователь с таким email
-      const existingUser = await pool.query('SELECT * FROM users WHERE email = $1', [ADMIN_EMAIL]);
-      
-      let userId;
-      if (existingUser.rows.length === 0) {
-        // Создаем пользователя
-        const randomPassword = Math.random().toString(36).slice(-12);
-        const hashedPassword = await bcrypt.hash(randomPassword, 12);
-        
-        const userResult = await pool.query(
-          'INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING id',
-          [ADMIN_EMAIL, hashedPassword, 'ADMIN']
-        );
-        userId = userResult.rows[0].id;
-        console.log('✅ Пользователь-администратор создан');
-      } else {
-        // Обновляем роль существующего пользователя
-        await pool.query('UPDATE users SET role = $1 WHERE email = $2', ['ADMIN', ADMIN_EMAIL]);
-        userId = existingUser.rows[0].id;
-        console.log('✅ Роль пользователя обновлена на ADMIN');
-      }
-      
-      // Создаем сотрудника-администратора
-      const employeeResult = await pool.query(
-        `INSERT INTO employees (
-          first_name, last_name, position, department, email, phone, 
-          telegram, telegram_id, is_active, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-        [
-          ADMIN_FIRST_NAME,
-          ADMIN_LAST_NAME,
-          ADMIN_POSITION,
-          ADMIN_DEPARTMENT,
-          ADMIN_EMAIL,
-          ADMIN_PHONE,
-          ADMIN_TELEGRAM_USERNAME,
-          ADMIN_TELEGRAM_ID,
-          true,
-          'APPROVED'
-        ]
-      );
-      console.log('✅ Сотрудник-администратор создан');
-      console.log(`📧 Email: ${ADMIN_EMAIL}`);
-      console.log(`🆔 Telegram ID: ${ADMIN_TELEGRAM_ID}`);
-      console.log(`👤 Telegram username: ${ADMIN_TELEGRAM_USERNAME}`);
-    } else {
-      // Администратор уже существует - обновляем данные если нужно
-      const admin = existingAdmin.rows[0];
-      console.log('ℹ️ Администратор уже существует');
-      
-      // Обновляем telegram_id если его нет
-      if (!admin.telegram_id || admin.telegram_id !== ADMIN_TELEGRAM_ID) {
-        await pool.query(
-          'UPDATE employees SET telegram_id = $1, telegram = $2, is_active = true, status = $3 WHERE id = $4',
-          [ADMIN_TELEGRAM_ID, ADMIN_TELEGRAM_USERNAME, 'APPROVED', admin.id]
-        );
-        console.log('✅ Данные администратора обновлены');
-      }
-      
-      // Убеждаемся, что пользователь имеет роль ADMIN
-      const userCheck = await pool.query('SELECT * FROM users WHERE email = $1', [admin.email]);
-      if (userCheck.rows.length > 0 && userCheck.rows[0].role !== 'ADMIN') {
-        await pool.query('UPDATE users SET role = $1 WHERE email = $2', ['ADMIN', admin.email]);
-        console.log('✅ Роль пользователя обновлена на ADMIN');
-      } else if (userCheck.rows.length === 0) {
-        // Создаем пользователя если его нет
-        const randomPassword = Math.random().toString(36).slice(-12);
-        const hashedPassword = await bcrypt.hash(randomPassword, 12);
-        await pool.query(
-          'INSERT INTO users (email, password, role) VALUES ($1, $2, $3)',
-          [admin.email, hashedPassword, 'ADMIN']
-        );
-        console.log('✅ Пользователь-администратор создан');
-      }
-    }
+    /*
+      Автосоздание первого администратора отключено по запросу.
+      Если потребуется вернуть поведение, раскомментируйте блок ниже
+      и/или перенесите параметры администратора в переменные окружения.
+    */
+    // console.log('🔍 Проверка наличия администратора...');
+    //
+    // const ADMIN_TELEGRAM_ID = 358932815;
+    // const ADMIN_TELEGRAM_USERNAME = 'p1ck23';
+    // const ADMIN_EMAIL = `${ADMIN_TELEGRAM_USERNAME}@telegram.local`;
+    // const ADMIN_FIRST_NAME = 'Даня';
+    // const ADMIN_LAST_NAME = 'p1ck23';
+    // const ADMIN_POSITION = 'Администратор';
+    // const ADMIN_DEPARTMENT = 'IT-Отдел';
+    // const ADMIN_PHONE = '+7 (967) 807-97-38';
+    //
+    // const existingAdmin = await pool.query(
+    //   'SELECT * FROM employees WHERE telegram_id = $1 OR (telegram = $2 OR telegram = $3)',
+    //   [ADMIN_TELEGRAM_ID, ADMIN_TELEGRAM_USERNAME, `@${ADMIN_TELEGRAM_USERNAME}`]
+    // );
+    //
+    // if (existingAdmin.rows.length === 0) {
+    //   const existingUser = await pool.query('SELECT * FROM users WHERE email = $1', [ADMIN_EMAIL]);
+    //   if (existingUser.rows.length === 0) {
+    //     const randomPassword = Math.random().toString(36).slice(-12);
+    //     const hashedPassword = await bcrypt.hash(randomPassword, 12);
+    //
+    //     await pool.query(
+    //       'INSERT INTO users (email, password, role) VALUES ($1, $2, $3)',
+    //       [ADMIN_EMAIL, hashedPassword, 'ADMIN']
+    //     );
+    //   } else {
+    //     await pool.query('UPDATE users SET role = $1 WHERE email = $2', ['ADMIN', ADMIN_EMAIL]);
+    //   }
+    //
+    //   await pool.query(
+    //     `INSERT INTO employees (
+    //       first_name, last_name, position, department, email, phone,
+    //       telegram, telegram_id, is_active, status
+    //     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    //     [
+    //       ADMIN_FIRST_NAME,
+    //       ADMIN_LAST_NAME,
+    //       ADMIN_POSITION,
+    //       ADMIN_DEPARTMENT,
+    //       ADMIN_EMAIL,
+    //       ADMIN_PHONE,
+    //       ADMIN_TELEGRAM_USERNAME,
+    //       ADMIN_TELEGRAM_ID,
+    //       true,
+    //       'APPROVED'
+    //     ]
+    //   );
+    // } else {
+    //   const admin = existingAdmin.rows[0];
+    //   if (!admin.telegram_id || admin.telegram_id !== ADMIN_TELEGRAM_ID) {
+    //     await pool.query(
+    //       'UPDATE employees SET telegram_id = $1, telegram = $2, is_active = true, status = $3 WHERE id = $4',
+    //       [ADMIN_TELEGRAM_ID, ADMIN_TELEGRAM_USERNAME, 'APPROVED', admin.id]
+    //     );
+    //   }
+    //
+    //   const userCheck = await pool.query('SELECT * FROM users WHERE email = $1', [admin.email]);
+    //   if (userCheck.rows.length > 0 && userCheck.rows[0].role !== 'ADMIN') {
+    //     await pool.query('UPDATE users SET role = $1 WHERE email = $2', ['ADMIN', admin.email]);
+    //   } else if (userCheck.rows.length === 0) {
+    //     const randomPassword = Math.random().toString(36).slice(-12);
+    //     const hashedPassword = await bcrypt.hash(randomPassword, 12);
+    //     await pool.query(
+    //       'INSERT INTO users (email, password, role) VALUES ($1, $2, $3)',
+    //       [admin.email, hashedPassword, 'ADMIN']
+    //     );
+    //   }
+    // }
     
     console.log('✅ База данных готова к работе');
   } catch (error) {
