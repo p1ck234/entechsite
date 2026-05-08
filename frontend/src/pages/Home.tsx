@@ -68,83 +68,73 @@ const Home: React.FC = () => {
     );
   }
 
+  const ankItems = [
+    {
+      title: 'ПОЛУЧИЛ ЗАДАЧУ — ЗАПИШИ, ЧТОБЫ НЕ ЗАБЫТЬ.',
+      description: 'Фиксируй каждое поручение: в блокноте, телефоне, CRM — не полагайся на память',
+    },
+    {
+      title: 'УТОЧНЯЙ, ЧТОБЫ НЕ ПЕРЕДЕЛЫВАТЬ.',
+      description: 'Лучше спросить, чем переделывать. Если задача вызывает сомнения — уточни. Если возникла проблема — сообщи сразу.',
+    },
+    {
+      title: 'СООБЩАЯ О ПРОБЛЕМЕ, ПРЕДЛОЖИ РЕШЕНИЕ.',
+      description: 'Проанализируй ситуацию и предложи варианты действий — это ускоряет процесс выполнения задачи и развивает аналитические навыки',
+    },
+    {
+      title: 'НЕ УСПЕВАЕШЬ ИЛИ НЕСКОЛЬКО ЗАДАЧ? СПРОСИ, ЧТО ВАЖНЕЕ!',
+      description: 'Один уточняющий вопрос помогает расставить приоритеты и избежать ошибок',
+    },
+    {
+      title: 'ЗАДАЧА ПРИНЯТА? НАВЕДИ ПОРЯДОК!',
+      description: 'Небрежное обращение с документами и материалами ведет к потере времени, денег, репутации.',
+    },
+    {
+      title: 'НЕ ТОРОПИСЬ ЗАВЕРШАТЬ ЗАДАЧУ, ПРОВЕРЬ, ЧТОБЫ НЕ КРАСНЕТЬ',
+      description: '',
+    },
+    {
+      title: 'НЕ МОЖЕШЬ ДОДЕЛАТЬ ЗАДАЧУ — НЕ БРОСАЙ, ПОПРОСИ ПОМОЩИ КОЛЛЕГ.',
+      description: '',
+    },
+    {
+      title: 'ОТЧИТЫВАЙСЯ КРАТКО, ЭКОНОМЬ ВРЕМЯ.',
+      description: 'Это снижает когнитивную нагрузку и ускоряет принятие решений.',
+    },
+  ];
+
   return (
     <div
       className={`${
         isInsideLayout ? 'h-full w-full absolute inset-0' : 'min-h-screen'
-      } bg-gray-600 flex items-center justify-center ${isInsideLayout ? 'p-0' : 'p-2 sm:p-4'}`}
+      } bg-[#f4ece6] flex items-center justify-center ${isInsideLayout ? 'p-0' : 'p-2 sm:p-4'}`}
     >
       <div className={`w-full ${isInsideLayout ? 'h-full' : 'max-w-7xl'} flex items-center justify-center`}>
-        {/* Основной блок */}
-        <div className={`relative ${isInsideLayout ? 'w-full h-full' : 'flex-1'} flex items-center justify-center`}>
-          {/* Серый прямоугольник с вертикальным списком ценностей */}
-          <div className={`relative ${isInsideLayout ? 'w-full h-full rounded-none' : 'w-full max-w-3xl rounded-[32px]'} bg-[#b9bbbf] ${isInsideLayout ? '' : 'shadow-2xl'} border border-white/30 overflow-y-auto`}>
-            <div className="relative z-10 flex flex-col items-center px-4 sm:px-6 md:px-8 py-6 sm:py-8 md:py-12 space-y-6 sm:space-y-8 md:space-y-10">
-              {/* Логотип сверху */}
-              <div className="flex items-center justify-center mb-4 sm:mb-6 mt-4 sm:mt-6 md:mt-8">
-                <div className="transition-all duration-300 hover:scale-110 cursor-default">
-                  <Logo size="lg" showText={true} />
-                </div>
-              </div>
+        <div
+          className={`${
+            isInsideLayout ? 'w-full h-full rounded-none' : 'w-full max-w-6xl rounded-[28px]'
+          } bg-[#f4ece6] ${isInsideLayout ? '' : 'shadow-xl border border-[#e4d7cf]'} overflow-y-auto`}
+        >
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-8 lg:px-14 py-8 sm:py-12 lg:py-16">
+            <div className="flex justify-center">
+              <Logo size="lg" showText={true} />
+            </div>
 
-              {/* Список ценностей */}
-              <div className="w-full space-y-4 sm:space-y-5 md:space-y-6 text-sm sm:text-base md:text-lg lg:text-xl font-semibold leading-relaxed" style={{ fontFamily: 'Raleway, sans-serif' }}>
-                {/* Ценность 1 */}
-                <div className="text-center">
-                  <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default">
-                    МЫ СОЗДАЕМ АТМОСФЕРУ, В КОТОРОЙ ХОЧЕТСЯ РАБОТАТЬ
-                  </p>
-                </div>
+            <h1 className="mt-6 sm:mt-8 text-center text-3xl sm:text-4xl font-bold tracking-wide text-[#7f2127]">
+              [ АНК ]
+            </h1>
 
-                {/* Ценность 2 */}
-                <div className="text-center">
-                  <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default">
-                    МЫ ВСЕГДА ГОТОВЫ К НОВЫМ РЕШЕНИЯМ
-                  </p>
-                </div>
-
-                {/* Ценность 3 */}
-                <div className="text-center">
-                  <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default">
-                    МЫ НЕ БОИМСЯ ОШИБОК, ДЛЯ НАС ЭТО ВОЗМОЖНОСТЬ СТАТЬ ЛУЧШЕ
-                  </p>
-                </div>
-
-                {/* Ценность 4 */}
-                <div className="text-center">
-                  <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default">
-                    СВОБОДА ОБЩЕНИЯ БЕЗ РАМОК — НАША ФОРМА СУБОРДИНАЦИИ
-                  </p>
-                </div>
-
-                {/* Ценность 5 */}
-                <div className="text-center">
-                  <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default">
-                    МЫ СМЕЛО ПРИНИМАЕМ РЕШЕНИЯ
-                  </p>
-                </div>
-
-                {/* Ценность 6 */}
-                <div className="text-center">
-                  <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default">
-                    НАША СИЛА В КОМАНДЕ
-                  </p>
-                </div>
-
-                {/* Ценность 7 */}
-                <div className="text-center">
-                  <p className="text-[#b81f1f] uppercase transition-all duration-300 hover:scale-105 hover:opacity-80 cursor-default">
-                    МЫ НЕ ИЩЕМ ВИНОВНЫХ, А ИЩЕМ РЕШЕНИЕ
-                  </p>
-                </div>
-
-                {/* Ценность 8 */}
-                <div className="text-center">
-                  <p className="text-black uppercase transition-all duration-300 hover:scale-105 hover:text-gray-700 cursor-default">
-                    И НЕСЕМ ОТВЕТСТВЕННОСТЬ ЗА НИХ
-                  </p>
-                </div>
-              </div>
+            <div className="mt-8 sm:mt-12 grid grid-cols-1 lg:grid-cols-2 gap-x-16 gap-y-8 sm:gap-y-10">
+              {ankItems.map((item) => (
+                <article key={item.title} className="text-[#7f2127] uppercase">
+                  <h2 className="text-xl sm:text-2xl font-extrabold leading-tight">{item.title}</h2>
+                  {item.description && (
+                    <p className="mt-3 text-sm sm:text-base font-semibold leading-snug">
+                      {item.description}
+                    </p>
+                  )}
+                </article>
+              ))}
             </div>
           </div>
         </div>
