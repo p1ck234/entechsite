@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bot, Copy, Check, Plus, Edit, Trash2, MessageCircle } from 'lucide-react';
+import { Bot, Copy, Check, Plus, Edit, Trash2, MessageCircle, Globe } from 'lucide-react';
 import { TelegramBot } from '../types';
 import { botsAPI } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
@@ -45,8 +45,8 @@ const Bots: React.FC = () => {
     }
   };
 
-  const handleCopy = async (text: string, fieldId: string) => {
-    const textToCopy = text.startsWith('@') ? text : `@${text}`;
+  const handleCopy = async (text: string, fieldId: string, withAtPrefix = false) => {
+    const textToCopy = withAtPrefix && !text.startsWith('@') ? `@${text}` : text;
     try {
       await navigator.clipboard.writeText(textToCopy);
       setCopiedField(fieldId);
@@ -77,7 +77,7 @@ const Bots: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-pastel-800">Боты</h1>
-          <p className="text-pastel-600 mt-1 text-sm sm:text-base">Telegram боты компании</p>
+          <p className="text-pastel-600 mt-1 text-sm sm:text-base">Telegram боты и сайты компании</p>
         </div>
         {isAdmin && (
           <button
@@ -88,7 +88,7 @@ const Bots: React.FC = () => {
             className="flex items-center space-x-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
           >
             <Plus className="w-5 h-5" />
-            <span>Добавить бота</span>
+            <span>Добавить</span>
           </button>
         )}
       </div>
@@ -108,7 +108,11 @@ const Bots: React.FC = () => {
               >
                 <div className="flex items-start space-x-4">
                   <div className="w-16 h-16 bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0">
-                    <Bot className="w-8 h-8 text-white" />
+                    {bot.type === 'SITE' ? (
+                      <Globe className="w-8 h-8 text-white" />
+                    ) : (
+                      <Bot className="w-8 h-8 text-white" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="text-lg font-semibold text-pastel-800 mb-2">
@@ -120,43 +124,64 @@ const Bots: React.FC = () => {
                     
                     <div className="flex items-center justify-between group">
                       <div className="flex items-center space-x-2 text-sm text-pastel-600 flex-1 min-w-0">
-                        <MessageCircle className="w-4 h-4 flex-shrink-0" />
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const telegramUsername = bot.username.replace('@', '');
-                            if (telegramUsername) {
-                              if (isTelegram && webApp) {
-                                // В Telegram Mini App используем openTelegramLink
-                                try {
-                                  webApp.openTelegramLink(`https://t.me/${telegramUsername}`);
-                                } catch (error) {
-                                  console.error('Error opening Telegram link:', error);
-                                  // Fallback: используем openLink
-                                  webApp.openLink(`https://t.me/${telegramUsername}`);
+                        {bot.type === 'SITE' ? (
+                          <>
+                            <Globe className="w-4 h-4 flex-shrink-0" />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!bot.url) return;
+                                if (isTelegram && webApp) {
+                                  webApp.openLink(bot.url);
+                                } else {
+                                  window.open(bot.url, '_blank');
                                 }
-                              } else {
-                                // В обычном браузере используем window.open
-                                window.open(`https://t.me/${telegramUsername}`, '_blank');
-                              }
-                            }
-                          }}
-                          className="text-primary-600 hover:text-primary-700 hover:underline transition-colors text-left font-medium"
-                        >
-                          @{bot.username}
-                        </button>
+                              }}
+                              className="text-primary-600 hover:text-primary-700 hover:underline transition-colors text-left font-medium truncate"
+                            >
+                              {bot.url}
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <MessageCircle className="w-4 h-4 flex-shrink-0" />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const telegramUsername = (bot.username || '').replace('@', '');
+                                if (telegramUsername) {
+                                  if (isTelegram && webApp) {
+                                    try {
+                                      webApp.openTelegramLink(`https://t.me/${telegramUsername}`);
+                                    } catch (error) {
+                                      console.error('Error opening Telegram link:', error);
+                                      webApp.openLink(`https://t.me/${telegramUsername}`);
+                                    }
+                                  } else {
+                                    window.open(`https://t.me/${telegramUsername}`, '_blank');
+                                  }
+                                }
+                              }}
+                              className="text-primary-600 hover:text-primary-700 hover:underline transition-colors text-left font-medium"
+                            >
+                              @{bot.username}
+                            </button>
+                          </>
+                        )}
                       </div>
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            const telegramToCopy = bot.username.startsWith('@') 
-                              ? bot.username 
-                              : `@${bot.username}`;
-                            handleCopy(telegramToCopy, `bot-${bot.id}`);
+                            if (bot.type === 'SITE' && bot.url) {
+                              handleCopy(bot.url, `bot-${bot.id}`);
+                              return;
+                            }
+                            const username = bot.username || '';
+                            handleCopy(username, `bot-${bot.id}`, true);
                           }}
                           className="p-1 text-pastel-400 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
-                          title="Скопировать тег бота"
+                          title={bot.type === 'SITE' ? 'Скопировать ссылку сайта' : 'Скопировать тег бота'}
                         >
                           {copiedField === `bot-${bot.id}` ? (
                             <Check className="w-3.5 h-3.5 text-green-600" />

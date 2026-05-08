@@ -30,7 +30,7 @@ router.get('/', auth_1.authenticateToken, [
         let paramCount = 0;
         if (search) {
             paramCount++;
-            whereClause += ` AND (name ILIKE $${paramCount} OR username ILIKE $${paramCount} OR description ILIKE $${paramCount})`;
+            whereClause += ` AND (name ILIKE $${paramCount} OR username ILIKE $${paramCount} OR url ILIKE $${paramCount} OR description ILIKE $${paramCount})`;
             params.push(`%${search}%`);
         }
         const [botsResult, totalResult] = await Promise.all([
@@ -70,7 +70,9 @@ router.get('/:id', auth_1.authenticateToken, async (req, res) => {
 });
 router.post('/', auth_1.authenticateToken, auth_1.requireAdmin, [
     (0, express_validator_1.body)('name').notEmpty().withMessage('Name is required'),
-    (0, express_validator_1.body)('username').notEmpty().withMessage('Username is required'),
+    (0, express_validator_1.body)('type').optional().isIn(['BOT', 'SITE']).withMessage('Type must be BOT or SITE'),
+    (0, express_validator_1.body)('username').optional().isString(),
+    (0, express_validator_1.body)('url').optional().isURL().withMessage('URL must be valid'),
     (0, express_validator_1.body)('description').optional().isString(),
     (0, express_validator_1.body)('is_active').optional().isBoolean()
 ], async (req, res) => {
@@ -79,11 +81,17 @@ router.post('/', auth_1.authenticateToken, auth_1.requireAdmin, [
         if (!errors.isEmpty()) {
             return res.status(400).json({ errors: errors.array() });
         }
-        const { name, username, description, is_active = true } = req.body;
-        const cleanUsername = username.startsWith('@') ? username.substring(1) : username;
-        const result = await pool.query(`INSERT INTO bots (name, username, description, is_active) 
-       VALUES ($1, $2, $3, $4) 
-       RETURNING *`, [name, cleanUsername, description || null, is_active]);
+        const { name, type = 'BOT', username, url, description, is_active = true } = req.body;
+        if (type === 'BOT' && (!username || !String(username).trim())) {
+            return res.status(400).json({ message: 'Username is required for bot type' });
+        }
+        if (type === 'SITE' && (!url || !String(url).trim())) {
+            return res.status(400).json({ message: 'URL is required for site type' });
+        }
+        const cleanUsername = username ? (username.startsWith('@') ? username.substring(1) : username) : null;
+        const result = await pool.query(`INSERT INTO bots (name, type, username, url, description, is_active) 
+       VALUES ($1, $2, $3, $4, $5, $6) 
+       RETURNING *`, [name, type, type === 'BOT' ? cleanUsername : null, type === 'SITE' ? url : null, description || null, is_active]);
         res.status(201).json(result.rows[0]);
     }
     catch (error) {
@@ -96,7 +104,9 @@ router.post('/', auth_1.authenticateToken, auth_1.requireAdmin, [
 });
 router.put('/:id', auth_1.authenticateToken, auth_1.requireAdmin, [
     (0, express_validator_1.body)('name').optional().notEmpty(),
-    (0, express_validator_1.body)('username').optional().notEmpty(),
+    (0, express_validator_1.body)('type').optional().isIn(['BOT', 'SITE']).withMessage('Type must be BOT or SITE'),
+    (0, express_validator_1.body)('username').optional().isString(),
+    (0, express_validator_1.body)('url').optional().isURL().withMessage('URL must be valid'),
     (0, express_validator_1.body)('description').optional().isString(),
     (0, express_validator_1.body)('is_active').optional().isBoolean()
 ], async (req, res) => {
@@ -106,22 +116,40 @@ router.put('/:id', auth_1.authenticateToken, auth_1.requireAdmin, [
             return res.status(400).json({ errors: errors.array() });
         }
         const { id } = req.params;
-        const { name, username, description, is_active } = req.body;
+        const { name, type, username, url, description, is_active } = req.body;
         const existingBot = await pool.query('SELECT * FROM bots WHERE id = $1', [id]);
         if (existingBot.rows.length === 0) {
             return res.status(404).json({ message: 'Bot not found' });
         }
+        const nextType = type || existingBot.rows[0].type || 'BOT';
+        const nextUsername = username !== undefined ? String(username).trim() : (existingBot.rows[0].username || '');
+        const nextUrl = url !== undefined ? String(url).trim() : (existingBot.rows[0].url || '');
+        if (nextType === 'BOT' && !nextUsername) {
+            return res.status(400).json({ message: 'Username is required for bot type' });
+        }
+        if (nextType === 'SITE' && !nextUrl) {
+            return res.status(400).json({ message: 'URL is required for site type' });
+        }
         const updates = [];
         const values = [];
         let paramCount = 1;
+        if (type !== undefined) {
+            updates.push(`type = $${paramCount++}`);
+            values.push(type);
+        }
         if (name !== undefined) {
             updates.push(`name = $${paramCount++}`);
             values.push(name);
         }
         if (username !== undefined) {
-            const cleanUsername = username.startsWith('@') ? username.substring(1) : username;
+            const usernameText = String(username);
+            const cleanUsername = usernameText.startsWith('@') ? usernameText.substring(1) : usernameText;
             updates.push(`username = $${paramCount++}`);
             values.push(cleanUsername);
+        }
+        if (url !== undefined) {
+            updates.push(`url = $${paramCount++}`);
+            values.push(url || null);
         }
         if (description !== undefined) {
             updates.push(`description = $${paramCount++}`);
@@ -134,7 +162,14 @@ router.put('/:id', auth_1.authenticateToken, auth_1.requireAdmin, [
         updates.push(`updated_at = CURRENT_TIMESTAMP`);
         values.push(id);
         const result = await pool.query(`UPDATE bots SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`, values);
-        res.json(result.rows[0]);
+        if (type === 'SITE') {
+            await pool.query('UPDATE bots SET username = NULL WHERE id = $1', [id]);
+        }
+        else if (type === 'BOT') {
+            await pool.query('UPDATE bots SET url = NULL WHERE id = $1', [id]);
+        }
+        const refreshed = await pool.query('SELECT * FROM bots WHERE id = $1', [id]);
+        res.json(refreshed.rows[0]);
     }
     catch (error) {
         console.error('Update bot error:', error);

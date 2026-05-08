@@ -13,8 +13,10 @@ interface BotModalProps {
 const BotModal: React.FC<BotModalProps> = ({ bot, onClose, onSuccess }) => {
   const { isTelegram } = useTelegram();
   const [formData, setFormData] = useState({
+    type: 'BOT' as 'BOT' | 'SITE',
     name: '',
     username: '',
+    url: '',
     description: '',
     isActive: true,
   });
@@ -24,15 +26,19 @@ const BotModal: React.FC<BotModalProps> = ({ bot, onClose, onSuccess }) => {
   useEffect(() => {
     if (bot) {
       setFormData({
+        type: bot.type || 'BOT',
         name: bot.name,
-        username: bot.username,
+        username: bot.username || '',
+        url: bot.url || '',
         description: bot.description || '',
         isActive: bot.isActive,
       });
     } else {
       setFormData({
+        type: 'BOT',
         name: '',
         username: '',
+        url: '',
         description: '',
         isActive: true,
       });
@@ -45,10 +51,16 @@ const BotModal: React.FC<BotModalProps> = ({ bot, onClose, onSuccess }) => {
     setError('');
 
     try {
+      const payload = {
+        ...formData,
+        username: formData.type === 'BOT' ? formData.username.trim() : undefined,
+        url: formData.type === 'SITE' ? formData.url.trim() : undefined,
+      };
+
       if (bot) {
-        await botsAPI.updateBot(bot.id, formData);
+        await botsAPI.updateBot(bot.id, payload);
       } else {
-        await botsAPI.createBot(formData);
+        await botsAPI.createBot(payload);
       }
       onSuccess();
       onClose();
@@ -59,7 +71,7 @@ const BotModal: React.FC<BotModalProps> = ({ bot, onClose, onSuccess }) => {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
     setFormData({
       ...formData,
@@ -103,7 +115,7 @@ const BotModal: React.FC<BotModalProps> = ({ bot, onClose, onSuccess }) => {
         <div className={`glass-card ${isTelegram ? 'rounded-none' : 'rounded-t-2xl sm:rounded-2xl'} p-6 ${isTelegram ? 'pb-24' : 'pb-24 sm:pb-8'}`}>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-pastel-800">
-              {bot ? 'Редактировать бота' : 'Добавить бота'}
+              {bot ? 'Редактировать запись' : 'Добавить запись'}
             </h2>
             <button
               onClick={onClose}
@@ -122,8 +134,24 @@ const BotModal: React.FC<BotModalProps> = ({ bot, onClose, onSuccess }) => {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
+                <label htmlFor="type" className="block text-sm font-medium text-pastel-700 mb-2">
+                  Что добавить *
+                </label>
+                <select
+                  id="type"
+                  name="type"
+                  value={formData.type}
+                  onChange={handleChange}
+                  className="input-field"
+                >
+                  <option value="BOT">Telegram бот</option>
+                  <option value="SITE">Сайт</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
                 <label htmlFor="name" className="block text-sm font-medium text-pastel-700 mb-2">
-                  Название бота *
+                  {formData.type === 'BOT' ? 'Название бота *' : 'Название сайта *'}
                 </label>
                 <input
                   id="name"
@@ -133,28 +161,46 @@ const BotModal: React.FC<BotModalProps> = ({ bot, onClose, onSuccess }) => {
                   onChange={handleChange}
                   required
                   className="input-field"
-                  placeholder="Например: ENTECH Site Bot"
+                  placeholder={formData.type === 'BOT' ? 'Например: ENTECH Site Bot' : 'Например: en-tech-group.ru'}
                 />
               </div>
 
-              <div className="md:col-span-2">
-                <label htmlFor="username" className="block text-sm font-medium text-pastel-700 mb-2">
-                  Username бота (без @) *
-                </label>
-                <input
-                  id="username"
-                  type="text"
-                  name="username"
-                  value={formData.username}
-                  onChange={handleChange}
-                  required
-                  className="input-field"
-                  placeholder="Например: entechsite_bot"
-                />
-                <p className="text-xs text-pastel-500 mt-1">
-                  Введите username без символа @
-                </p>
-              </div>
+              {formData.type === 'BOT' ? (
+                <div className="md:col-span-2">
+                  <label htmlFor="username" className="block text-sm font-medium text-pastel-700 mb-2">
+                    Username бота (без @) *
+                  </label>
+                  <input
+                    id="username"
+                    type="text"
+                    name="username"
+                    value={formData.username}
+                    onChange={handleChange}
+                    required
+                    className="input-field"
+                    placeholder="Например: entechsite_bot"
+                  />
+                  <p className="text-xs text-pastel-500 mt-1">
+                    Введите username без символа @
+                  </p>
+                </div>
+              ) : (
+                <div className="md:col-span-2">
+                  <label htmlFor="url" className="block text-sm font-medium text-pastel-700 mb-2">
+                    Ссылка на сайт *
+                  </label>
+                  <input
+                    id="url"
+                    type="url"
+                    name="url"
+                    value={formData.url}
+                    onChange={handleChange}
+                    required
+                    className="input-field"
+                    placeholder="https://example.com"
+                  />
+                </div>
+              )}
 
               <div className="md:col-span-2">
                 <label htmlFor="description" className="block text-sm font-medium text-pastel-700 mb-2">
@@ -167,7 +213,7 @@ const BotModal: React.FC<BotModalProps> = ({ bot, onClose, onSuccess }) => {
                   onChange={handleChange}
                   rows={3}
                   className="input-field"
-                  placeholder="Краткое описание бота..."
+                  placeholder={formData.type === 'BOT' ? 'Краткое описание бота...' : 'Краткое описание сайта...'}
                 />
               </div>
 

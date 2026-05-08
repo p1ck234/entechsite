@@ -546,7 +546,9 @@ export const botsAPI = {
     const transformedBots = response.data.bots.map((bot: any) => ({
       id: String(bot.id),
       name: bot.name,
+      type: bot.type || 'BOT',
       username: bot.username,
+      url: bot.url,
       description: bot.description,
       isActive: bot.is_active,
       createdAt: bot.created_at,
@@ -566,7 +568,9 @@ export const botsAPI = {
     return {
       id: String(bot.id),
       name: bot.name,
+      type: bot.type || 'BOT',
       username: bot.username,
+      url: bot.url,
       description: bot.description,
       isActive: bot.is_active,
       createdAt: bot.created_at,
@@ -577,7 +581,9 @@ export const botsAPI = {
   createBot: async (bot: Omit<TelegramBot, 'id' | 'createdAt' | 'updatedAt'>): Promise<TelegramBot> => {
     const response = await api.post('/bots', {
       name: bot.name,
+      type: bot.type,
       username: bot.username,
+      url: bot.url,
       description: bot.description,
       is_active: bot.isActive
     });
@@ -586,7 +592,9 @@ export const botsAPI = {
     return {
       id: String(createdBot.id),
       name: createdBot.name,
+      type: createdBot.type || 'BOT',
       username: createdBot.username,
+      url: createdBot.url,
       description: createdBot.description,
       isActive: createdBot.is_active,
       createdAt: createdBot.created_at,
@@ -597,7 +605,9 @@ export const botsAPI = {
   updateBot: async (id: string, bot: Partial<TelegramBot>): Promise<TelegramBot> => {
     const response = await api.put(`/bots/${id}`, {
       name: bot.name,
+      type: bot.type,
       username: bot.username,
+      url: bot.url,
       description: bot.description,
       is_active: bot.isActive
     });
@@ -606,7 +616,9 @@ export const botsAPI = {
     return {
       id: String(updatedBot.id),
       name: updatedBot.name,
+      type: updatedBot.type || 'BOT',
       username: updatedBot.username,
+      url: updatedBot.url,
       description: updatedBot.description,
       isActive: updatedBot.is_active,
       createdAt: updatedBot.created_at,

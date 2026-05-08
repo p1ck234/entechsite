@@ -173,7 +173,9 @@ export interface CalendarEvent {
 export interface TelegramBot {
   id: string;
   name: string;
-  username: string; // без @
+  type: 'BOT' | 'SITE';
+  username?: string; // без @, только для BOT
+  url?: string; // только для SITE
   description?: string;
   isActive: boolean;
   createdAt: string;
