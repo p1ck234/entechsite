@@ -8,6 +8,7 @@ const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const pg_1 = require("pg");
+const stream_1 = require("stream");
 const auth_1 = __importDefault(require("./routes/auth"));
 const employees_1 = __importDefault(require("./routes/employees"));
 const courses_1 = __importDefault(require("./routes/courses"));
@@ -225,6 +226,13 @@ if (!fs_1.default.existsSync(uploadsDir)) {
     console.log(`📁 Создана папка для загрузок: ${uploadsDir}`);
 }
 const OPTIMIZABLE_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const MEDIA_PROXY_ALLOWED_HOSTS = new Set([
+    'drive.google.com',
+    'docs.google.com',
+    'lh3.google.com',
+    'lh3.googleusercontent.com',
+    'drive.usercontent.google.com',
+]);
 let cachedSharpModule = null;
 let sharpInitAttempted = false;
 const getSharpModule = () => {
@@ -257,6 +265,91 @@ const parsePositiveInt = (value, max) => {
 const isResizeFit = (value) => {
     return typeof value === 'string' && ['cover', 'contain', 'fill', 'inside', 'outside'].includes(value);
 };
+const resolveMediaProxyUrl = (rawUrl) => {
+    try {
+        const parsedUrl = new URL(rawUrl);
+        if (parsedUrl.protocol !== 'https:') {
+            return null;
+        }
+        const hostname = parsedUrl.hostname.toLowerCase();
+        const isAllowedHost = MEDIA_PROXY_ALLOWED_HOSTS.has(hostname) || hostname.endsWith('.googleusercontent.com');
+        if (!isAllowedHost) {
+            return null;
+        }
+        return parsedUrl;
+    }
+    catch {
+        return null;
+    }
+};
+app.get('/api/media/proxy', async (req, res) => {
+    const rawUrl = typeof req.query.url === 'string' ? req.query.url : '';
+    if (!rawUrl) {
+        res.status(400).json({ message: 'Параметр url обязателен' });
+        return;
+    }
+    const targetUrl = resolveMediaProxyUrl(rawUrl);
+    if (!targetUrl) {
+        res.status(403).json({ message: 'URL недоступен для проксирования' });
+        return;
+    }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    try {
+        const upstreamResponse = await fetch(targetUrl.toString(), {
+            redirect: 'follow',
+            signal: controller.signal,
+            headers: {
+                Accept: 'image/avif,image/webp,image/*,*/*;q=0.8',
+                'User-Agent': 'EnTechSite-MediaProxy/1.0',
+            }
+        });
+        if (!upstreamResponse.ok || !upstreamResponse.body) {
+            res.status(502).json({
+                message: 'Не удалось получить изображение из внешнего источника',
+                status: upstreamResponse.status
+            });
+            return;
+        }
+        const contentType = (upstreamResponse.headers.get('content-type') || '').toLowerCase();
+        if (!contentType.startsWith('image/')) {
+            res.status(415).json({ message: 'Внешний URL не является изображением' });
+            return;
+        }
+        const contentLength = upstreamResponse.headers.get('content-length');
+        if (contentLength) {
+            res.setHeader('Content-Length', contentLength);
+        }
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+        res.setHeader('Vary', 'Accept');
+        const upstreamStream = stream_1.Readable.fromWeb(upstreamResponse.body);
+        upstreamStream.on('error', (streamError) => {
+            console.error('Media proxy stream error:', streamError);
+            if (!res.headersSent) {
+                res.status(502).json({ message: 'Ошибка потока изображения' });
+            }
+            else {
+                res.destroy(streamError);
+            }
+        });
+        upstreamStream.pipe(res);
+        return;
+    }
+    catch (error) {
+        if (error?.name === 'AbortError') {
+            res.status(504).json({ message: 'Таймаут при загрузке изображения' });
+            return;
+        }
+        console.error('Media proxy error:', error);
+        res.status(502).json({ message: 'Ошибка при проксировании изображения' });
+        return;
+    }
+    finally {
+        clearTimeout(timeoutId);
+    }
+});
 app.get('/api/uploads/:filename', async (req, res) => {
     const safeFilename = path_1.default.basename(req.params.filename);
     const filePath = path_1.default.join(uploadsDir, safeFilename);
