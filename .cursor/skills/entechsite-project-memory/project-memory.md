@@ -72,6 +72,25 @@
 
 ## Task Journal
 
+### 2026-06-25 - Кэш и предзагрузка фото для адресной книги и «Наша жизнь»
+
+- Goal: ускорить повторную загрузку фото после обновления страницы, включить превью в Mini App для «Наша жизнь», убрать лаги веб-версии адресной книги.
+- Changes:
+  - добавлен модуль `imagePreload.ts`: кэш успешных URL-кандидатов в памяти + `sessionStorage`, очередь предзагрузки с лимитом параллелизма (4), батчевая запись в storage;
+  - `ImageWithLoader` использует кэш при повторном рендере и сохраняет рабочий URL после успешной загрузки;
+  - в `Employees` и `Life` после получения данных запускается фоновая предзагрузка фото;
+  - в `Life.tsx` убрано условие `!isTelegram` — превью снова показываются в Mini App;
+  - для превью событий добавлены миниатюры `320x320`, `q=64`;
+  - Google URL-кандидаты теперь учитывают целевой размер из `imageOptions`;
+  - оптимизация лагов веб-версии: убрана дублирующая предзагрузка из каждого `ImageWithLoader`, ограничены batch/concurrency предзагрузки.
+- Files:
+  - `frontend/src/utils/imagePreload.ts`
+  - `frontend/src/components/ImageWithLoader.tsx`
+  - `frontend/src/pages/Employees.tsx`
+  - `frontend/src/pages/Life.tsx`
+  - `frontend/src/utils/imageUtils.ts`
+- Result: фото кэшируются между перерисовками страницы; превью в «Наша жизнь» работают в Mini App; веб-адресная книга не должна подтормаживать из-за агрессивной предзагрузки.
+
 ### 2026-06-25 - Fallback URL для фото и фикс деплоя backend из-за sharp
 
 - Goal: повысить устойчивость загрузки фото в Mini App и восстановить деплой backend на Railway.
@@ -152,6 +171,14 @@
 - Result: есть единая точка для фиксации контекста, прогресса и решений.
 
 ## Problems and Resolutions
+
+### 2026-06-25 - Веб-версия адресной книги подтормаживала после добавления предзагрузки фото
+
+- Symptom: страница «Адресная книга» на вебе ощутимо лагала при вводе/фильтрации; Mini App и другие страницы работали нормально.
+- Root cause: агрессивная предзагрузка — каждый `ImageWithLoader` дополнительно запускал preload, плюс синхронная запись всего кэша в `sessionStorage` на каждый успешный `onload`.
+- Resolution: предзагрузка централизована в `preloadImages()` с очередью и лимитом параллелизма; запись кэша батчами (~500ms); убран дублирующий preload из компонента картинки.
+- Validation: frontend собирается; линтер без ошибок.
+- Related files: `frontend/src/utils/imagePreload.ts`, `frontend/src/components/ImageWithLoader.tsx`, `frontend/src/pages/Employees.tsx`
 
 ### 2026-06-25 - Railway healthcheck падал из-за sharp на Node 18
 
@@ -278,10 +305,16 @@
 - Trade-off: без `sharp` оптимизация отключается, но сервис остаётся доступным; несколько попыток загрузки могут чуть увеличить время до первого успешного рендера.
 - Related files: `backend/src/index.ts`, `frontend/src/utils/imageUtils.ts`, `frontend/src/components/ImageWithLoader.tsx`
 
+### 2026-06-25 - Клиентский кэш URL изображений и фоновая предзагрузка
+
+- Context: при обновлении списка сотрудников/событий фото загружались заново; в Mini App «Наша жизнь» превью были отключены.
+- Decision: кэшировать успешный URL-кандидат в `sessionStorage` + in-memory Map; предзагружать фото пачкой после API-ответа; не дублировать preload на уровне каждого `<img>`.
+- Trade-off: кэш живёт в рамках сессии браузера (не persistent между закрытием вкладки); нужен контроль concurrency, чтобы не перегружать UI thread.
+- Related files: `frontend/src/utils/imagePreload.ts`, `frontend/src/pages/Employees.tsx`, `frontend/src/pages/Life.tsx`
+
 ## Open Risks and TODO
 
 - TODO: убрать хардкод fallback `DATABASE_URL` и credentials из кода.
   - Related files: `backend/src/index.ts`, `backend/scripts/add-admin-telegram-oauth.js`
 - TODO: синхронизировать документацию, т.к. `README.md` упоминает Prisma, а текущая реализация использует `pg`.
 - TODO: рассмотреть единый модуль подключения к БД вместо создания `Pool` в каждом роуте.
-- TODO: вернуть превью изображений в разделе "Наша жизнь" для Mini App (`Life.tsx` пока скрывает их через `!isTelegram`).
