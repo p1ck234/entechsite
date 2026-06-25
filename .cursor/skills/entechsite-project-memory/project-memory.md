@@ -42,6 +42,7 @@
 - `jsonwebtoken`, `bcryptjs`
 - `express-validator`, `helmet`, `cors`, `express-rate-limit`
 - `multer` для загрузки файлов
+- `sharp` для on-the-fly оптимизации изображений (`/api/uploads/:filename?w=&h=&q=&fit=`)
 - `dotenv`
 
 ### Telegram Bot (`telegram-bot/package.json`)
@@ -70,6 +71,23 @@
   - загрузка изображений.
 
 ## Task Journal
+
+### 2026-06-25 - Загрузка фото в адресной книге для Mini App и оптимизация аватаров
+
+- Goal: починить отображение фото сотрудников в Telegram Mini App и ускорить загрузку аватаров на сайте.
+- Changes:
+  - в `imageUtils` относительные пути `/api/uploads/...` приводятся к backend origin (важно для Mini App, где фронт и API на разных доменах);
+  - для локальных загрузок добавлены параметры оптимизации (`w/h/q/fit`) в URL изображений;
+  - в адресной книге аватары запрашиваются как миниатюры `192x192`, `q=72`;
+  - на backend добавлен роут `GET /api/uploads/:filename` с resize/compress через `sharp` и cache headers;
+  - для cross-origin загрузки изображений выставлен `Cross-Origin-Resource-Policy: cross-origin`.
+- Files:
+  - `frontend/src/utils/imageUtils.ts`
+  - `frontend/src/components/ImageWithLoader.tsx`
+  - `frontend/src/pages/Employees.tsx`
+  - `backend/src/index.ts`
+  - `backend/package.json`
+- Result: фото сотрудников должны грузиться в Mini App; аватары на сайте отдаются меньшим размером и быстрее.
 
 ### 2026-06-25 - Периодическая пересинхронизация Telegram в Mini App и веб-версии
 
@@ -117,6 +135,14 @@
 - Result: есть единая точка для фиксации контекста, прогресса и решений.
 
 ## Problems and Resolutions
+
+### 2026-06-25 - Фото сотрудников не грузились в Telegram Mini App
+
+- Symptom: в адресной книге Mini App вместо фото показывались инициалы; на веб-сайте фото отображались корректно, но медленно.
+- Root cause: в БД фото часто хранятся как относительный путь `/api/uploads/...`; в Mini App запрос шёл на origin фронтенда, где этого маршрута нет. Дополнительно отдавались полноразмерные изображения без оптимизации.
+- Resolution: нормализация URL фото к backend origin на фронте; серверная оптимизация через `sharp` с query-параметрами; для аватаров запрашиваются уменьшенные версии.
+- Validation: сборка `backend` и `frontend` проходит; линтер без ошибок.
+- Related files: `frontend/src/utils/imageUtils.ts`, `frontend/src/pages/Employees.tsx`, `backend/src/index.ts`
 
 ### 2026-06-25 - CORS и preflight в Telegram/веб окружении
 
@@ -213,9 +239,17 @@
 - Trade-off: требуется поддерживать обратную совместимость со старыми записями, где `telegram_id` еще не заполнен.
 - Related files: `backend/src/routes/auth.ts`, `backend/src/routes/employees.ts`
 
+### 2026-06-25 - Нормализация URL фото и серверная оптимизация через sharp
+
+- Context: Mini App и веб работают на разных origin; относительные пути к `/api/uploads` ломают загрузку фото в Mini App; полноразмерные аватары грузятся медленно.
+- Decision: на фронте всегда приводить upload-URL к backend origin; на backend отдавать оптимизированные версии по query-параметрам (`w`, `h`, `q`, `fit`) через `sharp`.
+- Trade-off: дополнительная CPU-нагрузка на backend при первом запросе каждого размера; компенсируется cache headers.
+- Related files: `frontend/src/utils/imageUtils.ts`, `backend/src/index.ts`, `frontend/src/pages/Employees.tsx`
+
 ## Open Risks and TODO
 
 - TODO: убрать хардкод fallback `DATABASE_URL` и credentials из кода.
   - Related files: `backend/src/index.ts`, `backend/scripts/add-admin-telegram-oauth.js`
 - TODO: синхронизировать документацию, т.к. `README.md` упоминает Prisma, а текущая реализация использует `pg`.
 - TODO: рассмотреть единый модуль подключения к БД вместо создания `Pool` в каждом роуте.
+- TODO: вернуть превью изображений в разделе "Наша жизнь" для Mini App (`Life.tsx` пока скрывает их через `!isTelegram`).
