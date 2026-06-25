@@ -138,7 +138,7 @@ const Employees: React.FC = () => {
           options: EMPLOYEE_AVATAR_IMAGE_OPTIONS
         }));
 
-      preloadImages(preloadEntries, 24);
+      preloadImages(preloadEntries, 6);
       setEmployees(response.employees);
       setTotalPages(response.pagination.pages);
     } catch (error) {

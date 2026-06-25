@@ -224,10 +224,14 @@ export const getTrainingDriveTree = async (): Promise<{ root: DriveFileItem; cou
   return { root, courses };
 };
 
-export const getDriveFileDownload = async (fileId: string): Promise<{
+export const getDriveFileDownload = async (fileId: string, rangeHeader?: string): Promise<{
   filename: string;
   mimeType: string;
   stream: NodeJS.ReadableStream;
+  status?: number;
+  contentLength?: string;
+  contentRange?: string;
+  acceptRanges?: string;
 }> => {
   const drive = getDriveClient();
   const metadataResponse = await drive.files.get({
@@ -263,12 +267,19 @@ export const getDriveFileDownload = async (fileId: string): Promise<{
       alt: 'media',
       supportsAllDrives: true,
     },
-    { responseType: 'stream' }
+    {
+      responseType: 'stream',
+      headers: rangeHeader ? { Range: rangeHeader } : undefined,
+    }
   );
 
   return {
     filename: file.name,
     mimeType: file.mimeType || 'application/octet-stream',
     stream: response.data as NodeJS.ReadableStream,
+    status: response.status,
+    contentLength: response.headers['content-length'] as string | undefined,
+    contentRange: response.headers['content-range'] as string | undefined,
+    acceptRanges: response.headers['accept-ranges'] as string | undefined,
   };
 };

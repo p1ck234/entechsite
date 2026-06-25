@@ -161,6 +161,16 @@ const archiveMaterialFileLessons = async (
   stats.lessonsArchived += archivedLessons.rowCount || 0;
 };
 
+const authenticateDriveFileRequest = (req: any, res: any, next: any) => {
+  const token = typeof req.query.token === 'string' ? req.query.token : null;
+
+  if (token && !req.headers.authorization) {
+    req.headers.authorization = `Bearer ${token}`;
+  }
+
+  return authenticateToken(req, res, next);
+};
+
 const upsertLessons = async (client: any, courseId: number, courseFolder: DriveCourseFolder, stats: SyncStats): Promise<void> => {
   for (const [index, lesson] of courseFolder.lessons.entries()) {
     const lessonUrl = getDriveItemCanonicalUrl(lesson);
@@ -232,14 +242,27 @@ const upsertLessons = async (client: any, courseId: number, courseFolder: DriveC
   }
 };
 
-router.get('/files/:fileId', authenticateToken, async (req: any, res: any) => {
+router.get('/files/:fileId', authenticateDriveFileRequest, async (req: any, res: any) => {
   try {
-    const download = await getDriveFileDownload(req.params.fileId);
+    const rangeHeader = typeof req.headers.range === 'string' ? req.headers.range : undefined;
+    const download = await getDriveFileDownload(req.params.fileId, rangeHeader);
     const encodedFilename = encodeURIComponent(download.filename);
 
+    if (download.status === 206) {
+      res.status(206);
+    }
     res.setHeader('Content-Type', download.mimeType);
     res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodedFilename}`);
     res.setHeader('Cache-Control', 'private, max-age=300');
+    if (download.contentLength) {
+      res.setHeader('Content-Length', download.contentLength);
+    }
+    if (download.contentRange) {
+      res.setHeader('Content-Range', download.contentRange);
+    }
+    if (download.acceptRanges) {
+      res.setHeader('Accept-Ranges', download.acceptRanges);
+    }
 
     download.stream.on('error', (error) => {
       console.error('Google Drive file stream error:', error);

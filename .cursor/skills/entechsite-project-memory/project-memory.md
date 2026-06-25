@@ -98,6 +98,27 @@
 
 ## Task Journal
 
+### 2026-06-25 - Streaming видео Drive и оптимизация больших списков
+
+- Goal: исправить открытие видео из Drive-материалов и снизить лаги на страницах с большим количеством сотрудников/курсов/уроков.
+- Changes:
+  - материалы Drive открываются прямым streaming URL `/api/drive/files/:fileId?token=...`, без предварительного скачивания в `Blob`;
+  - backend прокидывает `Range` в Google Drive и возвращает `Content-Range`/`Content-Length`, чтобы видео могло стримиться и перематываться;
+  - `Courses` получил debounce поиска и локальную пагинацию уроков внутри выбранного курса;
+  - пагинация курсов больше не показывается внутри выбранного курса;
+  - backend `courses` убрал N+1 запросы прогресса и подтягивает `course_progress` через `LEFT JOIN`;
+  - в `Employees` снижена параллельная предзагрузка аватарок, из `employees` backend убраны шумные SQL-логи.
+- Files:
+  - `backend/src/services/googleDrive.ts`
+  - `backend/src/routes/drive.ts`
+  - `backend/src/routes/courses.ts`
+  - `backend/src/routes/employees.ts`
+  - `frontend/src/api/client.ts`
+  - `frontend/src/pages/Courses.tsx`
+  - `frontend/src/pages/Employees.tsx`
+  - `frontend/dist/index.html`
+- Result: видео должно открываться быстрее и надёжнее, а страницы адресной книги/базы знаний меньше нагружают браузер и backend при больших списках.
+
 ### 2026-06-25 - Drive-папка как урок с материалами внутри портала
 
 - Goal: сделать подпапку Google Drive отдельным уроком в портале, но открывать вложенные файлы через backend/service account, а не ссылкой на папку Drive.
@@ -316,6 +337,14 @@
 - Result: есть единая точка для фиксации контекста, прогресса и решений.
 
 ## Problems and Resolutions
+
+### 2026-06-25 - Видео Drive не открывалось после перехода на материалы урока
+
+- Symptom: файлы в уроке отображались, но видео не открывалось/зависало, хотя раньше Drive-ссылка открывалась.
+- Root cause: frontend открывал материал через `axios -> Blob -> URL.createObjectURL`; для больших видео это требует полного скачивания и ломает streaming/перемотку.
+- Resolution: материалы открываются прямым URL на backend endpoint; endpoint принимает token в query для новой вкладки, стримит файл через service account и поддерживает `Range`.
+- Validation: `npm run build` в `backend` и `frontend` прошли успешно.
+- Related files: `backend/src/services/googleDrive.ts`, `backend/src/routes/drive.ts`, `frontend/src/api/client.ts`, `frontend/src/pages/Courses.tsx`
 
 ### 2026-06-25 - Drive sync падал по `ECONNABORTED` через 30 секунд
 

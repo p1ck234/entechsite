@@ -77,9 +77,6 @@ router.get('/', auth_1.authenticateToken, [
         const limitParam = paramCount + 1;
         const offsetParam = paramCount + 2;
         const queryParams = [...params, limit, skip];
-        console.log('SQL Query:', `SELECT e.*, u.role as user_role FROM employees e LEFT JOIN users u ON e.email = u.email ${whereClause} ORDER BY e.first_name ASC LIMIT $${limitParam} OFFSET $${offsetParam}`);
-        console.log('Query params:', queryParams);
-        console.log('Param count:', paramCount, 'Limit param:', limitParam, 'Offset param:', offsetParam);
         const [employeesResult, totalResult] = await Promise.all([
             pool.query(`SELECT e.*, u.role as user_role 
          FROM employees e 

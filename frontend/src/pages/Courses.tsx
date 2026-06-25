@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { coursesAPI, lessonsAPI } from '../api/client';
 import { Course, CoursesResponse, Lesson, LessonMaterial } from '../types';
@@ -6,6 +6,8 @@ import { Search, Plus, Edit, Trash2, ExternalLink, Play, CheckCircle, Clock, Boo
 import CourseModal from '../components/CourseModal';
 import LessonModal from '../components/LessonModal';
 import { useLocation } from 'react-router-dom';
+
+const LESSONS_PER_PAGE = 12;
 
 const Courses: React.FC = () => {
   const { isAdmin } = useAuth();
@@ -21,6 +23,7 @@ const Courses: React.FC = () => {
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [lessonPage, setLessonPage] = useState(1);
   const [syncingTraining, setSyncingTraining] = useState(false);
 
   // Reset selected course when navigating to courses page
@@ -28,6 +31,7 @@ const Courses: React.FC = () => {
     if (location.pathname === '/courses') {
       setSelectedCourse(null);
       setLessons([]);
+      setLessonPage(1);
       // Refresh courses when returning to main view
       fetchCourses();
     }
@@ -51,13 +55,18 @@ const Courses: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchCourses();
+    const timeoutId = window.setTimeout(() => {
+      fetchCourses();
+    }, searchTerm ? 300 : 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [currentPage, searchTerm]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentPage(1);
-    fetchCourses();
   };
 
   const handleDelete = async (id: string) => {
@@ -101,6 +110,7 @@ const Courses: React.FC = () => {
     try {
       const response = await lessonsAPI.getLessons(courseId);
       setLessons(response.lessons);
+      setLessonPage(1);
     } catch (error) {
       console.error('Error fetching lessons:', error);
     }
@@ -108,6 +118,7 @@ const Courses: React.FC = () => {
 
   const handleViewLessons = (course: Course) => {
     setSelectedCourse(course);
+    setLessonPage(1);
     fetchLessons(course.id);
   };
 
@@ -182,17 +193,20 @@ const Courses: React.FC = () => {
 
   const handleOpenDriveMaterial = async (material: LessonMaterial) => {
     try {
-      const blob = await lessonsAPI.getDriveMaterial(material.id);
-      const fileUrl = window.URL.createObjectURL(blob);
+      const fileUrl = lessonsAPI.getDriveMaterialUrl(material.id);
       window.open(fileUrl, '_blank', 'noopener,noreferrer');
-      window.setTimeout(() => {
-        window.URL.revokeObjectURL(fileUrl);
-      }, 60000);
     } catch (error: any) {
       console.error('Error opening Drive material:', error);
       window.alert(error.response?.data?.message || error.message || 'Ошибка открытия материала Google Drive');
     }
   };
+
+  const paginatedLessons = useMemo(() => {
+    const startIndex = (lessonPage - 1) * LESSONS_PER_PAGE;
+    return lessons.slice(startIndex, startIndex + LESSONS_PER_PAGE);
+  }, [lessonPage, lessons]);
+
+  const lessonTotalPages = Math.max(1, Math.ceil(lessons.length / LESSONS_PER_PAGE));
 
   const getProgressColor = (progress: number) => {
     if (progress === 100) return 'bg-green-500';
@@ -319,7 +333,7 @@ const Courses: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {lessons.map((lesson) => (
+            {paginatedLessons.map((lesson) => (
               <div key={lesson.id} className="card p-4 sm:p-6 hover:scale-105 transition-transform">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
@@ -427,6 +441,28 @@ const Courses: React.FC = () => {
               </div>
             ))}
           </div>
+
+          {lessonTotalPages > 1 && (
+            <div className="flex justify-center space-x-2">
+              <button
+                onClick={() => setLessonPage(prev => Math.max(prev - 1, 1))}
+                disabled={lessonPage === 1}
+                className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Назад
+              </button>
+              <span className="flex items-center px-4 py-2 text-pastel-600">
+                Уроки: страница {lessonPage} из {lessonTotalPages}
+              </span>
+              <button
+                onClick={() => setLessonPage(prev => Math.min(prev + 1, lessonTotalPages))}
+                disabled={lessonPage === lessonTotalPages}
+                className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Вперед
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         // Courses view
@@ -528,7 +564,7 @@ const Courses: React.FC = () => {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
+      {!selectedCourse && totalPages > 1 && (
         <div className="flex justify-center space-x-2">
           <button
             onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}

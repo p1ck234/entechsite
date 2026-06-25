@@ -26,19 +26,26 @@ router.get('/', authenticateToken, [
     const skip = (page - 1) * limit;
 
     let whereClause = 'WHERE is_active = true';
+    let coursesWhereClause = 'WHERE c.is_active = true';
     const params: any[] = [];
     let paramCount = 0;
 
     if (search) {
       paramCount++;
       whereClause += ` AND (title ILIKE $${paramCount} OR description ILIKE $${paramCount})`;
+      coursesWhereClause += ` AND (c.title ILIKE $${paramCount} OR c.description ILIKE $${paramCount})`;
       params.push(`%${search}%`);
     }
 
     const [coursesResult, totalResult] = await Promise.all([
       pool.query(
-        `SELECT * FROM courses ${whereClause} ORDER BY created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
-        [...params, limit, skip]
+        `SELECT c.*, cp.progress, cp.completed
+         FROM courses c
+         LEFT JOIN course_progress cp ON cp.course_id = c.id AND cp.user_id = $${paramCount + 1}
+         ${coursesWhereClause}
+         ORDER BY c.created_at DESC
+         LIMIT $${paramCount + 2} OFFSET $${paramCount + 3}`,
+        [...params, req.user.id, limit, skip]
       ),
       pool.query(`SELECT COUNT(*) FROM courses ${whereClause}`, params)
     ]);
@@ -46,20 +53,13 @@ router.get('/', authenticateToken, [
     const courses = coursesResult.rows;
     const total = parseInt(totalResult.rows[0].count);
 
-    // Get user progress for each course
-    const coursesWithProgress = await Promise.all(
-      courses.map(async (course: any) => {
-        const progressResult = await pool.query(
-          'SELECT progress, completed FROM course_progress WHERE user_id = $1 AND course_id = $2',
-          [req.user.id, course.id]
-        );
-        
-        return {
-          ...course,
-          userProgress: progressResult.rows[0] || { progress: 0, completed: false }
-        };
-      })
-    );
+    const coursesWithProgress = courses.map((course: any) => ({
+      ...course,
+      userProgress: {
+        progress: course.progress ?? 0,
+        completed: course.completed ?? false,
+      }
+    }));
 
     res.json({
       courses: coursesWithProgress,

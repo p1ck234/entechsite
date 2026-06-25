@@ -384,6 +384,17 @@ export const lessonsAPI = {
     return response.data;
   },
 
+  getDriveMaterialUrl: (fileId: string): string => {
+    const token = localStorage.getItem('token');
+    const url = new URL(`${API_BASE_URL}/drive/files/${encodeURIComponent(fileId)}`);
+
+    if (token) {
+      url.searchParams.set('token', token);
+    }
+
+    return url.toString();
+  },
+
   createLesson: async (lesson: Omit<Lesson, 'id' | 'createdAt' | 'updatedAt' | 'userProgress'>): Promise<{ message: string; lesson: Lesson }> => {
     const response = await api.post('/lessons', lesson);
     return response.data;
