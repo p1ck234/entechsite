@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, Eye, EyeOff } from 'lucide-react';
-import { usersAPI } from '../api/client';
+import { X, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { uploadAPI, usersAPI } from '../api/client';
 import { useTelegram } from '../contexts/TelegramContext';
+import ImageWithLoader from './ImageWithLoader';
 
 interface UserModalProps {
   onClose: () => void;
@@ -26,6 +27,7 @@ const UserModal: React.FC<UserModalProps> = ({ onClose }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState('');
 
   const departments = [
@@ -85,6 +87,36 @@ const UserModal: React.FC<UserModalProps> = ({ onClose }) => {
       ...formData,
       [e.target.name]: e.target.value,
     });
+  };
+
+  const handleUploadPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setUploadingPhoto(true);
+    setError('');
+
+    try {
+      const result = await uploadAPI.uploadPhoto(file);
+      setFormData((prev) => ({
+        ...prev,
+        photo: result.url,
+      }));
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || 'Ошибка при загрузке фото');
+    } finally {
+      setUploadingPhoto(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemovePhoto = () => {
+    setFormData((prev) => ({
+      ...prev,
+      photo: '',
+    }));
   };
 
   return (
@@ -313,17 +345,48 @@ const UserModal: React.FC<UserModalProps> = ({ onClose }) => {
 
               <div className="md:col-span-2">
                 <label htmlFor="photo" className="block text-sm font-medium text-pastel-700 mb-2">
-                  URL фото
+                  Фото
                 </label>
                 <input
                   id="photo"
-                  name="photo"
-                  type="url"
-                  value={formData.photo}
-                  onChange={handleChange}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handleUploadPhoto}
+                  disabled={uploadingPhoto || loading}
                   className="input-field"
-                  placeholder="https://example.com/photo.jpg"
                 />
+                <p className="text-xs text-pastel-500 mt-1">
+                  Фото сохраняется на сервере и стабильно открывается в Mini App.
+                </p>
+                {uploadingPhoto && (
+                  <p className="text-sm text-pastel-500 mt-2">Загрузка фото...</p>
+                )}
+                {formData.photo && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="w-20 h-20 rounded-full overflow-hidden bg-pastel-100">
+                      <ImageWithLoader
+                        src={formData.photo}
+                        alt="Фото пользователя"
+                        className="w-full h-full object-cover"
+                        imageOptions={{
+                          width: 160,
+                          height: 160,
+                          quality: 72,
+                          fit: 'cover',
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemovePhoto}
+                      disabled={uploadingPhoto || loading}
+                      className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Удалить фото из карточки"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -332,16 +395,16 @@ const UserModal: React.FC<UserModalProps> = ({ onClose }) => {
                 type="button"
                 onClick={onClose}
                 className="btn-secondary"
-                disabled={loading}
+                disabled={loading || uploadingPhoto}
               >
                 Отмена
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || uploadingPhoto}
                 className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Создание...' : 'Создать пользователя'}
+                {loading ? 'Создание...' : uploadingPhoto ? 'Загрузка...' : 'Создать пользователя'}
               </button>
             </div>
           </form>

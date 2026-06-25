@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { X, Trash2 } from 'lucide-react';
 import { Event } from '../types';
-import { eventsAPI } from '../api/client';
+import { eventsAPI, uploadAPI } from '../api/client';
 import ImageWithLoader from './ImageWithLoader';
 import { useTelegram } from '../contexts/TelegramContext';
 
@@ -19,8 +19,8 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose }) => {
     previewImages: [] as string[],
     eventDate: '',
   });
-  const [newImageUrl, setNewImageUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -41,7 +41,6 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose }) => {
         eventDate: '',
       });
     }
-    setNewImageUrl('');
   }, [event]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,21 +76,40 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose }) => {
     });
   };
 
-  const handleAddImage = () => {
-    if (newImageUrl.trim()) {
-      setFormData({
-        ...formData,
-        previewImages: [...formData.previewImages, newImageUrl.trim()],
-      });
-      setNewImageUrl('');
-    }
-  };
-
   const handleRemoveImage = (index: number) => {
     setFormData({
       ...formData,
       previewImages: formData.previewImages.filter((_, i) => i !== index),
     });
+  };
+
+  const handleUploadImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) {
+      return;
+    }
+
+    setUploadingImages(true);
+    setError('');
+
+    try {
+      const uploadedImages = await Promise.all(
+        files.map(async (file) => {
+          const result = await uploadAPI.uploadPhoto(file);
+          return result.url;
+        })
+      );
+
+      setFormData((prev) => ({
+        ...prev,
+        previewImages: [...prev.previewImages, ...uploadedImages],
+      }));
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || 'Ошибка при загрузке изображений');
+    } finally {
+      setUploadingImages(false);
+      e.target.value = '';
+    }
   };
 
   // Блокируем прокрутку body при открытом попапе
@@ -210,31 +228,25 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose }) => {
 
             <div>
               <label className="block text-sm font-medium text-pastel-700 mb-2">
-                Превью изображения (URL)
+                Превью изображения
               </label>
-              <div className="flex space-x-2 mb-2">
+              <div className="mb-3">
                 <input
-                  type="url"
-                  value={newImageUrl}
-                  onChange={(e) => setNewImageUrl(e.target.value)}
-                  className="input-field flex-1"
-                  placeholder="https://example.com/image.jpg"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddImage();
-                    }
-                  }}
+                  id="previewImagesUpload"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  multiple
+                  onChange={handleUploadImages}
+                  disabled={uploadingImages || loading}
+                  className="input-field"
                 />
-                <button
-                  type="button"
-                  onClick={handleAddImage}
-                  className="btn-secondary flex items-center space-x-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Добавить</span>
-                </button>
+                <p className="text-xs text-pastel-500 mt-1">
+                  Загружайте файлы сюда: они сохраняются на сервере и стабильно открываются в Mini App.
+                </p>
               </div>
+              {uploadingImages && (
+                <p className="text-sm text-pastel-500">Загрузка изображений...</p>
+              )}
               
               {formData.previewImages.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
@@ -263,16 +275,16 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose }) => {
                 type="button"
                 onClick={onClose}
                 className="btn-secondary"
-                disabled={loading}
+                disabled={loading || uploadingImages}
               >
                 Отмена
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || uploadingImages}
                 className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Сохранение...' : (event ? 'Обновить' : 'Создать')}
+                {loading ? 'Сохранение...' : uploadingImages ? 'Загрузка...' : (event ? 'Обновить' : 'Создать')}
               </button>
             </div>
           </form>
