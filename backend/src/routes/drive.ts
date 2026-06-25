@@ -15,6 +15,7 @@ interface SyncStats {
   lessonsCreated: number;
   lessonsUpdated: number;
   lessonsUnchanged: number;
+  lessonsArchived: number;
 }
 
 const getUniqueUrls = (...urls: Array<string | undefined>): string[] => {
@@ -64,9 +65,12 @@ const upsertCourse = async (client: any, courseFolder: DriveCourseFolder, stats:
 };
 
 const upsertLessons = async (client: any, courseId: number, courseFolder: DriveCourseFolder, stats: SyncStats): Promise<void> => {
+  const activeLessonUrls: string[] = [];
+
   for (const [index, lesson] of courseFolder.lessons.entries()) {
     const lessonUrl = getDriveFolderUrl(lesson.id);
     const lessonUrlCandidates = getUniqueUrls(lessonUrl, lesson.webViewLink);
+    activeLessonUrls.push(lessonUrl);
     const existingLesson = await client.query(
       `SELECT id, title, description, google_drive_url, order_index, is_active
        FROM lessons
@@ -106,6 +110,16 @@ const upsertLessons = async (client: any, courseId: number, courseFolder: DriveC
     );
     stats.lessonsCreated += 1;
   }
+
+  const archivedLessons = await client.query(
+    `UPDATE lessons
+     SET is_active = false, updated_at = CURRENT_TIMESTAMP
+     WHERE course_id = $1
+       AND is_active = true
+       AND NOT (google_drive_url = ANY($2::text[]))`,
+    [courseId, activeLessonUrls]
+  );
+  stats.lessonsArchived += archivedLessons.rowCount || 0;
 };
 
 router.post('/sync-training', authenticateToken, async (req: any, res: any) => {
@@ -121,6 +135,7 @@ router.post('/sync-training', authenticateToken, async (req: any, res: any) => {
     lessonsCreated: 0,
     lessonsUpdated: 0,
     lessonsUnchanged: 0,
+    lessonsArchived: 0,
   };
 
   try {

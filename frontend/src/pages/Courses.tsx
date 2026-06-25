@@ -169,7 +169,8 @@ const Courses: React.FC = () => {
         `${result.message}\n` +
         `Курсов найдено: ${result.coursesFound}\n` +
         `Курсов создано: ${result.coursesCreated}, обновлено: ${result.coursesUpdated}, без изменений: ${result.coursesUnchanged}\n` +
-        `Уроков создано: ${result.lessonsCreated}, обновлено: ${result.lessonsUpdated}, без изменений: ${result.lessonsUnchanged}`
+        `Уроков создано: ${result.lessonsCreated}, обновлено: ${result.lessonsUpdated}, без изменений: ${result.lessonsUnchanged}\n` +
+        `Лишних уроков скрыто: ${result.lessonsArchived}`
       );
     } catch (error: any) {
       console.error('Error syncing training from Google Drive:', error);

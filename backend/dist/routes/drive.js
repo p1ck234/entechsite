@@ -41,9 +41,11 @@ const upsertCourse = async (client, courseFolder, stats) => {
     return createdCourse.rows[0].id;
 };
 const upsertLessons = async (client, courseId, courseFolder, stats) => {
+    const activeLessonUrls = [];
     for (const [index, lesson] of courseFolder.lessons.entries()) {
         const lessonUrl = getDriveFolderUrl(lesson.id);
         const lessonUrlCandidates = getUniqueUrls(lessonUrl, lesson.webViewLink);
+        activeLessonUrls.push(lessonUrl);
         const existingLesson = await client.query(`SELECT id, title, description, google_drive_url, order_index, is_active
        FROM lessons
        WHERE course_id = $1 AND google_drive_url = ANY($2::text[])
@@ -69,6 +71,12 @@ const upsertLessons = async (client, courseId, courseFolder, stats) => {
        VALUES ($1, $2, $3, $4, $5, $6, true)`, [courseId, lesson.name, 'Папка Google Drive', lessonUrl, null, index]);
         stats.lessonsCreated += 1;
     }
+    const archivedLessons = await client.query(`UPDATE lessons
+     SET is_active = false, updated_at = CURRENT_TIMESTAMP
+     WHERE course_id = $1
+       AND is_active = true
+       AND NOT (google_drive_url = ANY($2::text[]))`, [courseId, activeLessonUrls]);
+    stats.lessonsArchived += archivedLessons.rowCount || 0;
 };
 router.post('/sync-training', auth_1.authenticateToken, async (req, res) => {
     if (req.user?.role !== 'ADMIN') {
@@ -82,6 +90,7 @@ router.post('/sync-training', auth_1.authenticateToken, async (req, res) => {
         lessonsCreated: 0,
         lessonsUpdated: 0,
         lessonsUnchanged: 0,
+        lessonsArchived: 0,
     };
     try {
         const driveTree = await (0, googleDrive_1.getTrainingDriveTree)();
