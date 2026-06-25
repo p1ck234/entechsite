@@ -1,18 +1,14 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { coursesAPI, lessonsAPI } from '../api/client';
-import { Course, CoursesResponse, Lesson, LessonMaterial } from '../types';
-import { Search, Plus, Edit, Trash2, ExternalLink, Play, CheckCircle, Clock, BookOpen, RefreshCw, X } from 'lucide-react';
+import { Course, CoursesResponse, Lesson } from '../types';
+import { Search, Plus, Edit, Trash2, ExternalLink, Play, CheckCircle, Clock, BookOpen } from 'lucide-react';
 import CourseModal from '../components/CourseModal';
 import LessonModal from '../components/LessonModal';
-import { useTelegram } from '../contexts/TelegramContext';
 import { useLocation } from 'react-router-dom';
-
-const LESSONS_PER_PAGE = 12;
 
 const Courses: React.FC = () => {
   const { isAdmin } = useAuth();
-  const { isTelegram, webApp } = useTelegram();
   const location = useLocation();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,17 +21,12 @@ const Courses: React.FC = () => {
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [lessonPage, setLessonPage] = useState(1);
-  const [syncingTraining, setSyncingTraining] = useState(false);
-  const [previewMaterial, setPreviewMaterial] = useState<LessonMaterial | null>(null);
-  const [previewVideoError, setPreviewVideoError] = useState(false);
 
   // Reset selected course when navigating to courses page
   useEffect(() => {
     if (location.pathname === '/courses') {
       setSelectedCourse(null);
       setLessons([]);
-      setLessonPage(1);
       // Refresh courses when returning to main view
       fetchCourses();
     }
@@ -59,18 +50,13 @@ const Courses: React.FC = () => {
   };
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      fetchCourses();
-    }, searchTerm ? 300 : 0);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
+    fetchCourses();
   }, [currentPage, searchTerm]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentPage(1);
+    fetchCourses();
   };
 
   const handleDelete = async (id: string) => {
@@ -114,7 +100,6 @@ const Courses: React.FC = () => {
     try {
       const response = await lessonsAPI.getLessons(courseId);
       setLessons(response.lessons);
-      setLessonPage(1);
     } catch (error) {
       console.error('Error fetching lessons:', error);
     }
@@ -122,7 +107,6 @@ const Courses: React.FC = () => {
 
   const handleViewLessons = (course: Course) => {
     setSelectedCourse(course);
-    setLessonPage(1);
     fetchLessons(course.id);
   };
 
@@ -173,86 +157,6 @@ const Courses: React.FC = () => {
     }
   };
 
-  const handleSyncTraining = async () => {
-    if (!isAdmin || syncingTraining) return;
-
-    try {
-      setSyncingTraining(true);
-      const result = await coursesAPI.syncTrainingFromDrive();
-      await fetchCourses();
-      window.alert(
-        `${result.message}\n` +
-        `Курсов найдено: ${result.coursesFound}\n` +
-        `Курсов создано: ${result.coursesCreated}, обновлено: ${result.coursesUpdated}, без изменений: ${result.coursesUnchanged}\n` +
-        `Уроков создано: ${result.lessonsCreated}, обновлено: ${result.lessonsUpdated}, без изменений: ${result.lessonsUnchanged}\n` +
-        `Старых файловых уроков заархивировано: ${result.lessonsArchived}`
-      );
-    } catch (error: any) {
-      console.error('Error syncing training from Google Drive:', error);
-      window.alert(error.response?.data?.message || error.message || 'Ошибка синхронизации Google Drive');
-    } finally {
-      setSyncingTraining(false);
-    }
-  };
-
-  const isVideoMaterial = (material: LessonMaterial): boolean => {
-    const mimeType = material.mimeType?.toLowerCase() || '';
-    const fileName = material.name.toLowerCase();
-
-    return mimeType.startsWith('video/') || /\.(mp4|m4v|mov|webm|mkv|avi)$/i.test(fileName);
-  };
-
-  const getGoogleDrivePreviewUrl = (material: LessonMaterial): string | null => {
-    if (!material.webViewLink) {
-      return null;
-    }
-
-    const fileIdFromPath = material.webViewLink.match(/\/file\/d\/([^/]+)/)?.[1];
-    const fileIdFromQuery = material.webViewLink.match(/[?&]id=([^&]+)/)?.[1];
-    const fileId = fileIdFromPath || fileIdFromQuery || material.id;
-
-    return `https://drive.google.com/file/d/${fileId}/preview`;
-  };
-
-  const getMaterialPreviewUrl = (material: LessonMaterial): string => {
-    if (isVideoMaterial(material)) {
-      const googlePreviewUrl = getGoogleDrivePreviewUrl(material);
-      if (googlePreviewUrl) {
-        return googlePreviewUrl;
-      }
-    }
-
-    return lessonsAPI.getDriveMaterialUrl(material.id);
-  };
-
-  const handleOpenDriveMaterial = (material: LessonMaterial) => {
-    setPreviewVideoError(false);
-    setPreviewMaterial(material);
-  };
-
-  const handleClosePreview = () => {
-    setPreviewVideoError(false);
-    setPreviewMaterial(null);
-  };
-
-  const handleOpenMaterialExternal = (material: LessonMaterial) => {
-    const externalUrl = material.webViewLink || getGoogleDrivePreviewUrl(material) || lessonsAPI.getDriveMaterialUrl(material.id);
-
-    if (isTelegram && webApp) {
-      webApp.openLink(externalUrl);
-      return;
-    }
-
-    window.open(externalUrl, '_blank', 'noopener,noreferrer');
-  };
-
-  const paginatedLessons = useMemo(() => {
-    const startIndex = (lessonPage - 1) * LESSONS_PER_PAGE;
-    return lessons.slice(startIndex, startIndex + LESSONS_PER_PAGE);
-  }, [lessonPage, lessons]);
-
-  const lessonTotalPages = Math.max(1, Math.ceil(lessons.length / LESSONS_PER_PAGE));
-
   const getProgressColor = (progress: number) => {
     if (progress === 100) return 'bg-green-500';
     if (progress >= 50) return 'bg-yellow-500';
@@ -278,25 +182,13 @@ const Courses: React.FC = () => {
           <p className="text-pastel-600 mt-1 text-sm sm:text-base">Образовательные материалы компании</p>
         </div>
         {isAdmin && (
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <button
-              onClick={handleSyncTraining}
-              disabled={syncingTraining}
-              className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <RefreshCw className={`w-4 h-4 sm:w-5 sm:h-5 ${syncingTraining ? 'animate-spin' : ''}`} />
-              <span className="text-sm sm:text-base">
-                {syncingTraining ? 'Синхронизация...' : 'Синхронизировать Drive'}
-              </span>
-            </button>
-            <button
-              onClick={handleAdd}
-              className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
-            >
-              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="text-sm sm:text-base">Добавить курс</span>
-            </button>
-          </div>
+          <button
+            onClick={handleAdd}
+            className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
+          >
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="text-sm sm:text-base">Добавить курс</span>
+          </button>
         )}
       </div>
 
@@ -378,7 +270,7 @@ const Courses: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {paginatedLessons.map((lesson) => (
+            {lessons.map((lesson) => (
               <div key={lesson.id} className="card p-4 sm:p-6 hover:scale-105 transition-transform">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
@@ -413,31 +305,17 @@ const Courses: React.FC = () => {
                 {/* Actions */}
                 <div className="flex items-center justify-between">
                   <div className="flex space-x-2">
-                    {lesson.materials?.length ? (
-                      <div className="flex flex-col gap-2">
-                        {lesson.materials.map((material) => (
-                          <button
-                            key={material.id}
-                            type="button"
-                            onClick={() => handleOpenDriveMaterial(material)}
-                            className="btn-primary flex items-center space-x-2 text-sm"
-                            title={`Открыть материал: ${material.name}`}
-                          >
-                            <Play className="w-4 h-4" />
-                            <span>{lesson.materials && lesson.materials.length > 1 ? material.name : 'Начать урок'}</span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : lesson.googleDriveUrl ? (
-                      <button
-                        type="button"
-                        onClick={() => window.open(lesson.googleDriveUrl, '_blank', 'noopener,noreferrer')}
+                    {lesson.googleDriveUrl ? (
+                      <a
+                        href={lesson.googleDriveUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="btn-primary flex items-center space-x-2 text-sm"
                         title={`Открыть урок: ${lesson.googleDriveUrl}`}
                       >
                         <Play className="w-4 h-4" />
                         <span>Начать урок</span>
-                      </button>
+                      </a>
                     ) : (
                       <button
                         className="btn-primary flex items-center space-x-2 text-sm opacity-50 cursor-not-allowed"
@@ -486,28 +364,6 @@ const Courses: React.FC = () => {
               </div>
             ))}
           </div>
-
-          {lessonTotalPages > 1 && (
-            <div className="flex justify-center space-x-2">
-              <button
-                onClick={() => setLessonPage(prev => Math.max(prev - 1, 1))}
-                disabled={lessonPage === 1}
-                className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Назад
-              </button>
-              <span className="flex items-center px-4 py-2 text-pastel-600">
-                Уроки: страница {lessonPage} из {lessonTotalPages}
-              </span>
-              <button
-                onClick={() => setLessonPage(prev => Math.min(prev + 1, lessonTotalPages))}
-                disabled={lessonPage === lessonTotalPages}
-                className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Вперед
-              </button>
-            </div>
-          )}
         </div>
       ) : (
         // Courses view
@@ -609,7 +465,7 @@ const Courses: React.FC = () => {
       )}
 
       {/* Pagination */}
-      {!selectedCourse && totalPages > 1 && (
+      {totalPages > 1 && (
         <div className="flex justify-center space-x-2">
           <button
             onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
@@ -646,69 +502,6 @@ const Courses: React.FC = () => {
           courseId={selectedCourse.id}
           onClose={handleLessonModalClose}
         />
-      )}
-
-      {previewMaterial && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-6">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between gap-3 p-4 border-b border-pastel-200">
-              <div className="min-w-0">
-                <h3 className="text-lg font-semibold text-pastel-800 truncate">
-                  {previewMaterial.name}
-                </h3>
-                {isVideoMaterial(previewMaterial) && (
-                  <p className="text-xs text-pastel-500">
-                    Видео открывается через Google Drive preview
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={handleClosePreview}
-                className="p-2 text-pastel-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                title="Закрыть"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            {isTelegram && isVideoMaterial(previewMaterial) ? (
-              <div className="w-full flex-1 bg-black flex items-center justify-center p-4">
-                {previewVideoError ? (
-                  <div className="text-center max-w-md">
-                    <p className="text-white text-sm mb-4">
-                      Этот формат видео не проигрывается внутри Mini App. Откройте материал через Google Drive.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenMaterialExternal(previewMaterial)}
-                      className="btn-primary inline-flex items-center space-x-2 text-sm"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      <span>Открыть в Google Drive</span>
-                    </button>
-                  </div>
-                ) : (
-                  <video
-                    src={lessonsAPI.getDriveMaterialUrl(previewMaterial.id)}
-                    className="w-full h-full max-h-full"
-                    controls
-                    playsInline
-                    preload="metadata"
-                    onError={() => setPreviewVideoError(true)}
-                  />
-                )}
-              </div>
-            ) : (
-              <iframe
-                src={getMaterialPreviewUrl(previewMaterial)}
-                title={previewMaterial.name}
-                className="w-full flex-1 bg-black"
-                allow="autoplay; fullscreen"
-                allowFullScreen
-              />
-            )}
-          </div>
-        </div>
       )}
     </div>
   );

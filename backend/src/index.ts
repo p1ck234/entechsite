@@ -16,7 +16,6 @@ import eventRoutes from './routes/events';
 import calendarRoutes from './routes/calendar';
 import botRoutes from './routes/bots';
 import uploadRoutes from './routes/upload';
-import driveRoutes from './routes/drive';
 import { initializeDatabase } from './utils/db-init';
 import { ensureUploadsDir, resolveUploadedFilePath } from './utils/uploads';
 import path from 'path';
@@ -287,7 +286,6 @@ app.use('/api/events', eventRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/bots', botRoutes);
 app.use('/api/upload', uploadRoutes);
-app.use('/api/drive', driveRoutes);
 
 const uploadsDir = ensureUploadsDir();
 

@@ -43,7 +43,6 @@
 - `express-validator`, `helmet`, `cors`, `express-rate-limit`
 - `multer` для загрузки файлов
 - `sharp@0.34.4` для on-the-fly оптимизации изображений (`/api/uploads/:filename?w=&h=&q=&fit=`); на Railway используется Node 18, поэтому версия зафиксирована (0.35.x требует Node >=20.9)
-- `googleapis` — чтение Google Drive через service account (синхронизация курсов/уроков)
 - `dotenv`
 
 ### Telegram Bot (`telegram-bot/package.json`)
@@ -70,10 +69,6 @@
   - Telegram боты и сайты.
 - `backend/src/routes/upload.ts`:
   - `POST /api/upload` — загрузка изображений (multer), возвращает `/api/uploads/<filename>`.
-- `backend/src/services/googleDrive.ts`, `backend/src/routes/drive.ts`:
-  - `POST /api/drive/sync-training` (admin) — читает папку «Обучение» на Google Drive и upsert курсов/уроков в БД;
-  - структура Drive: корневая папка → подпапки = курсы, файлы (рекурсивно) = уроки;
-  - credentials: `GOOGLE_SERVICE_ACCOUNT_JSON` / `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` / `GOOGLE_APPLICATION_CREDENTIALS` / локальный `credentials.json` (в `.gitignore`).
 - `backend/src/utils/uploads.ts`:
   - единый путь к папке uploads (`UPLOADS_DIR` или `process.cwd()/uploads`);
   - `resolveUploadedFilePath()` — поиск файла с fallback на legacy-папки.
@@ -84,94 +79,29 @@
   - админ загружает фото/превью файлами через `uploadAPI.uploadPhoto()`, без ручного ввода URL.
 - `frontend/server.js`:
   - production proxy `/api/*` на backend, чтобы относительные `/api/uploads/...` не попадали в SPA fallback.
-- `frontend/src/pages/Courses.tsx`:
-  - кнопка «Синхронизировать Drive» (admin) → `coursesAPI.syncTrainingFromDrive()`.
-
-## Google Drive credentials (Railway)
-
-- `credentials.json` **не коммитится** (см. `.gitignore`).
-- На Railway backend service → Variables:
-  - **Рекомендуется:** `GOOGLE_SERVICE_ACCOUNT_JSON` — весь JSON service account одной строкой (скопировать содержимое `credentials.json`).
-  - **Альтернатива:** `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` — тот же JSON в base64.
-  - **Опционально:** `GOOGLE_DRIVE_ROOT_FOLDER_ID` — ID корневой папки «Обучение»; если не задан, ищется по имени (`GOOGLE_DRIVE_ROOT_FOLDER_NAME`, default «Обучение»).
-- Service account должен иметь доступ к shared folder «Обучение» (Share → email вида `...@...iam.gserviceaccount.com`).
 
 ## Task Journal
 
-### 2026-06-25 - Streaming видео Drive и оптимизация больших списков
+### 2026-06-25 - Откат Google Drive sync для обучения
 
-- Goal: исправить открытие видео из Drive-материалов и снизить лаги на страницах с большим количеством сотрудников/курсов/уроков.
+- Goal: вернуть ручное заполнение курсов и уроков ссылками Google Drive, убрать автоматическую синхронизацию папки «Обучение».
 - Changes:
-  - видео-материалы (`video/*`, `mp4/mov/webm/mkv/avi`) открываются через Google Drive `webViewLink`, как в нативном Drive preview;
-  - остальные материалы Drive открываются через backend endpoint `/api/drive/files/:fileId?token=...`, без предварительного скачивания в `Blob`;
-  - backend endpoint сохраняет поддержку `Range` для случаев, когда материал всё же открывается через portal/service account;
-  - `Courses` получил debounce поиска и локальную пагинацию уроков внутри выбранного курса;
-  - пагинация курсов больше не показывается внутри выбранного курса;
-  - backend `courses` убрал N+1 запросы прогресса и подтягивает `course_progress` через `LEFT JOIN`;
-  - в `Employees` снижена параллельная предзагрузка аватарок, из `employees` backend убраны шумные SQL-логи.
+  - удалены backend route/service синхронизации Drive (`/api/drive/sync-training`, streaming материалов, service account traversal);
+  - из frontend убраны кнопка «Синхронизировать Drive», материалы урока, popup preview и связанная логика;
+  - `googleapis` удалён из backend dependencies;
+  - схема уроков возвращена без `materials JSONB`;
+  - защита `credentials.json` оставлена в `.gitignore`, чтобы секреты не попадали в git.
 - Files:
-  - `backend/src/services/googleDrive.ts`
   - `backend/src/routes/drive.ts`
-  - `backend/src/routes/courses.ts`
-  - `backend/src/routes/employees.ts`
-  - `frontend/src/api/client.ts`
-  - `frontend/src/pages/Courses.tsx`
-  - `frontend/src/pages/Employees.tsx`
-  - `frontend/dist/index.html`
-- Result: видео снова открывается в Google Drive preview, а страницы адресной книги/базы знаний меньше нагружают браузер и backend при больших списках.
-
-### 2026-06-25 - Drive-папка как урок с материалами внутри портала
-
-- Goal: сделать подпапку Google Drive отдельным уроком в портале, но открывать вложенные файлы через backend/service account, а не ссылкой на папку Drive.
-- Changes:
-  - добавлена колонка `lessons.materials JSONB`;
-  - Drive sync создаёт урок из прямой подпапки курса и кладёт файлы этой папки в `materials`;
-  - прямые файлы в курсе остаются уроками с одним материалом;
-  - `GET /api/drive/files/:fileId` стримит файл через service account; Google Docs экспортируются в PDF;
-  - frontend показывает материалы внутри карточки урока и открывает их через API портала;
-  - синхронизация сравнивает текущие данные с Drive и не обновляет неизменённые курсы/уроки;
-  - прогресс старых файловых уроков переносится в урок-папку до архивирования старых файловых карточек.
-- Files:
   - `backend/src/services/googleDrive.ts`
-  - `backend/src/routes/drive.ts`
-  - `backend/src/utils/db-init.ts`
-  - `frontend/src/types/index.ts`
-  - `frontend/src/api/client.ts`
-  - `frontend/src/pages/Courses.tsx`
-  - `frontend/dist/index.html`
-- Result: после повторной синхронизации пользователь видит уроки-папки в портале и открывает файлы из них без личного Google-аккаунта; повторный sync без изменений не пересоздаёт и не трогает записи.
-
-### 2026-06-25 - Синхронизация обучения из Google Drive
-
-- Goal: автоматически подтягивать курсы и уроки из общей папки Google Drive без ручного добавления в админке.
-- Changes:
-  - `backend/src/services/googleDrive.ts` — service account auth, обход дерева папок Drive (`supportsAllDrives`);
-  - `backend/src/routes/drive.ts` — `POST /api/drive/sync-training`: upsert courses/lessons по `google_drive_url`;
-  - `frontend/src/api/client.ts` — `coursesAPI.syncTrainingFromDrive()`;
-  - `frontend/src/pages/Courses.tsx` — кнопка синхронизации для admin;
-  - `.gitignore` — `credentials.json`;
-  - `googleapis` добавлен в `backend/package.json` (не в корень монорепы).
-- Files:
-  - `backend/src/services/googleDrive.ts`
-  - `backend/src/routes/drive.ts`
   - `backend/src/index.ts`
+  - `backend/src/utils/db-init.ts`
+  - `backend/package.json`
   - `frontend/src/api/client.ts`
   - `frontend/src/pages/Courses.tsx`
-  - `backend/package.json`
+  - `frontend/src/types/index.ts`
   - `.gitignore`
-- Result: admin может одной кнопкой синхронизировать структуру Drive → БД; материалы открываются по Google Drive URL без дублирования файлов на сервере.
-
-### 2026-06-25 - Увеличен timeout для Google Drive sync
-
-- Goal: убрать клиентский `ECONNABORTED` при запуске «Синхронизировать Drive».
-- Changes:
-  - для `coursesAPI.syncTrainingFromDrive()` задан отдельный timeout 180s вместо общего axios timeout 30s;
-  - в `frontend/server.js` timeout proxy `/api/*` увеличен до 180s и вынесен в `API_PROXY_TIMEOUT_MS`.
-- Files:
-  - `frontend/src/api/client.ts`
-  - `frontend/server.js`
-  - `frontend/dist/index.html`
-- Result: фронт и frontend proxy больше не должны обрывать долгую синхронизацию Drive через 30/60 секунд.
+- Result: курсы и уроки снова управляются вручную через существующие формы и `googleDriveUrl`; автоматической синхронизации с Google Drive больше нет.
 
 ### 2026-06-25 - Frontend proxy для `/api/uploads` на production-домене
 
@@ -339,22 +269,6 @@
 
 ## Problems and Resolutions
 
-### 2026-06-25 - Видео Drive не открывалось после перехода на материалы урока
-
-- Symptom: файлы в уроке отображались, но видео не открывалось/зависало, хотя раньше Drive-ссылка открывалась.
-- Root cause: frontend открывал материал через `axios -> Blob -> URL.createObjectURL`; для больших видео это требует полного скачивания и ломает привычный Drive preview.
-- Resolution: видео определяется по MIME/расширению и открывается через `webViewLink` Google Drive; остальные материалы продолжают открываться через portal/backend endpoint.
-- Validation: пользователь подтвердил, что видео после изменения открывается корректно; `npm run build` в `frontend` прошёл успешно.
-- Related files: `frontend/src/pages/Courses.tsx`, `frontend/dist/index.html`
-
-### 2026-06-25 - Drive sync падал по `ECONNABORTED` через 30 секунд
-
-- Symptom: при нажатии «Синхронизировать Drive» frontend логировал `timeout of 30000ms exceeded`, `code: ECONNABORTED`, URL `/drive/sync-training`.
-- Root cause: общий axios timeout был 30s, а синхронизация Drive может идти дольше из-за рекурсивного обхода папок и upsert в БД; frontend proxy также имел лимит 60s.
-- Resolution: для `syncTrainingFromDrive()` задан timeout 180s; timeout frontend proxy `/api/*` увеличен до 180s и сделан настраиваемым через `API_PROXY_TIMEOUT_MS`.
-- Validation: `npm run build` в `frontend` прошёл успешно.
-- Related files: `frontend/src/api/client.ts`, `frontend/server.js`, `frontend/dist/index.html`
-
 ### 2026-06-25 - `/api/uploads` на frontend-домене возвращал HTML и блокировался ORB
 
 - Symptom: Network показывает `net::ERR_BLOCKED_BY_ORB`, `404 text/html` для `https://entech.p1ck23.ru/api/uploads/photo-....jpg`, хотя URL выглядит как backend upload.
@@ -493,13 +407,6 @@
 
 ## Decisions
 
-### 2026-06-25 - Drive-папка хранится как урок, файлы — как `materials`
-
-- Context: ссылка на папку Google Drive неудобна и может требовать Google-аккаунт; при этом пользователь хочет видеть подпапку как один урок в курсе.
-- Decision: уроком считать прямую подпапку курса, а её файлы хранить в `lessons.materials` и открывать через backend endpoint с service account. Sync идемпотентный: существующие записи ищутся по Drive URL/ID, неизменённые строки не обновляются, прогресс старых файловых уроков переносится перед архивированием дублей.
-- Trade-off: нужна новая JSONB-колонка, streaming endpoint и аккуратная миграция прогресса; зато структура курса становится удобной, доступ к файлам не зависит от Google-аккаунта пользователя, а повторный sync не сбивает историю.
-- Related files: `backend/src/services/googleDrive.ts`, `backend/src/routes/drive.ts`, `backend/src/utils/db-init.ts`, `frontend/src/pages/Courses.tsx`
-
 ### 2026-06-25 - Регистрация новых пользователей через Telegram с модерацией
 
 - Context: нужен контролируемый доступ в корпоративный портал.
@@ -570,13 +477,6 @@
 - Trade-off: без persistent volume на Railway файлы могут теряться при redeploy; legacy fallback не спасёт файлы, уже записанные только в ephemeral-папку.
 - Related files: `backend/src/utils/uploads.ts`, `backend/src/routes/upload.ts`, `backend/src/index.ts`
 
-### 2026-06-25 - Курсы/уроки из Google Drive через service account
-
-- Context: материалы обучения хранятся на общем Google Drive; дублировать файлы на backend не нужно; пользователям не требуется личный доступ к Drive.
-- Decision: backend читает shared folder через service account; папки = курсы, файлы = уроки; синхронизация upsert по `google_drive_url`; credentials через env на Railway, не в git.
-- Trade-off: доступ к материалам по-прежнему зависит от публичности/шаринга файлов в Drive; service account нужно явно добавлять в shared folder.
-- Related files: `backend/src/services/googleDrive.ts`, `backend/src/routes/drive.ts`, `frontend/src/pages/Courses.tsx`
-
 ### 2026-06-25 - `/api` proxy на frontend server как production safety net
 
 - Context: даже при корректной нормализации URL часть ссылок может оставаться относительной `/api/uploads/...`; на кастомном домене это попадает в frontend service.
@@ -590,6 +490,6 @@
   - Related files: `backend/src/index.ts`, `backend/scripts/add-admin-telegram-oauth.js`
 - TODO: синхронизировать документацию, т.к. `README.md` упоминает Prisma, а текущая реализация использует `pg`.
 - TODO: рассмотреть единый модуль подключения к БД вместо создания `Pool` в каждом роуте.
-- TODO: мигрировать фото с Google Drive на object storage (S3/R2) — для курсов теперь используется Drive sync, но превью/legacy-контент может оставаться на внешних URL.
+- TODO: мигрировать курсы/фото с Google Drive на object storage (S3/R2) — сейчас контент завязан на `google_drive_url`, доступ зависит от Google-аккаунта пользователя.
 - TODO: перезалить legacy-записи с внешними URL в `employees.photo` и `events.preview_images` через админ-формы с file upload.
 - TODO: на Railway подключить persistent volume и задать `UPLOADS_DIR`, иначе upload-файлы пропадают при redeploy.

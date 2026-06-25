@@ -87,7 +87,6 @@ async function initializeDatabase(pool) {
           title VARCHAR(255) NOT NULL,
           description TEXT,
           google_drive_url VARCHAR(500),
-          materials JSONB DEFAULT '[]'::jsonb,
           duration INTEGER,
           order_index INTEGER DEFAULT 0,
           is_active BOOLEAN DEFAULT true,
@@ -185,17 +184,6 @@ async function initializeDatabase(pool) {
             ALTER TABLE employees ADD COLUMN status VARCHAR(20) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED'));
             -- Существующие сотрудники считаем одобренными
             UPDATE employees SET status = 'APPROVED' WHERE status IS NULL;
-          END IF;
-        END $$;
-      `);
-            await pool.query(`
-        DO $$
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_name = 'lessons' AND column_name = 'materials'
-          ) THEN
-            ALTER TABLE lessons ADD COLUMN materials JSONB DEFAULT '[]'::jsonb;
           END IF;
         END $$;
       `);

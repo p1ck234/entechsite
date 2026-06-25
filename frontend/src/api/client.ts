@@ -11,8 +11,6 @@ const api = axios.create({
   timeout: 30000, // 30 секунд таймаут
 });
 
-const DRIVE_SYNC_TIMEOUT_MS = 180000;
-
 // API для загрузки файлов (с FormData)
 const uploadApi = axios.create({
   baseURL: API_BASE_URL,
@@ -310,23 +308,6 @@ export const coursesAPI = {
     const response = await api.get('/courses/progress/user');
     return response.data;
   },
-
-  syncTrainingFromDrive: async (): Promise<{
-    message: string;
-    coursesFound: number;
-    coursesCreated: number;
-    coursesUpdated: number;
-    coursesUnchanged: number;
-    lessonsCreated: number;
-    lessonsUpdated: number;
-    lessonsUnchanged: number;
-    lessonsArchived: number;
-  }> => {
-    const response = await api.post('/drive/sync-training', undefined, {
-      timeout: DRIVE_SYNC_TIMEOUT_MS,
-    });
-    return response.data;
-  },
 };
 
 // Lessons API
@@ -341,7 +322,6 @@ export const lessonsAPI = {
       title: lesson.title,
       description: lesson.description,
       googleDriveUrl: lesson.google_drive_url,
-      materials: Array.isArray(lesson.materials) ? lesson.materials : [],
       duration: lesson.duration,
       orderIndex: lesson.order_index,
       isActive: lesson.is_active,
@@ -366,7 +346,6 @@ export const lessonsAPI = {
       title: lesson.title,
       description: lesson.description,
       googleDriveUrl: lesson.google_drive_url,
-      materials: Array.isArray(lesson.materials) ? lesson.materials : [],
       duration: lesson.duration,
       orderIndex: lesson.order_index,
       isActive: lesson.is_active,
@@ -374,25 +353,6 @@ export const lessonsAPI = {
       updatedAt: lesson.updated_at,
       userProgress: lesson.userProgress
     };
-  },
-
-  getDriveMaterial: async (fileId: string): Promise<Blob> => {
-    const response = await api.get(`/drive/files/${fileId}`, {
-      responseType: 'blob',
-      timeout: DRIVE_SYNC_TIMEOUT_MS,
-    });
-    return response.data;
-  },
-
-  getDriveMaterialUrl: (fileId: string): string => {
-    const token = localStorage.getItem('token');
-    const url = new URL(`${API_BASE_URL}/drive/files/${encodeURIComponent(fileId)}`);
-
-    if (token) {
-      url.searchParams.set('token', token);
-    }
-
-    return url.toString();
   },
 
   createLesson: async (lesson: Omit<Lesson, 'id' | 'createdAt' | 'updatedAt' | 'userProgress'>): Promise<{ message: string; lesson: Lesson }> => {

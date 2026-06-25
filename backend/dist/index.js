@@ -18,7 +18,6 @@ const events_1 = __importDefault(require("./routes/events"));
 const calendar_1 = __importDefault(require("./routes/calendar"));
 const bots_1 = __importDefault(require("./routes/bots"));
 const upload_1 = __importDefault(require("./routes/upload"));
-const drive_1 = __importDefault(require("./routes/drive"));
 const db_init_1 = require("./utils/db-init");
 const uploads_1 = require("./utils/uploads");
 const path_1 = __importDefault(require("path"));
@@ -219,7 +218,6 @@ app.use('/api/events', events_1.default);
 app.use('/api/calendar', calendar_1.default);
 app.use('/api/bots', bots_1.default);
 app.use('/api/upload', upload_1.default);
-app.use('/api/drive', drive_1.default);
 const uploadsDir = (0, uploads_1.ensureUploadsDir)();
 const OPTIMIZABLE_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const MEDIA_PROXY_ALLOWED_HOSTS = new Set([

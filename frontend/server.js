@@ -9,7 +9,6 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const API_PROXY_TARGET = process.env.API_PROXY_TARGET || 'https://entechsite-backend-production.up.railway.app';
-const API_PROXY_TIMEOUT_MS = Number(process.env.API_PROXY_TIMEOUT_MS || 180000);
 
 const distPath = join(__dirname, 'dist');
 
@@ -108,7 +107,7 @@ if (existsSync(distPath)) {
 // Проксируем /api на backend, чтобы относительные ссылки /api/uploads/... не попадали в SPA.
 app.use('/api', async (req, res) => {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), API_PROXY_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
 
   try {
     const targetUrl = new URL(`/api${req.originalUrl.replace(/^\/api/, '')}`, API_PROXY_TARGET);

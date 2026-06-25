@@ -46,7 +46,6 @@ export interface Lesson {
   title: string;
   description?: string;
   googleDriveUrl?: string;
-  materials?: LessonMaterial[];
   duration?: number;
   orderIndex: number;
   isActive: boolean;
@@ -57,14 +56,6 @@ export interface Lesson {
     startedAt?: string;
     completedAt?: string;
   };
-}
-
-export interface LessonMaterial {
-  id: string;
-  name: string;
-  mimeType?: string;
-  webViewLink?: string;
-  modifiedTime?: string;
 }
 
 export interface CourseProgress {
