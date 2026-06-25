@@ -69,8 +69,23 @@
   - Telegram боты и сайты.
 - `backend/src/routes/upload.ts`:
   - загрузка изображений.
+- `backend/src/index.ts`:
+  - `GET /api/uploads/:filename` — оптимизация локальных фото через `sharp`;
+  - `GET /api/media/proxy?url=...` — прокси Google-изображений для Mini App.
 
 ## Task Journal
+
+### 2026-06-25 - Прокси Google-изображений для «Наша жизнь» в Mini App
+
+- Goal: починить пустые превью в разделе «Наша жизнь» в Telegram Mini App, где прямые Google Drive URL не открываются в webview.
+- Changes:
+  - на backend добавлен `GET /api/media/proxy?url=...` с allowlist Google-хостов, streaming и cache headers;
+  - в `imageUtils` для Mini App Google-кандидаты строятся с приоритетом проксированных URL через backend;
+  - прямые Google-ссылки оставлены как fallback.
+- Files:
+  - `backend/src/index.ts`
+  - `frontend/src/utils/imageUtils.ts`
+- Result: превью событий в Mini App должны грузиться через backend proxy, не завися от Google-аккаунта пользователя в webview.
 
 ### 2026-06-25 - Кэш и предзагрузка фото для адресной книги и «Наша жизнь»
 
@@ -171,6 +186,14 @@
 - Result: есть единая точка для фиксации контекста, прогресса и решений.
 
 ## Problems and Resolutions
+
+### 2026-06-25 - Превью «Наша жизнь» пустые в Mini App, на вебе работают
+
+- Symptom: в Mini App карточка мероприятия показывает пустой серый блок вместо фото; на веб-сайте те же превью отображаются.
+- Root cause: `previewImages` хранят Google Drive URL; Telegram webview блокирует или не может загрузить прямые Google-ссылки (referrer/CORS/аккаунт).
+- Resolution: backend media proxy `/api/media/proxy`; в Mini App Google URL-кандидаты приоритетно идут через прокси backend origin.
+- Validation: backend и frontend собираются; требует деплоя backend + frontend для проверки в Mini App.
+- Related files: `backend/src/index.ts`, `frontend/src/utils/imageUtils.ts`, `frontend/src/pages/Life.tsx`
 
 ### 2026-06-25 - Веб-версия адресной книги подтормаживала после добавления предзагрузки фото
 
@@ -312,9 +335,17 @@
 - Trade-off: кэш живёт в рамках сессии браузера (не persistent между закрытием вкладки); нужен контроль concurrency, чтобы не перегружать UI thread.
 - Related files: `frontend/src/utils/imagePreload.ts`, `frontend/src/pages/Employees.tsx`, `frontend/src/pages/Life.tsx`
 
+### 2026-06-25 - Backend proxy для Google-изображений в Mini App
+
+- Context: курсы, уроки и «Наша жизнь» хранят контент как Google Drive URL; Mini App webview нестабильно грузит прямые ссылки; доступ зависит от Google-аккаунта пользователя.
+- Decision: для Google-изображений в Mini App использовать backend proxy с allowlist хостов; прямые ссылки — fallback. Долгосрочно — миграция на object storage.
+- Trade-off: proxy добавляет нагрузку на backend и не решает проблему доступа к курсам (только изображения); нужен деплой backend.
+- Related files: `backend/src/index.ts`, `frontend/src/utils/imageUtils.ts`
+
 ## Open Risks and TODO
 
 - TODO: убрать хардкод fallback `DATABASE_URL` и credentials из кода.
   - Related files: `backend/src/index.ts`, `backend/scripts/add-admin-telegram-oauth.js`
 - TODO: синхронизировать документацию, т.к. `README.md` упоминает Prisma, а текущая реализация использует `pg`.
 - TODO: рассмотреть единый модуль подключения к БД вместо создания `Pool` в каждом роуте.
+- TODO: мигрировать курсы/фото с Google Drive на object storage (S3/R2) — сейчас контент завязан на `google_drive_url`, доступ зависит от Google-аккаунта пользователя.
