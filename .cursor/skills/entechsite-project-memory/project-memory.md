@@ -102,6 +102,7 @@
   - `frontend/src/types/index.ts`
   - `.gitignore`
 - Result: курсы и уроки снова управляются вручную через существующие формы и `googleDriveUrl`; автоматической синхронизации с Google Drive больше нет.
+- Note: эксперимент с автоматической Drive-синхронизацией, service account traversal, `materials`, popup/preview и переносом прогресса признан неудачным для текущего продукта. Не возвращать эту схему без отдельного согласованного плана.
 
 ### 2026-06-25 - Frontend proxy для `/api/uploads` на production-домене
 
