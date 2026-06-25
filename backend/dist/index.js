@@ -20,7 +20,6 @@ const upload_1 = __importDefault(require("./routes/upload"));
 const db_init_1 = require("./utils/db-init");
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
-const sharp_1 = __importDefault(require("sharp"));
 dotenv_1.default.config();
 let databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
@@ -226,6 +225,25 @@ if (!fs_1.default.existsSync(uploadsDir)) {
     console.log(`📁 Создана папка для загрузок: ${uploadsDir}`);
 }
 const OPTIMIZABLE_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+let cachedSharpModule = null;
+let sharpInitAttempted = false;
+const getSharpModule = () => {
+    if (sharpInitAttempted) {
+        return cachedSharpModule;
+    }
+    sharpInitAttempted = true;
+    try {
+        cachedSharpModule = require('sharp');
+        console.log('✅ Модуль sharp успешно загружен');
+        return cachedSharpModule;
+    }
+    catch (error) {
+        cachedSharpModule = null;
+        console.warn('⚠️ Модуль sharp недоступен, оптимизация изображений отключена');
+        console.warn(error);
+        return null;
+    }
+};
 const parsePositiveInt = (value, max) => {
     if (typeof value !== 'string') {
         return undefined;
@@ -263,11 +281,15 @@ app.get('/api/uploads/:filename', async (req, res) => {
     if (!shouldOptimize) {
         return res.sendFile(filePath);
     }
+    const sharpModule = getSharpModule();
+    if (!sharpModule) {
+        return res.sendFile(filePath);
+    }
     try {
         const acceptHeader = typeof req.headers.accept === 'string' ? req.headers.accept : '';
         const prefersWebp = acceptHeader.includes('image/webp');
         const normalizedQuality = quality ?? 76;
-        let transformer = (0, sharp_1.default)(filePath, { failOn: 'none' }).rotate();
+        let transformer = sharpModule(filePath, { failOn: 'none' }).rotate();
         if (width !== undefined || height !== undefined) {
             transformer = transformer.resize({
                 width,
