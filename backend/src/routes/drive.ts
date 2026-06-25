@@ -1,7 +1,7 @@
 import express from 'express';
 import { Pool } from 'pg';
 import { authenticateToken } from '../middleware/auth';
-import { DriveCourseFolder, DriveFileItem, getTrainingDriveTree } from '../services/googleDrive';
+import { DriveCourseFolder, getTrainingDriveTree } from '../services/googleDrive';
 
 const router = express.Router();
 const pool = new Pool({
@@ -23,14 +23,6 @@ const getUniqueUrls = (...urls: Array<string | undefined>): string[] => {
 
 const getDriveFolderUrl = (folderId: string): string => {
   return `https://drive.google.com/drive/folders/${folderId}`;
-};
-
-const getDriveFileUrl = (fileId: string): string => {
-  return `https://drive.google.com/file/d/${fileId}/view`;
-};
-
-const getDriveFileUrlCandidates = (file: DriveFileItem): string[] => {
-  return getUniqueUrls(getDriveFileUrl(file.id), file.webViewLink);
 };
 
 const upsertCourse = async (client: any, courseFolder: DriveCourseFolder, stats: SyncStats): Promise<number> => {
@@ -73,8 +65,8 @@ const upsertCourse = async (client: any, courseFolder: DriveCourseFolder, stats:
 
 const upsertLessons = async (client: any, courseId: number, courseFolder: DriveCourseFolder, stats: SyncStats): Promise<void> => {
   for (const [index, lesson] of courseFolder.lessons.entries()) {
-    const lessonUrl = getDriveFileUrl(lesson.id);
-    const lessonUrlCandidates = getDriveFileUrlCandidates(lesson);
+    const lessonUrl = getDriveFolderUrl(lesson.id);
+    const lessonUrlCandidates = getUniqueUrls(lessonUrl, lesson.webViewLink);
     const existingLesson = await client.query(
       `SELECT id, title, description, google_drive_url, order_index, is_active
        FROM lessons
@@ -87,7 +79,7 @@ const upsertLessons = async (client: any, courseId: number, courseFolder: DriveC
       const existing = existingLesson.rows[0];
       const unchanged =
         existing.title === lesson.name &&
-        (existing.description || null) === (lesson.mimeType || null) &&
+        (existing.description || null) === 'Папка Google Drive' &&
         existing.google_drive_url === lessonUrl &&
         Number(existing.order_index) === index &&
         existing.is_active === true;
@@ -101,7 +93,7 @@ const upsertLessons = async (client: any, courseId: number, courseFolder: DriveC
         `UPDATE lessons
          SET title = $1, description = $2, google_drive_url = $3, order_index = $4, is_active = true, updated_at = CURRENT_TIMESTAMP
          WHERE id = $5`,
-        [lesson.name, lesson.mimeType || null, lessonUrl, index, existing.id]
+        [lesson.name, 'Папка Google Drive', lessonUrl, index, existing.id]
       );
       stats.lessonsUpdated += 1;
       continue;
@@ -110,7 +102,7 @@ const upsertLessons = async (client: any, courseId: number, courseFolder: DriveC
     await client.query(
       `INSERT INTO lessons (course_id, title, description, google_drive_url, duration, order_index, is_active)
        VALUES ($1, $2, $3, $4, $5, $6, true)`,
-      [courseId, lesson.name, lesson.mimeType || null, lessonUrl, null, index]
+      [courseId, lesson.name, 'Папка Google Drive', lessonUrl, null, index]
     );
     stats.lessonsCreated += 1;
   }

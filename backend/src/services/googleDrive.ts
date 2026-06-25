@@ -81,9 +81,13 @@ const getDriveClient = (): drive_v3.Drive => {
   });
 };
 
-const getFileWebViewLink = (file: drive_v3.Schema$File): string => {
+const getDriveWebViewLink = (file: drive_v3.Schema$File): string => {
   if (file.webViewLink) {
     return file.webViewLink;
+  }
+
+  if (file.mimeType === FOLDER_MIME_TYPE) {
+    return `https://drive.google.com/drive/folders/${file.id}`;
   }
 
   return `https://drive.google.com/file/d/${file.id}/view`;
@@ -98,7 +102,7 @@ const mapDriveFile = (file: drive_v3.Schema$File): DriveFileItem => {
     id: file.id,
     name: file.name,
     mimeType: file.mimeType || undefined,
-    webViewLink: getFileWebViewLink(file),
+    webViewLink: getDriveWebViewLink(file),
     modifiedTime: file.modifiedTime || undefined,
   };
 };
@@ -161,24 +165,9 @@ const listFolderChildren = async (drive: drive_v3.Drive, folderId: string): Prom
   return sortDriveItemsByName(files.map(mapDriveFile));
 };
 
-const listFolderFilesRecursive = async (drive: drive_v3.Drive, folderId: string, prefix = ''): Promise<DriveFileItem[]> => {
-  const children = await listFolderChildren(drive, folderId);
-  const files: DriveFileItem[] = [];
-
-  for (const child of children) {
-    if (child.mimeType === FOLDER_MIME_TYPE) {
-      const nestedPrefix = prefix ? `${prefix} / ${child.name}` : child.name;
-      files.push(...await listFolderFilesRecursive(drive, child.id, nestedPrefix));
-      continue;
-    }
-
-    files.push({
-      ...child,
-      name: prefix ? `${prefix} / ${child.name}` : child.name,
-    });
-  }
-
-  return files;
+const listDirectLessonFolders = async (drive: drive_v3.Drive, courseFolderId: string): Promise<DriveFileItem[]> => {
+  const children = await listFolderChildren(drive, courseFolderId);
+  return sortDriveItemsByName(children.filter((child) => child.mimeType === FOLDER_MIME_TYPE));
 };
 
 export const getTrainingDriveTree = async (): Promise<{ root: DriveFileItem; courses: DriveCourseFolder[] }> => {
@@ -190,7 +179,7 @@ export const getTrainingDriveTree = async (): Promise<{ root: DriveFileItem; cou
   const courses = await Promise.all(
     courseFolders.map(async (folder) => ({
       ...folder,
-      lessons: await listFolderFilesRecursive(drive, folder.id),
+      lessons: await listDirectLessonFolders(drive, folder.id),
     }))
   );
 

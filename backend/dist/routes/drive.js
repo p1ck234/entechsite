@@ -17,12 +17,6 @@ const getUniqueUrls = (...urls) => {
 const getDriveFolderUrl = (folderId) => {
     return `https://drive.google.com/drive/folders/${folderId}`;
 };
-const getDriveFileUrl = (fileId) => {
-    return `https://drive.google.com/file/d/${fileId}/view`;
-};
-const getDriveFileUrlCandidates = (file) => {
-    return getUniqueUrls(getDriveFileUrl(file.id), file.webViewLink);
-};
 const upsertCourse = async (client, courseFolder, stats) => {
     const courseUrl = getDriveFolderUrl(courseFolder.id);
     const courseUrlCandidates = getUniqueUrls(courseUrl, courseFolder.webViewLink);
@@ -48,8 +42,8 @@ const upsertCourse = async (client, courseFolder, stats) => {
 };
 const upsertLessons = async (client, courseId, courseFolder, stats) => {
     for (const [index, lesson] of courseFolder.lessons.entries()) {
-        const lessonUrl = getDriveFileUrl(lesson.id);
-        const lessonUrlCandidates = getDriveFileUrlCandidates(lesson);
+        const lessonUrl = getDriveFolderUrl(lesson.id);
+        const lessonUrlCandidates = getUniqueUrls(lessonUrl, lesson.webViewLink);
         const existingLesson = await client.query(`SELECT id, title, description, google_drive_url, order_index, is_active
        FROM lessons
        WHERE course_id = $1 AND google_drive_url = ANY($2::text[])
@@ -57,7 +51,7 @@ const upsertLessons = async (client, courseId, courseFolder, stats) => {
         if (existingLesson.rows.length > 0) {
             const existing = existingLesson.rows[0];
             const unchanged = existing.title === lesson.name &&
-                (existing.description || null) === (lesson.mimeType || null) &&
+                (existing.description || null) === 'Папка Google Drive' &&
                 existing.google_drive_url === lessonUrl &&
                 Number(existing.order_index) === index &&
                 existing.is_active === true;
@@ -67,12 +61,12 @@ const upsertLessons = async (client, courseId, courseFolder, stats) => {
             }
             await client.query(`UPDATE lessons
          SET title = $1, description = $2, google_drive_url = $3, order_index = $4, is_active = true, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $5`, [lesson.name, lesson.mimeType || null, lessonUrl, index, existing.id]);
+         WHERE id = $5`, [lesson.name, 'Папка Google Drive', lessonUrl, index, existing.id]);
             stats.lessonsUpdated += 1;
             continue;
         }
         await client.query(`INSERT INTO lessons (course_id, title, description, google_drive_url, duration, order_index, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, true)`, [courseId, lesson.name, lesson.mimeType || null, lessonUrl, null, index]);
+       VALUES ($1, $2, $3, $4, $5, $6, true)`, [courseId, lesson.name, 'Папка Google Drive', lessonUrl, null, index]);
         stats.lessonsCreated += 1;
     }
 };
