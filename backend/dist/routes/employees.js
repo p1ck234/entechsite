@@ -12,6 +12,13 @@ const router = express_1.default.Router();
 const pool = new pg_1.Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
+const normalizeTelegramUsername = (username) => {
+    if (!username) {
+        return null;
+    }
+    const normalized = username.trim().replace(/^@+/, '').toLowerCase();
+    return normalized.length > 0 ? normalized : null;
+};
 router.get('/', auth_1.authenticateToken, [
     (0, express_validator_1.query)('page').optional().isInt({ min: 1 }),
     (0, express_validator_1.query)('limit').optional().isInt({ min: 1, max: 100 }),
@@ -166,12 +173,13 @@ router.post('/', auth_1.authenticateToken, [
             return res.status(403).json({ message: 'Admin access required' });
         }
         const { firstName, lastName, middleName, position, department, email, phone, telegram, photo } = req.body;
+        const normalizedTelegram = normalizeTelegramUsername(telegram);
         const existingEmployee = await pool.query('SELECT id FROM employees WHERE email = $1 AND is_active = true', [email]);
         if (existingEmployee.rows.length > 0) {
             return res.status(400).json({ message: 'Employee with this email already exists' });
         }
         const result = await pool.query(`INSERT INTO employees (first_name, last_name, middle_name, position, department, email, phone, telegram, photo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`, [firstName, lastName, middleName, position, department, email, phone, telegram, photo]);
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`, [firstName, lastName, middleName, position, department, email, phone, normalizedTelegram, photo]);
         res.status(201).json({
             message: 'Employee created successfully',
             employee: result.rows[0]
@@ -204,6 +212,9 @@ router.put('/:id', auth_1.authenticateToken, [
         }
         const { id } = req.params;
         const updateData = req.body;
+        if (Object.prototype.hasOwnProperty.call(updateData, 'telegram')) {
+            updateData.telegram = normalizeTelegramUsername(updateData.telegram);
+        }
         const existingEmployee = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
         if (existingEmployee.rows.length === 0) {
             return res.status(404).json({ message: 'Employee not found' });

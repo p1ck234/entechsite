@@ -48,6 +48,19 @@ const EmployeeAvatar: React.FC<{ employee: Employee }> = ({ employee }) => {
   );
 };
 
+const normalizeTelegramUsername = (username?: string | null): string => {
+  if (!username) {
+    return '';
+  }
+
+  return username.trim().replace(/^@+/, '').toLowerCase();
+};
+
+const formatTelegramUsername = (username?: string | null): string => {
+  const normalized = normalizeTelegramUsername(username);
+  return normalized ? `@${normalized}` : '';
+};
+
 const Employees: React.FC = () => {
   const { isAdmin } = useAuth();
   const { isTelegram, webApp } = useTelegram();
@@ -436,7 +449,7 @@ const Employees: React.FC = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              const telegramUsername = employee.telegram?.replace('@', '') || '';
+                              const telegramUsername = normalizeTelegramUsername(employee.telegram);
                               if (telegramUsername) {
                                 if (isTelegram && webApp) {
                                   // В Telegram Mini App используем openTelegramLink
@@ -455,16 +468,16 @@ const Employees: React.FC = () => {
                             }}
                             className="text-primary-600 hover:text-primary-700 hover:underline transition-colors text-left"
                           >
-                            {employee.telegram}
+                            {formatTelegramUsername(employee.telegram)}
                           </button>
                         </div>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            const telegramToCopy = employee.telegram?.startsWith('@') 
-                              ? employee.telegram 
-                              : `@${employee.telegram}`;
-                            handleCopy(telegramToCopy, `telegram-${employee.id}`);
+                            const telegramToCopy = formatTelegramUsername(employee.telegram);
+                            if (telegramToCopy) {
+                              handleCopy(telegramToCopy, `telegram-${employee.id}`);
+                            }
                           }}
                           className="ml-2 p-1 text-pastel-400 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
                           title="Скопировать Telegram"

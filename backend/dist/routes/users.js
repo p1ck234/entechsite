@@ -12,6 +12,13 @@ const router = express_1.default.Router();
 const pool = new pg_1.Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
+const normalizeTelegramUsername = (username) => {
+    if (!username) {
+        return null;
+    }
+    const normalized = username.trim().replace(/^@+/, '').toLowerCase();
+    return normalized.length > 0 ? normalized : null;
+};
 router.post('/', auth_1.authenticateToken, auth_1.requireAdmin, [
     (0, express_validator_1.body)('email').isEmail().normalizeEmail(),
     (0, express_validator_1.body)('password').isLength({ min: 6 }),
@@ -31,6 +38,7 @@ router.post('/', auth_1.authenticateToken, auth_1.requireAdmin, [
             return res.status(400).json({ errors: errors.array() });
         }
         const { email, password, role, firstName, lastName, middleName, position, department, phone, telegram, photo } = req.body;
+        const normalizedTelegram = normalizeTelegramUsername(telegram);
         const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
         if (existingUser.rows.length > 0) {
             return res.status(400).json({ message: 'User with this email already exists' });
@@ -43,7 +51,7 @@ router.post('/', auth_1.authenticateToken, auth_1.requireAdmin, [
         const userResult = await pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING id, email, role, created_at', [email, hashedPassword, role]);
         const user = userResult.rows[0];
         const employeeResult = await pool.query(`INSERT INTO employees (first_name, last_name, middle_name, position, department, email, phone, telegram, photo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`, [firstName, lastName, middleName, position, department, email, phone, telegram, photo]);
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`, [firstName, lastName, middleName, position, department, email, phone, normalizedTelegram, photo]);
         res.status(201).json({
             message: 'User and employee created successfully',
             user,

@@ -9,6 +9,15 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
 
+const normalizeTelegramUsername = (username?: string | null): string | null => {
+  if (!username) {
+    return null;
+  }
+
+  const normalized = username.trim().replace(/^@+/, '').toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+};
+
 // Create user (Admin only) - creates both user and employee
 router.post('/', authenticateToken, requireAdmin, [
   body('email').isEmail().normalizeEmail(),
@@ -42,6 +51,7 @@ router.post('/', authenticateToken, requireAdmin, [
       telegram,
       photo
     } = req.body;
+    const normalizedTelegram = normalizeTelegramUsername(telegram);
 
     // Check if user already exists
     const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
@@ -70,7 +80,7 @@ router.post('/', authenticateToken, requireAdmin, [
     const employeeResult = await pool.query(
       `INSERT INTO employees (first_name, last_name, middle_name, position, department, email, phone, telegram, photo)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [firstName, lastName, middleName, position, department, email, phone, telegram, photo]
+      [firstName, lastName, middleName, position, department, email, phone, normalizedTelegram, photo]
     );
 
     res.status(201).json({

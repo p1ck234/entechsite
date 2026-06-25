@@ -9,6 +9,15 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
 
+const normalizeTelegramUsername = (username?: string | null): string | null => {
+  if (!username) {
+    return null;
+  }
+
+  const normalized = username.trim().replace(/^@+/, '').toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+};
+
 // Get all employees
 router.get('/', authenticateToken, [
   query('page').optional().isInt({ min: 1 }),
@@ -207,6 +216,7 @@ router.post('/', authenticateToken, [
       telegram,
       photo
     } = req.body;
+    const normalizedTelegram = normalizeTelegramUsername(telegram);
 
     // Check if active employee with email already exists
     const existingEmployee = await pool.query('SELECT id FROM employees WHERE email = $1 AND is_active = true', [email]);
@@ -218,7 +228,7 @@ router.post('/', authenticateToken, [
     const result = await pool.query(
       `INSERT INTO employees (first_name, last_name, middle_name, position, department, email, phone, telegram, photo)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [firstName, lastName, middleName, position, department, email, phone, telegram, photo]
+      [firstName, lastName, middleName, position, department, email, phone, normalizedTelegram, photo]
     );
 
     res.status(201).json({
@@ -256,6 +266,10 @@ router.put('/:id', authenticateToken, [
 
     const { id } = req.params;
     const updateData = req.body;
+
+    if (Object.prototype.hasOwnProperty.call(updateData, 'telegram')) {
+      updateData.telegram = normalizeTelegramUsername(updateData.telegram);
+    }
 
     // Check if employee exists
     const existingEmployee = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
