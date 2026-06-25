@@ -125,9 +125,13 @@ const listFolderChildren = async (drive, folderId) => {
     });
     return sortDriveItemsByName(files.map(mapDriveFile));
 };
-const listDirectLessonFolders = async (drive, courseFolderId) => {
+const listDirectLessons = async (drive, courseFolderId) => {
     const children = await listFolderChildren(drive, courseFolderId);
-    return sortDriveItemsByName(children.filter((child) => child.mimeType === FOLDER_MIME_TYPE));
+    const folders = children.filter((child) => child.mimeType === FOLDER_MIME_TYPE);
+    if (folders.length > 0) {
+        return sortDriveItemsByName(folders);
+    }
+    return sortDriveItemsByName(children.filter((child) => child.mimeType !== FOLDER_MIME_TYPE));
 };
 const getTrainingDriveTree = async () => {
     const drive = getDriveClient();
@@ -136,7 +140,7 @@ const getTrainingDriveTree = async () => {
     const courseFolders = sortDriveItemsByName(rootChildren.filter((item) => item.mimeType === FOLDER_MIME_TYPE));
     const courses = await Promise.all(courseFolders.map(async (folder) => ({
         ...folder,
-        lessons: await listDirectLessonFolders(drive, folder.id),
+        lessons: await listDirectLessons(drive, folder.id),
     })));
     return { root, courses };
 };
