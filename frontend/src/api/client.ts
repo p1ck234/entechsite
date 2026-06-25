@@ -308,6 +308,18 @@ export const coursesAPI = {
     const response = await api.get('/courses/progress/user');
     return response.data;
   },
+
+  syncTrainingFromDrive: async (): Promise<{
+    message: string;
+    coursesFound: number;
+    coursesCreated: number;
+    coursesUpdated: number;
+    lessonsCreated: number;
+    lessonsUpdated: number;
+  }> => {
+    const response = await api.post('/drive/sync-training');
+    return response.data;
+  },
 };
 
 // Lessons API

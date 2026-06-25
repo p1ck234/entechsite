@@ -43,6 +43,7 @@
 - `express-validator`, `helmet`, `cors`, `express-rate-limit`
 - `multer` для загрузки файлов
 - `sharp@0.34.4` для on-the-fly оптимизации изображений (`/api/uploads/:filename?w=&h=&q=&fit=`); на Railway используется Node 18, поэтому версия зафиксирована (0.35.x требует Node >=20.9)
+- `googleapis` — чтение Google Drive через service account (синхронизация курсов/уроков)
 - `dotenv`
 
 ### Telegram Bot (`telegram-bot/package.json`)
@@ -69,6 +70,10 @@
   - Telegram боты и сайты.
 - `backend/src/routes/upload.ts`:
   - `POST /api/upload` — загрузка изображений (multer), возвращает `/api/uploads/<filename>`.
+- `backend/src/services/googleDrive.ts`, `backend/src/routes/drive.ts`:
+  - `POST /api/drive/sync-training` (admin) — читает папку «Обучение» на Google Drive и upsert курсов/уроков в БД;
+  - структура Drive: корневая папка → подпапки = курсы, файлы (рекурсивно) = уроки;
+  - credentials: `GOOGLE_SERVICE_ACCOUNT_JSON` / `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` / `GOOGLE_APPLICATION_CREDENTIALS` / локальный `credentials.json` (в `.gitignore`).
 - `backend/src/utils/uploads.ts`:
   - единый путь к папке uploads (`UPLOADS_DIR` или `process.cwd()/uploads`);
   - `resolveUploadedFilePath()` — поиск файла с fallback на legacy-папки.
@@ -79,8 +84,39 @@
   - админ загружает фото/превью файлами через `uploadAPI.uploadPhoto()`, без ручного ввода URL.
 - `frontend/server.js`:
   - production proxy `/api/*` на backend, чтобы относительные `/api/uploads/...` не попадали в SPA fallback.
+- `frontend/src/pages/Courses.tsx`:
+  - кнопка «Синхронизировать Drive» (admin) → `coursesAPI.syncTrainingFromDrive()`.
+
+## Google Drive credentials (Railway)
+
+- `credentials.json` **не коммитится** (см. `.gitignore`).
+- На Railway backend service → Variables:
+  - **Рекомендуется:** `GOOGLE_SERVICE_ACCOUNT_JSON` — весь JSON service account одной строкой (скопировать содержимое `credentials.json`).
+  - **Альтернатива:** `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` — тот же JSON в base64.
+  - **Опционально:** `GOOGLE_DRIVE_ROOT_FOLDER_ID` — ID корневой папки «Обучение»; если не задан, ищется по имени (`GOOGLE_DRIVE_ROOT_FOLDER_NAME`, default «Обучение»).
+- Service account должен иметь доступ к shared folder «Обучение» (Share → email вида `...@...iam.gserviceaccount.com`).
 
 ## Task Journal
+
+### 2026-06-25 - Синхронизация обучения из Google Drive
+
+- Goal: автоматически подтягивать курсы и уроки из общей папки Google Drive без ручного добавления в админке.
+- Changes:
+  - `backend/src/services/googleDrive.ts` — service account auth, обход дерева папок Drive (`supportsAllDrives`);
+  - `backend/src/routes/drive.ts` — `POST /api/drive/sync-training`: upsert courses/lessons по `google_drive_url`;
+  - `frontend/src/api/client.ts` — `coursesAPI.syncTrainingFromDrive()`;
+  - `frontend/src/pages/Courses.tsx` — кнопка синхронизации для admin;
+  - `.gitignore` — `credentials.json`;
+  - `googleapis` добавлен в `backend/package.json` (не в корень монорепы).
+- Files:
+  - `backend/src/services/googleDrive.ts`
+  - `backend/src/routes/drive.ts`
+  - `backend/src/index.ts`
+  - `frontend/src/api/client.ts`
+  - `frontend/src/pages/Courses.tsx`
+  - `backend/package.json`
+  - `.gitignore`
+- Result: admin может одной кнопкой синхронизировать структуру Drive → БД; материалы открываются по Google Drive URL без дублирования файлов на сервере.
 
 ### 2026-06-25 - Frontend proxy для `/api/uploads` на production-домене
 
@@ -456,6 +492,13 @@
 - Trade-off: без persistent volume на Railway файлы могут теряться при redeploy; legacy fallback не спасёт файлы, уже записанные только в ephemeral-папку.
 - Related files: `backend/src/utils/uploads.ts`, `backend/src/routes/upload.ts`, `backend/src/index.ts`
 
+### 2026-06-25 - Курсы/уроки из Google Drive через service account
+
+- Context: материалы обучения хранятся на общем Google Drive; дублировать файлы на backend не нужно; пользователям не требуется личный доступ к Drive.
+- Decision: backend читает shared folder через service account; папки = курсы, файлы = уроки; синхронизация upsert по `google_drive_url`; credentials через env на Railway, не в git.
+- Trade-off: доступ к материалам по-прежнему зависит от публичности/шаринга файлов в Drive; service account нужно явно добавлять в shared folder.
+- Related files: `backend/src/services/googleDrive.ts`, `backend/src/routes/drive.ts`, `frontend/src/pages/Courses.tsx`
+
 ### 2026-06-25 - `/api` proxy на frontend server как production safety net
 
 - Context: даже при корректной нормализации URL часть ссылок может оставаться относительной `/api/uploads/...`; на кастомном домене это попадает в frontend service.
@@ -469,6 +512,6 @@
   - Related files: `backend/src/index.ts`, `backend/scripts/add-admin-telegram-oauth.js`
 - TODO: синхронизировать документацию, т.к. `README.md` упоминает Prisma, а текущая реализация использует `pg`.
 - TODO: рассмотреть единый модуль подключения к БД вместо создания `Pool` в каждом роуте.
-- TODO: мигрировать курсы/фото с Google Drive на object storage (S3/R2) — сейчас контент завязан на `google_drive_url`, доступ зависит от Google-аккаунта пользователя.
+- TODO: мигрировать фото с Google Drive на object storage (S3/R2) — для курсов теперь используется Drive sync, но превью/legacy-контент может оставаться на внешних URL.
 - TODO: перезалить legacy-записи с внешними URL в `employees.photo` и `events.preview_images` через админ-формы с file upload.
 - TODO: на Railway подключить persistent volume и задать `UPLOADS_DIR`, иначе upload-файлы пропадают при redeploy.
