@@ -5,12 +5,14 @@ import { Course, CoursesResponse, Lesson, LessonMaterial } from '../types';
 import { Search, Plus, Edit, Trash2, ExternalLink, Play, CheckCircle, Clock, BookOpen, RefreshCw, X } from 'lucide-react';
 import CourseModal from '../components/CourseModal';
 import LessonModal from '../components/LessonModal';
+import { useTelegram } from '../contexts/TelegramContext';
 import { useLocation } from 'react-router-dom';
 
 const LESSONS_PER_PAGE = 12;
 
 const Courses: React.FC = () => {
   const { isAdmin } = useAuth();
+  const { isTelegram, webApp } = useTelegram();
   const location = useLocation();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,6 +28,7 @@ const Courses: React.FC = () => {
   const [lessonPage, setLessonPage] = useState(1);
   const [syncingTraining, setSyncingTraining] = useState(false);
   const [previewMaterial, setPreviewMaterial] = useState<LessonMaterial | null>(null);
+  const [previewVideoError, setPreviewVideoError] = useState(false);
 
   // Reset selected course when navigating to courses page
   useEffect(() => {
@@ -223,7 +226,24 @@ const Courses: React.FC = () => {
   };
 
   const handleOpenDriveMaterial = (material: LessonMaterial) => {
+    setPreviewVideoError(false);
     setPreviewMaterial(material);
+  };
+
+  const handleClosePreview = () => {
+    setPreviewVideoError(false);
+    setPreviewMaterial(null);
+  };
+
+  const handleOpenMaterialExternal = (material: LessonMaterial) => {
+    const externalUrl = material.webViewLink || getGoogleDrivePreviewUrl(material) || lessonsAPI.getDriveMaterialUrl(material.id);
+
+    if (isTelegram && webApp) {
+      webApp.openLink(externalUrl);
+      return;
+    }
+
+    window.open(externalUrl, '_blank', 'noopener,noreferrer');
   };
 
   const paginatedLessons = useMemo(() => {
@@ -644,20 +664,49 @@ const Courses: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => setPreviewMaterial(null)}
+                onClick={handleClosePreview}
                 className="p-2 text-pastel-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                 title="Закрыть"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <iframe
-              src={getMaterialPreviewUrl(previewMaterial)}
-              title={previewMaterial.name}
-              className="w-full flex-1 bg-black"
-              allow="autoplay; fullscreen"
-              allowFullScreen
-            />
+            {isTelegram && isVideoMaterial(previewMaterial) ? (
+              <div className="w-full flex-1 bg-black flex items-center justify-center p-4">
+                {previewVideoError ? (
+                  <div className="text-center max-w-md">
+                    <p className="text-white text-sm mb-4">
+                      Этот формат видео не проигрывается внутри Mini App. Откройте материал через Google Drive.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenMaterialExternal(previewMaterial)}
+                      className="btn-primary inline-flex items-center space-x-2 text-sm"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span>Открыть в Google Drive</span>
+                    </button>
+                  </div>
+                ) : (
+                  <video
+                    src={lessonsAPI.getDriveMaterialUrl(previewMaterial.id)}
+                    className="w-full h-full max-h-full"
+                    controls
+                    playsInline
+                    preload="metadata"
+                    onError={() => setPreviewVideoError(true)}
+                  />
+                )}
+              </div>
+            ) : (
+              <iframe
+                src={getMaterialPreviewUrl(previewMaterial)}
+                title={previewMaterial.name}
+                className="w-full flex-1 bg-black"
+                allow="autoplay; fullscreen"
+                allowFullScreen
+              />
+            )}
           </div>
         </div>
       )}
