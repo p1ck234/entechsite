@@ -493,6 +493,21 @@ export const eventsAPI = {
     const response = await api.delete(`/events/${id}`);
     return response.data;
   },
+
+  syncLifeFromDrive: async (): Promise<{
+    message: string;
+    eventsFound: number;
+    eventsCreated: number;
+    eventsUpdated: number;
+    eventsUnchanged: number;
+    eventsArchived: number;
+    eventsSkippedNoDate: number;
+  }> => {
+    const response = await api.post('/drive/sync-life', undefined, {
+      timeout: DRIVE_SYNC_TIMEOUT_MS,
+    });
+    return response.data;
+  },
 };
 
 // Calendar API

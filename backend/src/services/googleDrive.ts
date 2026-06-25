@@ -127,17 +127,21 @@ const listAllFiles = async (drive: drive_v3.Drive, params: drive_v3.Params$Resou
   return files;
 };
 
-const findRootFolder = async (drive: drive_v3.Drive): Promise<DriveFileItem> => {
+const getFolderById = async (drive: drive_v3.Drive, folderId: string): Promise<DriveFileItem> => {
+  const response = await drive.files.get({
+    fileId: folderId,
+    supportsAllDrives: true,
+    fields: 'id, name, mimeType, webViewLink, modifiedTime',
+  });
+
+  return mapDriveFile(response.data);
+};
+
+const findTrainingRootFolder = async (drive: drive_v3.Drive): Promise<DriveFileItem> => {
   const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
 
   if (rootFolderId) {
-    const response = await drive.files.get({
-      fileId: rootFolderId,
-      supportsAllDrives: true,
-      fields: 'id, name, mimeType, webViewLink, modifiedTime',
-    });
-
-    return mapDriveFile(response.data);
+    return getFolderById(drive, rootFolderId);
   }
 
   const rootFolderName = process.env.GOOGLE_DRIVE_ROOT_FOLDER_NAME || DEFAULT_ROOT_FOLDER_NAME;
@@ -178,7 +182,7 @@ const listDirectLessons = async (drive: drive_v3.Drive, courseFolderId: string):
 
 export const getTrainingDriveTree = async (): Promise<{ root: DriveFileItem; courses: DriveCourseFolder[] }> => {
   const drive = getDriveClient();
-  const root = await findRootFolder(drive);
+  const root = await findTrainingRootFolder(drive);
   const rootChildren = await listFolderChildren(drive, root.id);
   const courseFolders = sortDriveItemsByName(rootChildren.filter((item) => item.mimeType === FOLDER_MIME_TYPE));
 
@@ -190,4 +194,18 @@ export const getTrainingDriveTree = async (): Promise<{ root: DriveFileItem; cou
   );
 
   return { root, courses };
+};
+
+export const getLifeDriveItems = async (): Promise<{ root: DriveFileItem; items: DriveFileItem[] }> => {
+  const drive = getDriveClient();
+  const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_PHOTO_ID;
+
+  if (!rootFolderId) {
+    throw new Error('GOOGLE_DRIVE_ROOT_FOLDER_PHOTO_ID is not configured.');
+  }
+
+  const root = await getFolderById(drive, rootFolderId);
+  const items = await listFolderChildren(drive, root.id);
+
+  return { root, items };
 };

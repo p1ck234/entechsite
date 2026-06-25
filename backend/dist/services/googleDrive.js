@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getTrainingDriveTree = void 0;
+exports.getLifeDriveItems = exports.getTrainingDriveTree = void 0;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const googleapis_1 = require("googleapis");
@@ -95,15 +95,18 @@ const listAllFiles = async (drive, params) => {
     } while (pageToken);
     return files;
 };
-const findRootFolder = async (drive) => {
+const getFolderById = async (drive, folderId) => {
+    const response = await drive.files.get({
+        fileId: folderId,
+        supportsAllDrives: true,
+        fields: 'id, name, mimeType, webViewLink, modifiedTime',
+    });
+    return mapDriveFile(response.data);
+};
+const findTrainingRootFolder = async (drive) => {
     const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
     if (rootFolderId) {
-        const response = await drive.files.get({
-            fileId: rootFolderId,
-            supportsAllDrives: true,
-            fields: 'id, name, mimeType, webViewLink, modifiedTime',
-        });
-        return mapDriveFile(response.data);
+        return getFolderById(drive, rootFolderId);
     }
     const rootFolderName = process.env.GOOGLE_DRIVE_ROOT_FOLDER_NAME || DEFAULT_ROOT_FOLDER_NAME;
     const folders = await listAllFiles(drive, {
@@ -135,7 +138,7 @@ const listDirectLessons = async (drive, courseFolderId) => {
 };
 const getTrainingDriveTree = async () => {
     const drive = getDriveClient();
-    const root = await findRootFolder(drive);
+    const root = await findTrainingRootFolder(drive);
     const rootChildren = await listFolderChildren(drive, root.id);
     const courseFolders = sortDriveItemsByName(rootChildren.filter((item) => item.mimeType === FOLDER_MIME_TYPE));
     const courses = await Promise.all(courseFolders.map(async (folder) => ({
@@ -145,4 +148,15 @@ const getTrainingDriveTree = async () => {
     return { root, courses };
 };
 exports.getTrainingDriveTree = getTrainingDriveTree;
+const getLifeDriveItems = async () => {
+    const drive = getDriveClient();
+    const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_PHOTO_ID;
+    if (!rootFolderId) {
+        throw new Error('GOOGLE_DRIVE_ROOT_FOLDER_PHOTO_ID is not configured.');
+    }
+    const root = await getFolderById(drive, rootFolderId);
+    const items = await listFolderChildren(drive, root.id);
+    return { root, items };
+};
+exports.getLifeDriveItems = getLifeDriveItems;
 //# sourceMappingURL=googleDrive.js.map

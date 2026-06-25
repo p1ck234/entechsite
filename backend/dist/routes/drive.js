@@ -11,6 +11,7 @@ const router = express_1.default.Router();
 const pool = new pg_1.Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
+const DRIVE_LIFE_DESCRIPTION = 'Синхронизировано из Google Drive';
 const getUniqueUrls = (...urls) => {
     return Array.from(new Set(urls.filter(Boolean)));
 };
@@ -28,6 +29,38 @@ const getLessonUrl = (lesson) => {
 };
 const getLessonDescription = (lesson) => {
     return isDriveFolder(lesson) ? 'Папка Google Drive' : lesson.mimeType || 'Файл Google Drive';
+};
+const parseDriveLifeTitle = (name) => {
+    const datePatterns = [
+        /(?<day>\d{1,2})[./-](?<month>\d{1,2})[./-](?<year>\d{4})/,
+        /(?<year>\d{4})[./-](?<month>\d{1,2})[./-](?<day>\d{1,2})/,
+    ];
+    for (const pattern of datePatterns) {
+        const match = name.match(pattern);
+        if (!match?.groups) {
+            continue;
+        }
+        const day = match.groups.day.padStart(2, '0');
+        const month = match.groups.month.padStart(2, '0');
+        const year = match.groups.year;
+        const parsedDate = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+        if (Number.isNaN(parsedDate.getTime()) ||
+            parsedDate.getUTCFullYear() !== Number(year) ||
+            parsedDate.getUTCMonth() + 1 !== Number(month) ||
+            parsedDate.getUTCDate() !== Number(day)) {
+            continue;
+        }
+        const title = name
+            .replace(match[0], '')
+            .replace(/\s*[—–-]\s*/g, ' ')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+        return {
+            title: title || name,
+            eventDate: `${year}-${month}-${day}`,
+        };
+    }
+    return { title: name.trim(), eventDate: null };
 };
 const upsertCourse = async (client, courseFolder, stats) => {
     const courseUrl = getDriveFolderUrl(courseFolder.id);
@@ -123,6 +156,89 @@ router.post('/sync-training', auth_1.authenticateToken, async (req, res) => {
     catch (error) {
         await client.query('ROLLBACK');
         console.error('Google Drive training sync error:', error);
+        res.status(500).json({
+            message: error?.message || 'Ошибка синхронизации Google Drive',
+        });
+    }
+    finally {
+        client.release();
+    }
+});
+router.post('/sync-life', auth_1.authenticateToken, async (req, res) => {
+    if (req.user?.role !== 'ADMIN') {
+        return res.status(403).json({ message: 'Admin access required' });
+    }
+    const client = await pool.connect();
+    const stats = {
+        eventsFound: 0,
+        eventsCreated: 0,
+        eventsUpdated: 0,
+        eventsUnchanged: 0,
+        eventsArchived: 0,
+        eventsSkippedNoDate: 0,
+    };
+    const activeEventUrls = [];
+    try {
+        const driveLife = await (0, googleDrive_1.getLifeDriveItems)();
+        stats.eventsFound = driveLife.items.length;
+        await client.query('BEGIN');
+        for (const item of driveLife.items) {
+            const eventUrl = item.webViewLink || (isDriveFolder(item) ? getDriveFolderUrl(item.id) : getDriveFileUrl(item.id));
+            const eventUrlCandidates = getUniqueUrls(eventUrl, item.webViewLink);
+            const { title, eventDate } = parseDriveLifeTitle(item.name);
+            if (!eventDate) {
+                stats.eventsSkippedNoDate += 1;
+                continue;
+            }
+            activeEventUrls.push(eventUrl);
+            const existingEvent = await client.query(`SELECT id, title, description, google_drive_url, event_date, is_active
+         FROM events
+         WHERE google_drive_url = ANY($1::text[])
+         LIMIT 1`, [eventUrlCandidates]);
+            if (existingEvent.rows.length > 0) {
+                const existing = existingEvent.rows[0];
+                const existingDate = existing.event_date ? new Date(existing.event_date).toISOString().slice(0, 10) : null;
+                const unchanged = existing.title === title &&
+                    (existing.description || null) === DRIVE_LIFE_DESCRIPTION &&
+                    existing.google_drive_url === eventUrl &&
+                    existingDate === eventDate &&
+                    existing.is_active === true;
+                if (unchanged) {
+                    stats.eventsUnchanged += 1;
+                    continue;
+                }
+                await client.query(`UPDATE events
+           SET title = $1,
+               description = $2,
+               google_drive_url = $3,
+               preview_images = $4,
+               event_date = $5,
+               is_active = true,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $6`, [title, DRIVE_LIFE_DESCRIPTION, eventUrl, [], eventDate, existing.id]);
+                stats.eventsUpdated += 1;
+                continue;
+            }
+            await client.query(`INSERT INTO events (title, description, google_drive_url, preview_images, event_date, is_active)
+         VALUES ($1, $2, $3, $4, $5, true)`, [title, DRIVE_LIFE_DESCRIPTION, eventUrl, [], eventDate]);
+            stats.eventsCreated += 1;
+        }
+        const archivedEvents = await client.query(`UPDATE events
+       SET is_active = false, updated_at = CURRENT_TIMESTAMP
+       WHERE is_active = true
+         AND description = $1
+         AND NOT (google_drive_url = ANY($2::text[]))`, [DRIVE_LIFE_DESCRIPTION, activeEventUrls]);
+        stats.eventsArchived += archivedEvents.rowCount || 0;
+        await client.query('COMMIT');
+        res.json({
+            message: 'Наша жизнь синхронизирована из Google Drive',
+            root: driveLife.root,
+            ...stats,
+        });
+    }
+    catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Google Drive life sync error:', error);
         res.status(500).json({
             message: error?.message || 'Ошибка синхронизации Google Drive',
         });

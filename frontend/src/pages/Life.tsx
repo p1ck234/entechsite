@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { eventsAPI } from '../api/client';
 import { Event, EventsResponse } from '../types';
-import { ExternalLink, Plus, Edit, Trash2, Calendar, ImageOff } from 'lucide-react';
+import { ExternalLink, Plus, Edit, Trash2, Calendar, ImageOff, RefreshCw } from 'lucide-react';
 import EventModal from '../components/EventModal';
 import ImageWithLoader from '../components/ImageWithLoader';
 import { preloadImages } from '../utils/imagePreload';
@@ -51,6 +51,7 @@ const Life: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  const [syncingLife, setSyncingLife] = useState(false);
 
   const fetchEvents = async () => {
     try {
@@ -109,6 +110,28 @@ const Life: React.FC = () => {
     fetchEvents();
   };
 
+  const handleSyncLife = async () => {
+    if (!isAdmin || syncingLife) return;
+
+    try {
+      setSyncingLife(true);
+      const result = await eventsAPI.syncLifeFromDrive();
+      await fetchEvents();
+      window.alert(
+        `${result.message}\n` +
+        `Элементов найдено: ${result.eventsFound}\n` +
+        `Событий создано: ${result.eventsCreated}, обновлено: ${result.eventsUpdated}, без изменений: ${result.eventsUnchanged}\n` +
+        `Скрыто старых событий: ${result.eventsArchived}\n` +
+        `Пропущено без даты в названии: ${result.eventsSkippedNoDate}`
+      );
+    } catch (error: any) {
+      console.error('Error syncing life from Google Drive:', error);
+      window.alert(error.response?.data?.message || error.message || 'Ошибка синхронизации Google Drive');
+    } finally {
+      setSyncingLife(false);
+    }
+  };
+
   const formatDate = (dateString?: string) => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -128,13 +151,23 @@ const Life: React.FC = () => {
           <p className="text-pastel-600 mt-1">Мероприятия и события компании</p>
         </div>
         {isAdmin && (
-          <button
-            onClick={handleAdd}
-            className="mt-4 sm:mt-0 btn-primary flex items-center space-x-2"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Добавить мероприятие</span>
-          </button>
+          <div className="mt-4 sm:mt-0 flex flex-col sm:flex-row gap-2">
+            <button
+              onClick={handleSyncLife}
+              disabled={syncingLife}
+              className="btn-secondary flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-5 h-5 ${syncingLife ? 'animate-spin' : ''}`} />
+              <span>{syncingLife ? 'Синхронизация...' : 'Синхронизировать Drive'}</span>
+            </button>
+            <button
+              onClick={handleAdd}
+              className="btn-primary flex items-center space-x-2"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Добавить мероприятие</span>
+            </button>
+          </div>
         )}
       </div>
 

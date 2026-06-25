@@ -12,4 +12,8 @@ export declare const getTrainingDriveTree: () => Promise<{
     root: DriveFileItem;
     courses: DriveCourseFolder[];
 }>;
+export declare const getLifeDriveItems: () => Promise<{
+    root: DriveFileItem;
+    items: DriveFileItem[];
+}>;
 //# sourceMappingURL=googleDrive.d.ts.map

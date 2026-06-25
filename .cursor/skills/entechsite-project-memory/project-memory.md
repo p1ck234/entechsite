@@ -82,6 +82,24 @@
 
 ## Task Journal
 
+### 2026-06-25 - Drive sync для «Нашей жизни»
+
+- Goal: автоматически создавать события «Наша жизнь» из отдельной Google Drive папки без загрузки фото/файлов.
+- Changes:
+  - добавлен backend `POST /api/drive/sync-life`;
+  - root папка берётся из `GOOGLE_DRIVE_ROOT_FOLDER_PHOTO_ID`;
+  - sync читает только прямые элементы root папки, сохраняет `title`, `event_date`, `google_drive_url`, пустой `preview_images`;
+  - дата парсится из названия и убирается из `title`;
+  - upsert выполняется по Drive URL, неизменённые события не трогаются;
+  - старые события, созданные этим Drive sync и отсутствующие в папке, скрываются через `is_active=false`;
+  - на странице `frontend/src/pages/Life.tsx` добавлена admin-кнопка «Синхронизировать Drive».
+- Files:
+  - `backend/src/services/googleDrive.ts`
+  - `backend/src/routes/drive.ts`
+  - `frontend/src/api/client.ts`
+  - `frontend/src/pages/Life.tsx`
+- Result: Railway нужно задать `GOOGLE_DRIVE_ROOT_FOLDER_PHOTO_ID`; sync будет подтягивать только названия, даты и ссылки.
+
 ### 2026-06-25 - Возврат простой link-only синхронизации Drive
 
 - Goal: автоматически добавлять курсы/уроки из Google Drive, но сохранять их как обычные `googleDriveUrl` ссылки без файлового proxy/preview.
