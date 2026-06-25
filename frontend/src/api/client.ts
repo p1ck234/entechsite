@@ -11,6 +11,8 @@ const api = axios.create({
   timeout: 30000, // 30 секунд таймаут
 });
 
+const DRIVE_SYNC_TIMEOUT_MS = 180000;
+
 // API для загрузки файлов (с FormData)
 const uploadApi = axios.create({
   baseURL: API_BASE_URL,
@@ -317,7 +319,9 @@ export const coursesAPI = {
     lessonsCreated: number;
     lessonsUpdated: number;
   }> => {
-    const response = await api.post('/drive/sync-training');
+    const response = await api.post('/drive/sync-training', undefined, {
+      timeout: DRIVE_SYNC_TIMEOUT_MS,
+    });
     return response.data;
   },
 };

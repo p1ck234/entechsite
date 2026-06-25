@@ -118,6 +118,18 @@
   - `.gitignore`
 - Result: admin может одной кнопкой синхронизировать структуру Drive → БД; материалы открываются по Google Drive URL без дублирования файлов на сервере.
 
+### 2026-06-25 - Увеличен timeout для Google Drive sync
+
+- Goal: убрать клиентский `ECONNABORTED` при запуске «Синхронизировать Drive».
+- Changes:
+  - для `coursesAPI.syncTrainingFromDrive()` задан отдельный timeout 180s вместо общего axios timeout 30s;
+  - в `frontend/server.js` timeout proxy `/api/*` увеличен до 180s и вынесен в `API_PROXY_TIMEOUT_MS`.
+- Files:
+  - `frontend/src/api/client.ts`
+  - `frontend/server.js`
+  - `frontend/dist/index.html`
+- Result: фронт и frontend proxy больше не должны обрывать долгую синхронизацию Drive через 30/60 секунд.
+
 ### 2026-06-25 - Frontend proxy для `/api/uploads` на production-домене
 
 - Goal: починить `ERR_BLOCKED_BY_ORB` и `404 text/html` для URL вида `https://entech.p1ck23.ru/api/uploads/photo-....jpg`.
@@ -283,6 +295,14 @@
 - Result: есть единая точка для фиксации контекста, прогресса и решений.
 
 ## Problems and Resolutions
+
+### 2026-06-25 - Drive sync падал по `ECONNABORTED` через 30 секунд
+
+- Symptom: при нажатии «Синхронизировать Drive» frontend логировал `timeout of 30000ms exceeded`, `code: ECONNABORTED`, URL `/drive/sync-training`.
+- Root cause: общий axios timeout был 30s, а синхронизация Drive может идти дольше из-за рекурсивного обхода папок и upsert в БД; frontend proxy также имел лимит 60s.
+- Resolution: для `syncTrainingFromDrive()` задан timeout 180s; timeout frontend proxy `/api/*` увеличен до 180s и сделан настраиваемым через `API_PROXY_TIMEOUT_MS`.
+- Validation: `npm run build` в `frontend` прошёл успешно.
+- Related files: `frontend/src/api/client.ts`, `frontend/server.js`, `frontend/dist/index.html`
 
 ### 2026-06-25 - `/api/uploads` на frontend-домене возвращал HTML и блокировался ORB
 
