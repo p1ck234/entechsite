@@ -8,6 +8,7 @@ const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const API_PROXY_TARGET = process.env.API_PROXY_TARGET || 'https://entechsite-backend-production.up.railway.app';
 
 const distPath = join(__dirname, 'dist');
 
@@ -102,6 +103,77 @@ if (existsSync(distPath)) {
   console.error('❌ Папка dist не найдена! Убедитесь, что выполнен npm run build');
   console.error('   Искали по пути:', distPath);
 }
+
+// Проксируем /api на backend, чтобы относительные ссылки /api/uploads/... не попадали в SPA.
+app.use('/api', async (req, res) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+  try {
+    const targetUrl = new URL(`/api${req.originalUrl.replace(/^\/api/, '')}`, API_PROXY_TARGET);
+    const headers = new Headers();
+
+    Object.entries(req.headers).forEach(([key, value]) => {
+      if (value === undefined || key.toLowerCase() === 'host') {
+        return;
+      }
+
+      if (Array.isArray(value)) {
+        headers.set(key, value.join(', '));
+      } else {
+        headers.set(key, value);
+      }
+    });
+
+    const upstreamResponse = await fetch(targetUrl, {
+      method: req.method,
+      headers,
+      body: ['GET', 'HEAD'].includes(req.method) ? undefined : req,
+      duplex: ['GET', 'HEAD'].includes(req.method) ? undefined : 'half',
+      redirect: 'manual',
+      signal: controller.signal,
+    });
+
+    res.status(upstreamResponse.status);
+    upstreamResponse.headers.forEach((value, key) => {
+      res.setHeader(key, value);
+    });
+
+    if (!upstreamResponse.body) {
+      return res.end();
+    }
+
+    const reader = upstreamResponse.body.getReader();
+    const pump = async () => {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        res.write(Buffer.from(value));
+      }
+      res.end();
+    };
+
+    return pump().catch((error) => {
+      console.error('⚠️ Ошибка proxy stream /api:', error);
+      if (!res.headersSent) {
+        res.status(502).json({ message: 'Ошибка proxy /api' });
+      } else {
+        res.destroy(error);
+      }
+    });
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      return res.status(504).json({ message: 'Таймаут proxy /api' });
+    }
+
+    console.error('⚠️ Ошибка proxy /api:', error);
+    return res.status(502).json({ message: 'Ошибка proxy /api' });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+});
 
 // Раздача статических файлов из dist (должно быть первым!)
 app.use(express.static(distPath, {
