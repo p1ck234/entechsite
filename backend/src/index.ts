@@ -17,6 +17,8 @@ import botRoutes from './routes/bots';
 import uploadRoutes from './routes/upload';
 import { initializeDatabase } from './utils/db-init';
 import path from 'path';
+import fs from 'fs';
+import sharp from 'sharp';
 
 dotenv.config();
 
@@ -290,12 +292,115 @@ const uploadsDir = process.env.NODE_ENV === 'production'
   : path.join(__dirname, '../../uploads');
 
 // Создаем папку если её нет
-if (!require('fs').existsSync(uploadsDir)) {
-  require('fs').mkdirSync(uploadsDir, { recursive: true });
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
   console.log(`📁 Создана папка для загрузок: ${uploadsDir}`);
 }
 
-app.use('/api/uploads', express.static(uploadsDir));
+type ResizeFit = 'cover' | 'contain' | 'fill' | 'inside' | 'outside';
+
+const OPTIMIZABLE_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+
+const parsePositiveInt = (value: unknown, max: number): number | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined;
+  }
+
+  return Math.min(parsed, max);
+};
+
+const isResizeFit = (value: unknown): value is ResizeFit => {
+  return typeof value === 'string' && ['cover', 'contain', 'fill', 'inside', 'outside'].includes(value);
+};
+
+app.get('/api/uploads/:filename', async (req, res) => {
+  const safeFilename = path.basename(req.params.filename);
+  const filePath = path.join(uploadsDir, safeFilename);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ message: 'Файл не найден' });
+  }
+
+  const extension = path.extname(safeFilename).toLowerCase();
+  const canOptimize = OPTIMIZABLE_IMAGE_EXTENSIONS.has(extension);
+
+  const width = parsePositiveInt(req.query.w, 2048);
+  const height = parsePositiveInt(req.query.h, 2048);
+  const quality = parsePositiveInt(req.query.q, 100);
+  const fit = isResizeFit(req.query.fit) ? req.query.fit : 'cover';
+
+  const shouldOptimize = canOptimize && (
+    width !== undefined ||
+    height !== undefined ||
+    quality !== undefined ||
+    req.query.fit !== undefined
+  );
+
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Vary', 'Accept');
+  res.setHeader(
+    'Cache-Control',
+    shouldOptimize
+      ? 'public, max-age=31536000, immutable'
+      : 'public, max-age=604800, stale-while-revalidate=86400'
+  );
+
+  if (!shouldOptimize) {
+    return res.sendFile(filePath);
+  }
+
+  try {
+    const acceptHeader = typeof req.headers.accept === 'string' ? req.headers.accept : '';
+    const prefersWebp = acceptHeader.includes('image/webp');
+    const normalizedQuality = quality ?? 76;
+
+    let transformer = sharp(filePath, { failOn: 'none' }).rotate();
+    if (width !== undefined || height !== undefined) {
+      transformer = transformer.resize({
+        width,
+        height,
+        fit,
+        withoutEnlargement: true
+      });
+    }
+
+    let transformedBuffer: Buffer;
+    let contentType: string;
+
+    if (prefersWebp) {
+      transformedBuffer = await transformer.webp({ quality: normalizedQuality }).toBuffer();
+      contentType = 'image/webp';
+    } else if (extension === '.png') {
+      transformedBuffer = await transformer.png({ compressionLevel: 9 }).toBuffer();
+      contentType = 'image/png';
+    } else {
+      transformedBuffer = await transformer.jpeg({ quality: normalizedQuality, mozjpeg: true }).toBuffer();
+      contentType = 'image/jpeg';
+    }
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Length', transformedBuffer.length.toString());
+    return res.send(transformedBuffer);
+  } catch (error) {
+    console.error('⚠️ Не удалось оптимизировать изображение, отдаем оригинал:', error);
+    return res.sendFile(filePath);
+  }
+});
+
+app.use('/api/uploads', express.static(uploadsDir, {
+  maxAge: '7d',
+  etag: true,
+  lastModified: true,
+  setHeaders: (res) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+  }
+}));
 
 // Health check - должен быть ДО всех других маршрутов для быстрого ответа
 app.get('/api/health', (req, res) => {

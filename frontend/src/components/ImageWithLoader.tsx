@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
-import { normalizeImageUrl } from '../utils/imageUtils';
+import { normalizeImageUrl, NormalizeImageUrlOptions } from '../utils/imageUtils';
 
 interface ImageWithLoaderProps {
   src: string;
@@ -8,17 +8,25 @@ interface ImageWithLoaderProps {
   className?: string;
   onError?: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void;
   onLoadError?: () => void; // Callback для уведомления родителя об ошибке
+  imageOptions?: NormalizeImageUrlOptions;
 }
 
-const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt, className = '', onError, onLoadError }) => {
+const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
+  src,
+  alt,
+  className = '',
+  onError,
+  onLoadError,
+  imageOptions
+}) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   // Нормализуем URL для Google Drive ссылок
   const normalizedSrc = useMemo(() => {
     if (!src) return '';
-    return normalizeImageUrl(src);
-  }, [src]);
+    return normalizeImageUrl(src, imageOptions);
+  }, [src, imageOptions?.width, imageOptions?.height, imageOptions?.quality, imageOptions?.fit]);
 
   const handleLoad = () => {
     setLoading(false);
@@ -61,6 +69,7 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({ src, alt, className =
         onLoad={handleLoad}
         onError={handleError}
         loading="lazy"
+        decoding="async"
       />
     </div>
   );

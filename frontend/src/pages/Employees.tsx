@@ -11,6 +11,10 @@ import ImageWithLoader from '../components/ImageWithLoader';
 const EmployeeAvatar: React.FC<{ employee: Employee }> = ({ employee }) => {
   const [imageError, setImageError] = useState(false);
 
+  useEffect(() => {
+    setImageError(false);
+  }, [employee.photo]);
+
   // Если нет фото - сразу показываем инициалы
   if (!employee.photo) {
     return (
@@ -30,6 +34,7 @@ const EmployeeAvatar: React.FC<{ employee: Employee }> = ({ employee }) => {
           src={employee.photo}
           alt={`${employee.firstName} ${employee.lastName}`}
           className="w-16 h-16 rounded-full object-cover"
+          imageOptions={{ width: 192, height: 192, quality: 72, fit: 'cover' }}
           onLoadError={() => {
             setImageError(true);
           }}
