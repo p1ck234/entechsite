@@ -17,9 +17,12 @@ import {
 } from 'lucide-react';
 import Logo from './Logo';
 
+const TELEGRAM_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+const TELEGRAM_OAUTH_STORAGE_KEY = 'telegramOAuthData';
+
 const Layout: React.FC = () => {
-  const { user, logout, isAdmin, isAuthenticated } = useAuth();
-  const { isTelegram, webApp } = useTelegram();
+  const { user, logout, isAdmin, isAuthenticated, syncTelegramAuth, syncTelegramOAuth } = useAuth();
+  const { isTelegram, webApp, initData } = useTelegram();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -79,6 +82,63 @@ const Layout: React.FC = () => {
       isMounted = false;
     };
   }, [isAuthenticated]);
+
+  // Фоновая пересинхронизация Telegram username/telegram_id:
+  // - сразу после входа в защищенную часть
+  // - каждые 5 минут
+  // - при возврате приложения в активное состояние
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    const hasMiniAppSource = isTelegram && Boolean(initData);
+    const hasWebOAuthSource = !isTelegram && Boolean(localStorage.getItem(TELEGRAM_OAUTH_STORAGE_KEY));
+
+    if (!hasMiniAppSource && !hasWebOAuthSource) {
+      return;
+    }
+
+    let syncInProgress = false;
+
+    const runSync = async () => {
+      if (syncInProgress) {
+        return;
+      }
+
+      syncInProgress = true;
+      try {
+        if (hasMiniAppSource && initData) {
+          await syncTelegramAuth(initData);
+          return;
+        }
+
+        if (hasWebOAuthSource) {
+          await syncTelegramOAuth();
+        }
+      } finally {
+        syncInProgress = false;
+      }
+    };
+
+    void runSync();
+    const intervalId = window.setInterval(() => {
+      void runSync();
+    }, TELEGRAM_SYNC_INTERVAL_MS);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void runSync();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isTelegram, isAuthenticated, initData, syncTelegramAuth, syncTelegramOAuth]);
 
   const displayName = currentEmployee
     ? `${currentEmployee.lastName || ''} ${currentEmployee.firstName || ''}`.trim() || user?.email

@@ -17,6 +17,16 @@ const uploadApi = axios.create({
   timeout: 60000, // 60 секунд для загрузки файлов
 });
 
+type TelegramOAuthPayload = {
+  id: number;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+  photo_url?: string;
+  auth_date: number;
+  hash: string;
+};
+
 // Request interceptor to add auth token
 const addAuthToken = (config: any) => {
   const token = localStorage.getItem('token');
@@ -95,6 +105,11 @@ export const authAPI = {
 
   loginTelegram: async (initData: string): Promise<AuthResponse> => {
     const response = await api.post('/auth/telegram', { initData });
+    return response.data;
+  },
+
+  loginTelegramOAuth: async (payload: TelegramOAuthPayload): Promise<AuthResponse> => {
+    const response = await api.post('/auth/telegram-oauth', payload);
     return response.data;
   },
 

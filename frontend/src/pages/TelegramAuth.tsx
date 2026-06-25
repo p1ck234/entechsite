@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTelegram } from '../contexts/TelegramContext';
-import { API_BASE_URL } from '../config/api';
+import { authAPI } from '../api/client';
 import Logo from '../components/Logo';
+
+const TELEGRAM_OAUTH_STORAGE_KEY = 'telegramOAuthData';
 
 const TelegramAuth: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -46,35 +48,31 @@ const TelegramAuth: React.FC = () => {
         setLoading(true);
         setError('');
 
-        // Используем API_BASE_URL из config/api.ts
-        const apiUrl = API_BASE_URL;
-        
-        // Отправляем данные на backend
-        const response = await fetch(`${apiUrl}/auth/telegram-oauth`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            id: user.id,
-            first_name: user.first_name,
-            last_name: user.last_name,
-            username: user.username,
-            photo_url: user.photo_url,
-            auth_date: user.auth_date,
-            hash: user.hash,
-          }),
-        });
+        const oauthPayload = {
+          id: user.id,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          username: user.username,
+          photo_url: user.photo_url,
+          auth_date: user.auth_date,
+          hash: user.hash,
+        };
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.message || 'Ошибка авторизации');
-        }
+        const data = await authAPI.loginTelegramOAuth(oauthPayload);
 
         // Сохраняем токен и пользователя
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem(
+          TELEGRAM_OAUTH_STORAGE_KEY,
+          JSON.stringify({
+            id: oauthPayload.id,
+            first_name: oauthPayload.first_name,
+            last_name: oauthPayload.last_name,
+            auth_date: oauthPayload.auth_date,
+            hash: oauthPayload.hash,
+          })
+        );
 
         console.log('✅ Авторизация успешна, перенаправление на главную...');
 
