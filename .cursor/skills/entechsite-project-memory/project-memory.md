@@ -68,12 +68,30 @@
 - `backend/src/routes/bots.ts`:
   - Telegram боты и сайты.
 - `backend/src/routes/upload.ts`:
-  - загрузка изображений.
+  - `POST /api/upload` — загрузка изображений (multer), возвращает `/api/uploads/<filename>`.
 - `backend/src/index.ts`:
   - `GET /api/uploads/:filename` — оптимизация локальных фото через `sharp`;
-  - `GET /api/media/proxy?url=...` — прокси Google-изображений для Mini App.
+  - `GET /api/media/proxy?url=...` — прокси Google-изображений для Mini App (legacy-превью).
+- `frontend/src/components/EmployeeModal.tsx`, `EventModal.tsx`:
+  - админ загружает фото/превью файлами через `uploadAPI.uploadPhoto()`, без ручного ввода URL.
 
 ## Task Journal
+
+### 2026-06-25 - Загрузка фото файлами в адресной книге и «Наша жизнь»
+
+- Goal: убрать ручной ввод URL для фото/превью в админ-формах; хранить изображения на backend как `/api/uploads/...`, чтобы они стабильно открывались в Mini App (как уже работающие аватары).
+- Changes:
+  - в `EmployeeModal` поле `URL фото` заменено на `<input type="file">` + предпросмотр и удаление;
+  - в `EventModal` убран ввод URL превью, оставлена только загрузка файлов (multiple);
+  - в `UserModal` (legacy) синхронизирован тот же паттерн загрузки;
+  - используется существующий `uploadAPI.uploadPhoto()` → `POST /api/upload`.
+- Files:
+  - `frontend/src/components/EmployeeModal.tsx`
+  - `frontend/src/components/EventModal.tsx`
+  - `frontend/src/components/UserModal.tsx`
+  - `frontend/src/api/client.ts` (`uploadAPI`)
+  - `backend/src/routes/upload.ts`
+- Result: новые/обновлённые фото и превью сохраняются на сервере; Google/lh3 URL больше не вводятся через UI. Старые записи с внешними ссылками нужно перезалить через редактирование.
 
 ### 2026-06-25 - Устойчивая загрузка превью «Наша жизнь» в Mini App (lh3/google)
 
@@ -199,6 +217,14 @@
 - Result: есть единая точка для фиксации контекста, прогресса и решений.
 
 ## Problems and Resolutions
+
+### 2026-06-25 - Google URL в админ-формах не работают в Mini App
+
+- Symptom: превью «Наша жизнь» и фото сотрудников не отображаются в Mini App, хотя на вебе иногда видны; в формах админ вводил `lh3.google.com/...` или другие внешние URL.
+- Root cause: внешние Google-ссылки требуют авторизации и нестабильны в Telegram webview; адресная книга работала там, где в БД уже лежали `/api/uploads/...` с backend.
+- Resolution: в `EmployeeModal` и `EventModal` убран ручной ввод URL; фото/превью загружаются файлами через `POST /api/upload` и сохраняются как `/api/uploads/<filename>`.
+- Validation: frontend собирается; линтер без ошибок; старые записи с Google URL нужно перезалить через редактирование.
+- Related files: `frontend/src/components/EmployeeModal.tsx`, `frontend/src/components/EventModal.tsx`, `backend/src/routes/upload.ts`
 
 ### 2026-06-25 - Превью «Наша жизнь» зависают в Mini App на Google lh3-ссылках
 
@@ -370,6 +396,13 @@
 - Trade-off: до 7s на каждый неудачный кандидат увеличивает worst-case время; зато UI не зависает бесконечно.
 - Related files: `frontend/src/utils/imageUtils.ts`, `frontend/src/components/ImageWithLoader.tsx`, `frontend/src/pages/Life.tsx`
 
+### 2026-06-25 - Фото сотрудников и превью событий — только через backend upload
+
+- Context: внешние URL (Google Drive, lh3) не подходят для Mini App; рабочий путь — `/api/uploads/...` с backend origin и sharp-оптимизацией.
+- Decision: в админ-формах (`EmployeeModal`, `EventModal`) загрузка только файлами через `uploadAPI`; ручной ввод URL убран. Google Drive URL остаётся только для ссылки на альбом/материал (`googleDriveUrl`), не для превью-картинок.
+- Trade-off: нужно перезалить legacy-записи с внешними URL; диск backend/Railway хранит файлы (лимит upload 5MB).
+- Related files: `frontend/src/components/EmployeeModal.tsx`, `frontend/src/components/EventModal.tsx`, `backend/src/routes/upload.ts`, `frontend/src/api/client.ts`
+
 ## Open Risks and TODO
 
 - TODO: убрать хардкод fallback `DATABASE_URL` и credentials из кода.
@@ -377,3 +410,4 @@
 - TODO: синхронизировать документацию, т.к. `README.md` упоминает Prisma, а текущая реализация использует `pg`.
 - TODO: рассмотреть единый модуль подключения к БД вместо создания `Pool` в каждом роуте.
 - TODO: мигрировать курсы/фото с Google Drive на object storage (S3/R2) — сейчас контент завязан на `google_drive_url`, доступ зависит от Google-аккаунта пользователя.
+- TODO: перезалить legacy-записи с внешними URL в `employees.photo` и `events.preview_images` через админ-формы с file upload.
