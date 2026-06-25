@@ -82,6 +82,18 @@
 
 ## Task Journal
 
+### 2026-06-25 - Fallback для старых preview upload URL
+
+- Goal: починить отображение старых preview-картинок «Нашей жизни» у пользователей без локального кэша.
+- Changes:
+  - `frontend/src/utils/imageUtils.ts` теперь распознаёт старые значения вида `photo-....jpg/png/webp/gif`;
+  - такие значения автоматически нормализуются в `/api/uploads/<filename>` на backend/API origin;
+  - это сохраняет поддержку новых `/api/uploads/...` URL и не меняет данные в базе.
+- Files:
+  - `frontend/src/utils/imageUtils.ts`
+  - `frontend/dist/index.html`
+- Result: старые preview изображения больше не должны запрашиваться с frontend пути `/photo-...` и падать 404.
+
 ### 2026-06-25 - Drive sync для «Нашей жизни»
 
 - Goal: автоматически создавать события «Наша жизнь» из отдельной Google Drive папки без загрузки фото/файлов.

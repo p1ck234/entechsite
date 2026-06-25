@@ -64,6 +64,10 @@ const isGoogleUrl = (url: string): boolean => {
   return GOOGLE_HOST_MARKERS.some((marker) => url.includes(marker));
 };
 
+const isUploadFilename = (url: string): boolean => {
+  return /^photo-[^/\\]+\.(jpe?g|png|gif|webp)$/i.test(url.trim());
+};
+
 const extractGoogleFileId = (url: string): string | null => {
   const patterns = [
     /\/file\/d\/([^/?]+)/,
@@ -124,6 +128,10 @@ const toAbsoluteUploadUrl = (sourceUrl: string): string => {
 
   if (!baseOrigin) {
     return trimmedUrl;
+  }
+
+  if (isUploadFilename(trimmedUrl)) {
+    return `${baseOrigin}/api/uploads/${trimmedUrl}`;
   }
 
   if (trimmedUrl.startsWith('/api/uploads/')) {
