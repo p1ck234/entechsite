@@ -6,6 +6,14 @@ import { Employee, EmployeesResponse } from '../types';
 import { Search, Edit, Trash2, Phone, Mail, MessageCircle, RotateCcw, CheckCircle, XCircle, Clock, Copy, Check } from 'lucide-react';
 import EmployeeModal from '../components/EmployeeModal';
 import ImageWithLoader from '../components/ImageWithLoader';
+import { preloadImages } from '../utils/imagePreload';
+
+const EMPLOYEE_AVATAR_IMAGE_OPTIONS = {
+  width: 192,
+  height: 192,
+  quality: 72,
+  fit: 'cover',
+} as const;
 
 // Компонент для отображения аватара сотрудника с fallback на инициалы
 const EmployeeAvatar: React.FC<{ employee: Employee }> = ({ employee }) => {
@@ -34,7 +42,7 @@ const EmployeeAvatar: React.FC<{ employee: Employee }> = ({ employee }) => {
           src={employee.photo}
           alt={`${employee.firstName} ${employee.lastName}`}
           className="w-16 h-16 rounded-full object-cover"
-          imageOptions={{ width: 192, height: 192, quality: 72, fit: 'cover' }}
+          imageOptions={EMPLOYEE_AVATAR_IMAGE_OPTIONS}
           onLoadError={() => {
             setImageError(true);
           }}
@@ -122,6 +130,15 @@ const Employees: React.FC = () => {
         showInactive: isAdmin && showInactive,
         status: statusParam,
       });
+
+      const preloadEntries = response.employees
+        .filter((employee) => Boolean(employee.photo))
+        .map((employee) => ({
+          src: employee.photo as string,
+          options: EMPLOYEE_AVATAR_IMAGE_OPTIONS
+        }));
+
+      preloadImages(preloadEntries, 24);
       setEmployees(response.employees);
       setTotalPages(response.pagination.pages);
     } catch (error) {

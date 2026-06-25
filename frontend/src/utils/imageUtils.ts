@@ -189,9 +189,17 @@ const applyUploadOptimization = (sourceUrl: string, options?: NormalizeImageUrlO
   }
 };
 
-const buildGoogleCandidates = (sourceUrl: string): string[] => {
+const resolveGoogleTargetSize = (options?: NormalizeImageUrlOptions): number => {
+  const width = isPositiveNumber(options?.width) ? Math.round(options.width) : 0;
+  const height = isPositiveNumber(options?.height) ? Math.round(options.height) : 0;
+  const baseSize = Math.max(width, height, 512);
+  return Math.min(1600, Math.max(128, baseSize));
+};
+
+const buildGoogleCandidates = (sourceUrl: string, options?: NormalizeImageUrlOptions): string[] => {
   const candidates: string[] = [];
   const cleanedSource = cleanGoogleUrl(sourceUrl);
+  const targetSize = resolveGoogleTargetSize(options);
 
   pushUniqueUrl(candidates, sourceUrl);
   pushUniqueUrl(candidates, cleanedSource);
@@ -199,8 +207,8 @@ const buildGoogleCandidates = (sourceUrl: string): string[] => {
   const fileId = extractGoogleFileId(cleanedSource);
   if (fileId) {
     // Для Mini App пробуем несколько форматов, т.к. часть Google URL ведет себя по-разному в webview.
-    pushUniqueUrl(candidates, `https://lh3.googleusercontent.com/d/${fileId}=s512`);
-    pushUniqueUrl(candidates, `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`);
+    pushUniqueUrl(candidates, `https://lh3.googleusercontent.com/d/${fileId}=s${targetSize}`);
+    pushUniqueUrl(candidates, `https://drive.google.com/thumbnail?id=${fileId}&sz=w${targetSize}`);
     pushUniqueUrl(candidates, `https://drive.google.com/uc?export=view&id=${fileId}`);
   }
 
@@ -237,7 +245,7 @@ export function getImageUrlCandidates(url: string, options?: NormalizeImageUrlOp
   }
 
   if (isGoogleUrl(trimmedUrl)) {
-    return buildGoogleCandidates(trimmedUrl);
+    return buildGoogleCandidates(trimmedUrl, options);
   }
 
   const candidates: string[] = [];

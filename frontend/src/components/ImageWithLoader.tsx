@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { getImageUrlCandidates, NormalizeImageUrlOptions } from '../utils/imageUtils';
+import { getCachedImageCandidate, rememberImageCandidate } from '../utils/imagePreload';
 
 interface ImageWithLoaderProps {
   src: string;
@@ -34,6 +35,9 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
   const currentSrc = srcCandidates[candidateIndex] || '';
 
   const handleLoad = () => {
+    if (src && currentSrc) {
+      rememberImageCandidate(src, imageOptions, currentSrc);
+    }
     setLoading(false);
     setError(false);
   };
@@ -60,10 +64,13 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
 
   // Сбрасываем состояние при изменении src
   useEffect(() => {
-    setCandidateIndex(0);
+    const cachedCandidate = src ? getCachedImageCandidate(src, imageOptions) : null;
+    const initialIndex = cachedCandidate ? srcCandidates.indexOf(cachedCandidate) : 0;
+
+    setCandidateIndex(initialIndex >= 0 ? initialIndex : 0);
     setLoading(true);
     setError(false);
-  }, [src, imageOptions?.width, imageOptions?.height, imageOptions?.quality, imageOptions?.fit]);
+  }, [src, srcCandidates, imageOptions?.width, imageOptions?.height, imageOptions?.quality, imageOptions?.fit]);
 
   if (!currentSrc || error) {
     return null; // Если ошибка или нет src, возвращаем null - родитель покажет fallback
