@@ -10,6 +10,7 @@ export interface NormalizeImageUrlOptions {
 }
 
 const RESIZE_FITS = new Set<ImageResizeFit>(['cover', 'contain', 'fill', 'inside', 'outside']);
+const GOOGLE_HOST_MARKERS = ['google.com', 'googleusercontent.com'];
 
 const API_ORIGIN = (() => {
   try {
@@ -21,6 +22,65 @@ const API_ORIGIN = (() => {
 
 const isPositiveNumber = (value: unknown): value is number => {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
+};
+
+const getFallbackOrigin = (): string => {
+  if (API_ORIGIN) {
+    return API_ORIGIN;
+  }
+
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  return 'http://localhost';
+};
+
+const pushUniqueUrl = (target: string[], value?: string | null): void => {
+  if (!value) {
+    return;
+  }
+
+  const normalizedValue = value.trim();
+  if (!normalizedValue) {
+    return;
+  }
+
+  if (!target.includes(normalizedValue)) {
+    target.push(normalizedValue);
+  }
+};
+
+const isGoogleUrl = (url: string): boolean => {
+  return GOOGLE_HOST_MARKERS.some((marker) => url.includes(marker));
+};
+
+const extractGoogleFileId = (url: string): string | null => {
+  const patterns = [
+    /\/file\/d\/([^/?]+)/,
+    /[?&]id=([^&]+)/,
+    /\/d\/([^=/?]+)/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
+};
+
+const cleanGoogleUrl = (url: string): string => {
+  try {
+    const urlObj = new URL(url);
+    urlObj.searchParams.delete('auditContext');
+    urlObj.searchParams.delete('usp');
+    return urlObj.toString();
+  } catch {
+    return url;
+  }
 };
 
 const toAbsoluteUploadUrl = (sourceUrl: string): string => {
@@ -76,6 +136,15 @@ const toAbsoluteUploadUrl = (sourceUrl: string): string => {
   return trimmedUrl;
 };
 
+const isUploadUrl = (sourceUrl: string): boolean => {
+  try {
+    const parsedUrl = new URL(sourceUrl, getFallbackOrigin());
+    return parsedUrl.pathname.startsWith('/api/uploads/') || parsedUrl.pathname.startsWith('/uploads/');
+  } catch {
+    return sourceUrl.startsWith('/api/uploads/') || sourceUrl.startsWith('/uploads/');
+  }
+};
+
 const applyUploadOptimization = (sourceUrl: string, options?: NormalizeImageUrlOptions): string => {
   if (!options) {
     return sourceUrl;
@@ -92,8 +161,7 @@ const applyUploadOptimization = (sourceUrl: string, options?: NormalizeImageUrlO
   }
 
   try {
-    const fallbackOrigin = API_ORIGIN || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
-    const parsedUrl = new URL(sourceUrl, fallbackOrigin);
+    const parsedUrl = new URL(sourceUrl, getFallbackOrigin());
 
     if (!parsedUrl.pathname.startsWith('/api/uploads/')) {
       return sourceUrl;
@@ -121,86 +189,71 @@ const applyUploadOptimization = (sourceUrl: string, options?: NormalizeImageUrlO
   }
 };
 
-const normalizeGoogleDriveUrl = (url: string): string => {
-  // Формат: https://lh3.google.com/u/0/d/FILE_ID=w2880-h1764-iv1?auditContext=prefetch
-  if (url.includes('lh3.google.com')) {
-    const lh3Match = url.match(/lh3\.google\.com\/[^/]+\/d\/([^=]+)/);
-    if (lh3Match) {
-      const fileId = lh3Match[1];
-      return `https://drive.google.com/uc?export=view&id=${fileId}`;
-    }
+const buildGoogleCandidates = (sourceUrl: string): string[] => {
+  const candidates: string[] = [];
+  const cleanedSource = cleanGoogleUrl(sourceUrl);
 
-    try {
-      const urlObj = new URL(url);
-      urlObj.searchParams.delete('auditContext');
-      urlObj.searchParams.delete('usp');
-      if (urlObj.pathname.includes('=')) {
-        urlObj.pathname = urlObj.pathname.replace(/=[^?]+/, '=s0');
-      }
-      return urlObj.toString();
-    } catch {
-      return url;
-    }
+  pushUniqueUrl(candidates, sourceUrl);
+  pushUniqueUrl(candidates, cleanedSource);
+
+  const fileId = extractGoogleFileId(cleanedSource);
+  if (fileId) {
+    // Для Mini App пробуем несколько форматов, т.к. часть Google URL ведет себя по-разному в webview.
+    pushUniqueUrl(candidates, `https://lh3.googleusercontent.com/d/${fileId}=s512`);
+    pushUniqueUrl(candidates, `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`);
+    pushUniqueUrl(candidates, `https://drive.google.com/uc?export=view&id=${fileId}`);
   }
 
-  // Формат: https://drive.google.com/file/d/FILE_ID/view
-  const driveFileMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
-  if (driveFileMatch) {
-    return `https://drive.google.com/uc?export=view&id=${driveFileMatch[1]}`;
-  }
-
-  // Формат: https://drive.google.com/open?id=FILE_ID
-  const driveOpenMatch = url.match(/drive\.google\.com\/open\?id=([^&]+)/);
-  if (driveOpenMatch) {
-    return `https://drive.google.com/uc?export=view&id=${driveOpenMatch[1]}`;
-  }
-
-  // Формат: https://docs.google.com/uc?id=FILE_ID
-  const docsMatch = url.match(/docs\.google\.com\/uc\?id=([^&]+)/);
-  if (docsMatch) {
-    return `https://drive.google.com/uc?export=view&id=${docsMatch[1]}`;
-  }
-
-  // Формат: https://lh3.googleusercontent.com/d/FILE_ID=w0
-  const lh3UserContentMatch = url.match(/lh3\.googleusercontent\.com\/d\/([^=]+)/);
-  if (lh3UserContentMatch) {
-    return `https://drive.google.com/uc?export=view&id=${lh3UserContentMatch[1]}`;
-  }
-
-  try {
-    const urlObj = new URL(url);
-    urlObj.searchParams.delete('auditContext');
-    urlObj.searchParams.delete('usp');
-    return urlObj.toString();
-  } catch {
-    return url;
-  }
+  return candidates;
 };
 
 /**
- * Нормализует ссылки изображений:
+ * Возвращает список URL-кандидатов:
  * - приводит ссылки загрузок /api/uploads к backend origin (важно для Telegram Mini App);
- * - преобразует Google Drive URL в формат прямого доступа;
- * - по необходимости добавляет параметры оптимизации (w/h/q/fit) для локальных загрузок.
+ * - для upload URL добавляет fallback без параметров оптимизации;
+ * - для Google URL добавляет несколько совместимых форматов.
  */
-export function normalizeImageUrl(url: string, options?: NormalizeImageUrlOptions): string {
+export function getImageUrlCandidates(url: string, options?: NormalizeImageUrlOptions): string[] {
   if (!url) {
-    return url;
+    return [];
   }
 
   const trimmedUrl = url.trim();
   if (!trimmedUrl) {
-    return trimmedUrl;
+    return [];
   }
 
   if (trimmedUrl.startsWith('data:') || trimmedUrl.startsWith('blob:')) {
-    return trimmedUrl;
+    return [trimmedUrl];
   }
 
-  const normalizedUrl = trimmedUrl.includes('google.com') || trimmedUrl.includes('googleusercontent.com')
-    ? normalizeGoogleDriveUrl(trimmedUrl)
-    : toAbsoluteUploadUrl(trimmedUrl);
+  const uploadAbsoluteUrl = toAbsoluteUploadUrl(trimmedUrl);
+  if (isUploadUrl(uploadAbsoluteUrl)) {
+    const candidates: string[] = [];
+    pushUniqueUrl(candidates, applyUploadOptimization(uploadAbsoluteUrl, options));
+    pushUniqueUrl(candidates, uploadAbsoluteUrl);
+    pushUniqueUrl(candidates, trimmedUrl);
+    return candidates;
+  }
 
-  return applyUploadOptimization(normalizedUrl, options);
+  if (isGoogleUrl(trimmedUrl)) {
+    return buildGoogleCandidates(trimmedUrl);
+  }
+
+  const candidates: string[] = [];
+  pushUniqueUrl(candidates, uploadAbsoluteUrl);
+  pushUniqueUrl(candidates, trimmedUrl);
+  return candidates;
+}
+
+/**
+ * Нормализует ссылку изображения:
+ * - приводит ссылки загрузок /api/uploads к backend origin;
+ * - по необходимости добавляет параметры оптимизации (w/h/q/fit) для локальных загрузок.
+ * Для более устойчивой загрузки лучше использовать `getImageUrlCandidates`.
+ */
+export function normalizeImageUrl(url: string, options?: NormalizeImageUrlOptions): string {
+  const candidates = getImageUrlCandidates(url, options);
+  return candidates[0] ?? url;
 }
 

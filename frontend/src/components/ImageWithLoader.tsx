@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
-import { normalizeImageUrl, NormalizeImageUrlOptions } from '../utils/imageUtils';
+import { getImageUrlCandidates, NormalizeImageUrlOptions } from '../utils/imageUtils';
 
 interface ImageWithLoaderProps {
   src: string;
@@ -21,12 +21,17 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [candidateIndex, setCandidateIndex] = useState(0);
 
-  // Нормализуем URL для Google Drive ссылок
-  const normalizedSrc = useMemo(() => {
-    if (!src) return '';
-    return normalizeImageUrl(src, imageOptions);
+  const srcCandidates = useMemo(() => {
+    if (!src) {
+      return [];
+    }
+
+    return getImageUrlCandidates(src, imageOptions);
   }, [src, imageOptions?.width, imageOptions?.height, imageOptions?.quality, imageOptions?.fit]);
+
+  const currentSrc = srcCandidates[candidateIndex] || '';
 
   const handleLoad = () => {
     setLoading(false);
@@ -34,8 +39,16 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
   };
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    if (candidateIndex < srcCandidates.length - 1) {
+      setCandidateIndex((prev) => prev + 1);
+      setLoading(true);
+      setError(false);
+      return;
+    }
+
     setLoading(false);
     setError(true);
+
     // Уведомляем родителя об ошибке загрузки
     if (onLoadError) {
       onLoadError();
@@ -47,11 +60,12 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
 
   // Сбрасываем состояние при изменении src
   useEffect(() => {
+    setCandidateIndex(0);
     setLoading(true);
     setError(false);
-  }, [src]);
+  }, [src, imageOptions?.width, imageOptions?.height, imageOptions?.quality, imageOptions?.fit]);
 
-  if (!src || error) {
+  if (!currentSrc || error) {
     return null; // Если ошибка или нет src, возвращаем null - родитель покажет fallback
   }
 
@@ -63,13 +77,14 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
         </div>
       )}
       <img
-        src={normalizedSrc}
+        src={currentSrc}
         alt={alt}
         className={`${className} ${loading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
         onLoad={handleLoad}
         onError={handleError}
         loading="lazy"
         decoding="async"
+        referrerPolicy="no-referrer"
       />
     </div>
   );
