@@ -42,7 +42,7 @@
 - `jsonwebtoken`, `bcryptjs`
 - `express-validator`, `helmet`, `cors`, `express-rate-limit`
 - `multer` для загрузки файлов
-- `sharp` для on-the-fly оптимизации изображений (`/api/uploads/:filename?w=&h=&q=&fit=`)
+- `sharp@0.34.4` для on-the-fly оптимизации изображений (`/api/uploads/:filename?w=&h=&q=&fit=`); на Railway используется Node 18, поэтому версия зафиксирована (0.35.x требует Node >=20.9)
 - `dotenv`
 
 ### Telegram Bot (`telegram-bot/package.json`)
@@ -71,6 +71,23 @@
   - загрузка изображений.
 
 ## Task Journal
+
+### 2026-06-25 - Fallback URL для фото и фикс деплоя backend из-за sharp
+
+- Goal: повысить устойчивость загрузки фото в Mini App и восстановить деплой backend на Railway.
+- Changes:
+  - на фронте `getImageUrlCandidates()` возвращает несколько URL для одного фото (upload: оптимизированный + оригинал; Google: несколько форматов);
+  - `ImageWithLoader` переключается между кандидатами при `onError`, в инициалы уходит только после провала всех вариантов;
+  - добавлен `referrerPolicy="no-referrer"` для внешних изображений;
+  - на backend `sharp` загружается лениво через `require()` — при ошибке сервер не падает, отдаёт оригинал;
+  - `sharp` зафиксирован на `0.34.4` (совместим с Node 18 на Railway).
+- Files:
+  - `frontend/src/utils/imageUtils.ts`
+  - `frontend/src/components/ImageWithLoader.tsx`
+  - `backend/src/index.ts`
+  - `backend/package.json`
+  - `backend/package-lock.json`
+- Result: backend должен проходить healthcheck на Railway; фото в Mini App пробуют несколько URL перед fallback на инициалы.
 
 ### 2026-06-25 - Загрузка фото в адресной книге для Mini App и оптимизация аватаров
 
@@ -136,12 +153,20 @@
 
 ## Problems and Resolutions
 
+### 2026-06-25 - Railway healthcheck падал из-за sharp на Node 18
+
+- Symptom: деплой backend на Railway завершался с `Healthcheck failed`, в логах `Could not load the "sharp" module`, `Requires >=20.9.0`, `Found 18.20.5`.
+- Root cause: `sharp@0.35.2` требует Node >=20.9.0; на Railway backend работает на Node 18.20.5; импорт `sharp` на старте приложения ронял процесс до поднятия `/health`.
+- Resolution: downgrade до `sharp@0.34.4`; ленивая загрузка `sharp` внутри роута изображений с fallback на оригинал без оптимизации.
+- Validation: backend собирается; `sharp@0.34.4` резолвится и загружается локально.
+- Related files: `backend/src/index.ts`, `backend/package.json`, `backend/package-lock.json`
+
 ### 2026-06-25 - Фото сотрудников не грузились в Telegram Mini App
 
 - Symptom: в адресной книге Mini App вместо фото показывались инициалы; на веб-сайте фото отображались корректно, но медленно.
 - Root cause: в БД фото часто хранятся как относительный путь `/api/uploads/...`; в Mini App запрос шёл на origin фронтенда, где этого маршрута нет. Дополнительно отдавались полноразмерные изображения без оптимизации.
-- Resolution: нормализация URL фото к backend origin на фронте; серверная оптимизация через `sharp` с query-параметрами; для аватаров запрашиваются уменьшенные версии.
-- Validation: сборка `backend` и `frontend` проходит; линтер без ошибок.
+- Resolution: нормализация URL фото к backend origin на фронте; серверная оптимизация через `sharp` с query-параметрами; для аватаров запрашиваются уменьшенные версии; дополнительно — цепочка fallback URL-кандидатов в `ImageWithLoader`.
+- Validation: сборка `backend` и `frontend` проходит; линтер без ошибок; ожидает проверки в Mini App после успешного деплоя backend.
 - Related files: `frontend/src/utils/imageUtils.ts`, `frontend/src/pages/Employees.tsx`, `backend/src/index.ts`
 
 ### 2026-06-25 - CORS и preflight в Telegram/веб окружении
@@ -245,6 +270,13 @@
 - Decision: на фронте всегда приводить upload-URL к backend origin; на backend отдавать оптимизированные версии по query-параметрам (`w`, `h`, `q`, `fit`) через `sharp`.
 - Trade-off: дополнительная CPU-нагрузка на backend при первом запросе каждого размера; компенсируется cache headers.
 - Related files: `frontend/src/utils/imageUtils.ts`, `backend/src/index.ts`, `frontend/src/pages/Employees.tsx`
+
+### 2026-06-25 - Ленивая загрузка sharp и fallback URL-кандидаты для изображений
+
+- Context: Railway backend на Node 18; один URL изображения может не работать в Mini App webview (Google Drive, referrer, оптимизированный upload URL).
+- Decision: `sharp` загружать лениво и не блокировать старт сервера; на фронте пробовать несколько URL-кандидатов перед показом инициалов; версию `sharp` держать совместимой с Node 18 (`0.34.4`).
+- Trade-off: без `sharp` оптимизация отключается, но сервис остаётся доступным; несколько попыток загрузки могут чуть увеличить время до первого успешного рендера.
+- Related files: `backend/src/index.ts`, `frontend/src/utils/imageUtils.ts`, `frontend/src/components/ImageWithLoader.tsx`
 
 ## Open Risks and TODO
 
