@@ -7,7 +7,7 @@ interface PreloadEntry {
 
 const SUCCESS_CACHE = new Map<string, string>();
 const INFLIGHT_CACHE = new Map<string, Promise<string | null>>();
-const STORAGE_KEY = 'entech:image-candidate-cache:v1';
+const STORAGE_KEY = 'entech:image-candidate-cache:v2';
 const MAX_PERSISTED_ENTRIES = 300;
 const MAX_PRELOAD_CONCURRENCY = 4;
 const MAX_PRELOAD_BATCH = 120;

@@ -82,6 +82,22 @@
 
 ## Task Journal
 
+### 2026-06-25 - Upload image candidates для Mini App
+
+- Goal: восстановить отображение upload-фото в Telegram Mini App для адресной книги и «Нашей жизни», когда на web-домене картинки открываются.
+- Changes:
+  - `frontend/src/utils/imageUtils.ts` теперь строит для `/api/uploads/...` несколько кандидатов:
+    - текущий origin Mini App/frontend (`/api/uploads/...`, через frontend proxy);
+    - backend/API origin Railway;
+    - исходный URL как fallback;
+  - в Mini App приоритет отдаётся текущему origin, чтобы не зависеть от прямой загрузки с отдельного Railway backend домена.
+  - версия sessionStorage-кэша image candidates поднята до `v2`, чтобы Mini App не держал старый неудачный backend-кандидат.
+- Files:
+  - `frontend/src/utils/imageUtils.ts`
+  - `frontend/src/utils/imagePreload.ts`
+  - `frontend/dist/index.html`
+- Result: upload-фото сотрудников и preview «Нашей жизни» должны пробовать оба рабочих пути и не падать только из-за недоступности одного origin в webview.
+
 ### 2026-06-25 - Fallback для старых preview upload URL
 
 - Goal: починить отображение старых preview-картинок «Нашей жизни» у пользователей без локального кэша.

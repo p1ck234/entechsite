@@ -45,6 +45,14 @@ const getFallbackOrigin = (): string => {
   return 'http://localhost';
 };
 
+const getCurrentOrigin = (): string => {
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  return '';
+};
+
 const pushUniqueUrl = (target: string[], value?: string | null): void => {
   if (!value) {
     return;
@@ -66,6 +74,56 @@ const isGoogleUrl = (url: string): boolean => {
 
 const isUploadFilename = (url: string): boolean => {
   return /^photo-[^/\\]+\.(jpe?g|png|gif|webp)$/i.test(url.trim());
+};
+
+const toUploadPath = (sourceUrl: string): string | null => {
+  const trimmedUrl = sourceUrl.trim();
+
+  if (isUploadFilename(trimmedUrl)) {
+    return `/api/uploads/${trimmedUrl}`;
+  }
+
+  try {
+    const parsedUrl = new URL(trimmedUrl, getFallbackOrigin());
+
+    if (parsedUrl.pathname.startsWith('/api/uploads/')) {
+      return `${parsedUrl.pathname}${parsedUrl.search}`;
+    }
+
+    if (parsedUrl.pathname.startsWith('/uploads/')) {
+      return `/api${parsedUrl.pathname}${parsedUrl.search}`;
+    }
+  } catch {
+    if (trimmedUrl.startsWith('/api/uploads/')) {
+      return trimmedUrl;
+    }
+
+    if (trimmedUrl.startsWith('api/uploads/')) {
+      return `/${trimmedUrl}`;
+    }
+
+    if (trimmedUrl.startsWith('/uploads/')) {
+      return `/api${trimmedUrl}`;
+    }
+
+    if (trimmedUrl.startsWith('uploads/')) {
+      return `/api/${trimmedUrl}`;
+    }
+  }
+
+  return null;
+};
+
+const buildUploadUrl = (origin: string, uploadPath: string | null): string | null => {
+  if (!origin || !uploadPath) {
+    return null;
+  }
+
+  try {
+    return new URL(uploadPath, origin).toString();
+  } catch {
+    return null;
+  }
 };
 
 const extractGoogleFileId = (url: string): string | null => {
@@ -216,6 +274,37 @@ const applyUploadOptimization = (sourceUrl: string, options?: NormalizeImageUrlO
   }
 };
 
+const pushUploadUrlWithFallback = (
+  candidates: string[],
+  sourceUrl: string,
+  options?: NormalizeImageUrlOptions
+): void => {
+  pushUniqueUrl(candidates, applyUploadOptimization(sourceUrl, options));
+  pushUniqueUrl(candidates, sourceUrl);
+};
+
+const buildUploadCandidates = (sourceUrl: string, options?: NormalizeImageUrlOptions): string[] => {
+  const candidates: string[] = [];
+  const uploadAbsoluteUrl = toAbsoluteUploadUrl(sourceUrl);
+  const uploadPath = toUploadPath(sourceUrl) || toUploadPath(uploadAbsoluteUrl);
+  const currentOriginUrl = buildUploadUrl(getCurrentOrigin(), uploadPath);
+  const apiOriginUrl = buildUploadUrl(API_ORIGIN, uploadPath);
+
+  if (isTelegramMiniApp()) {
+    pushUploadUrlWithFallback(candidates, currentOriginUrl || uploadAbsoluteUrl, options);
+    pushUploadUrlWithFallback(candidates, apiOriginUrl || uploadAbsoluteUrl, options);
+    pushUploadUrlWithFallback(candidates, uploadAbsoluteUrl, options);
+    pushUniqueUrl(candidates, sourceUrl);
+    return candidates;
+  }
+
+  pushUploadUrlWithFallback(candidates, uploadAbsoluteUrl, options);
+  pushUploadUrlWithFallback(candidates, currentOriginUrl || uploadAbsoluteUrl, options);
+  pushUploadUrlWithFallback(candidates, apiOriginUrl || uploadAbsoluteUrl, options);
+  pushUniqueUrl(candidates, sourceUrl);
+  return candidates;
+};
+
 const resolveGoogleTargetSize = (options?: NormalizeImageUrlOptions): number => {
   const width = isPositiveNumber(options?.width) ? Math.round(options.width) : 0;
   const height = isPositiveNumber(options?.height) ? Math.round(options.height) : 0;
@@ -289,11 +378,7 @@ export function getImageUrlCandidates(url: string, options?: NormalizeImageUrlOp
 
   const uploadAbsoluteUrl = toAbsoluteUploadUrl(trimmedUrl);
   if (isUploadUrl(uploadAbsoluteUrl)) {
-    const candidates: string[] = [];
-    pushUniqueUrl(candidates, applyUploadOptimization(uploadAbsoluteUrl, options));
-    pushUniqueUrl(candidates, uploadAbsoluteUrl);
-    pushUniqueUrl(candidates, trimmedUrl);
-    return candidates;
+    return buildUploadCandidates(trimmedUrl, options);
   }
 
   if (isGoogleUrl(trimmedUrl)) {
