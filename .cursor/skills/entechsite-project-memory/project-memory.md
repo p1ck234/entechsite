@@ -69,13 +69,43 @@
   - Telegram боты и сайты.
 - `backend/src/routes/upload.ts`:
   - `POST /api/upload` — загрузка изображений (multer), возвращает `/api/uploads/<filename>`.
+- `backend/src/utils/uploads.ts`:
+  - единый путь к папке uploads (`UPLOADS_DIR` или `process.cwd()/uploads`);
+  - `resolveUploadedFilePath()` — поиск файла с fallback на legacy-папки.
 - `backend/src/index.ts`:
   - `GET /api/uploads/:filename` — оптимизация локальных фото через `sharp`;
   - `GET /api/media/proxy?url=...` — прокси Google-изображений для Mini App (legacy-превью).
 - `frontend/src/components/EmployeeModal.tsx`, `EventModal.tsx`:
   - админ загружает фото/превью файлами через `uploadAPI.uploadPhoto()`, без ручного ввода URL.
+- `frontend/server.js`:
+  - production proxy `/api/*` на backend, чтобы относительные `/api/uploads/...` не попадали в SPA fallback.
 
 ## Task Journal
+
+### 2026-06-25 - Frontend proxy для `/api/uploads` на production-домене
+
+- Goal: починить `ERR_BLOCKED_BY_ORB` и `404 text/html` для URL вида `https://entech.p1ck23.ru/api/uploads/photo-....jpg`.
+- Changes:
+  - в `frontend/server.js` добавлен proxy `app.use('/api', ...)` до `express.static` и SPA fallback;
+  - proxy перенаправляет `/api/*` на backend (`API_PROXY_TARGET` или production Railway backend);
+  - это защищает относительные upload URL, даже если фронт не переписал их на backend origin.
+- Files:
+  - `frontend/server.js`
+- Result: `/api/uploads/...` на frontend-домене больше не должен возвращать HTML/SPA и блокироваться браузером как ORB; запрос должен доходить до backend.
+
+### 2026-06-25 - Единый путь uploads: upload и раздача `/api/uploads`
+
+- Goal: починить ситуацию, когда фото загружаются через форму, URL сохраняется в БД, но картинка не открывается ни в «Наша жизнь», ни в адресной книге (веб и Mini App).
+- Changes:
+  - добавлен `backend/src/utils/uploads.ts`: `getUploadsDir()`, `ensureUploadsDir()`, `resolveUploadedFilePath()`;
+  - каноническая папка: `UPLOADS_DIR` или `process.cwd()/uploads` (не `dist/uploads` vs `backend/uploads` по-разному);
+  - `upload.ts` и `index.ts` используют один helper для сохранения и отдачи файлов;
+  - при чтении — fallback-поиск в legacy-папках (`dist/uploads`, `backend/uploads`).
+- Files:
+  - `backend/src/utils/uploads.ts`
+  - `backend/src/routes/upload.ts`
+  - `backend/src/index.ts`
+- Result: после деплоя backend новые upload-фото должны открываться по `/api/uploads/...`. Файлы, загруженные до фикса в «не ту» папку, могут потребовать перезагрузки через форму.
 
 ### 2026-06-25 - Загрузка фото файлами в адресной книге и «Наша жизнь»
 
@@ -217,6 +247,22 @@
 - Result: есть единая точка для фиксации контекста, прогресса и решений.
 
 ## Problems and Resolutions
+
+### 2026-06-25 - `/api/uploads` на frontend-домене возвращал HTML и блокировался ORB
+
+- Symptom: Network показывает `net::ERR_BLOCKED_BY_ORB`, `404 text/html` для `https://entech.p1ck23.ru/api/uploads/photo-....jpg`, хотя URL выглядит как backend upload.
+- Root cause: относительный `/api/uploads/...` попадал на frontend server; SPA fallback/404 отдавал HTML вместо image, браузер блокировал ответ как ORB.
+- Resolution: production frontend server проксирует `/api/*` на backend до обработки статики и SPA fallback.
+- Validation: `node --check frontend/server.js` и frontend build проходят.
+- Related files: `frontend/server.js`
+
+### 2026-06-25 - Upload сохранял файл, но `/api/uploads` отдавал 404
+
+- Symptom: после загрузки фото через форму в «Наша жизнь» и адресной книге в БД лежит `/api/uploads/photo-....jpg`, но на вебе и в Mini App показываются заглушки/инициалы.
+- Root cause: `upload.ts` и `index.ts` вычисляли `uploadsDir` по-разному (`__dirname` + production/dev), файл сохранялся в одну директорию, а `GET /api/uploads/:filename` искал в другой.
+- Resolution: общий модуль `utils/uploads.ts`; канонический путь `process.cwd()/uploads` (или `UPLOADS_DIR`); `resolveUploadedFilePath()` с fallback на legacy-папки.
+- Validation: backend собирается; требует деплоя backend; старые файлы из «не той» папки — перезалить.
+- Related files: `backend/src/utils/uploads.ts`, `backend/src/routes/upload.ts`, `backend/src/index.ts`
 
 ### 2026-06-25 - Google URL в админ-формах не работают в Mini App
 
@@ -403,6 +449,20 @@
 - Trade-off: нужно перезалить legacy-записи с внешними URL; диск backend/Railway хранит файлы (лимит upload 5MB).
 - Related files: `frontend/src/components/EmployeeModal.tsx`, `frontend/src/components/EventModal.tsx`, `backend/src/routes/upload.ts`, `frontend/src/api/client.ts`
 
+### 2026-06-25 - Каноническая папка uploads на backend
+
+- Context: после перехода на file upload фото всё равно не открывались — upload и serve смотрели в разные директории; на Railway пути зависят от `cwd` и сборки в `dist/`.
+- Decision: один модуль `utils/uploads.ts`; сохранение и раздача через `ensureUploadsDir()` / `resolveUploadedFilePath()`; override через env `UPLOADS_DIR` при необходимости persistent volume на Railway.
+- Trade-off: без persistent volume на Railway файлы могут теряться при redeploy; legacy fallback не спасёт файлы, уже записанные только в ephemeral-папку.
+- Related files: `backend/src/utils/uploads.ts`, `backend/src/routes/upload.ts`, `backend/src/index.ts`
+
+### 2026-06-25 - `/api` proxy на frontend server как production safety net
+
+- Context: даже при корректной нормализации URL часть ссылок может оставаться относительной `/api/uploads/...`; на кастомном домене это попадает в frontend service.
+- Decision: `frontend/server.js` обязан проксировать `/api/*` на backend перед SPA fallback. Target задаётся `API_PROXY_TARGET`, default — production backend Railway.
+- Trade-off: лишний hop через frontend для относительных API URL; зато отсутствует HTML fallback для image/API запросов.
+- Related files: `frontend/server.js`, `frontend/src/config/api.ts`
+
 ## Open Risks and TODO
 
 - TODO: убрать хардкод fallback `DATABASE_URL` и credentials из кода.
@@ -411,3 +471,4 @@
 - TODO: рассмотреть единый модуль подключения к БД вместо создания `Pool` в каждом роуте.
 - TODO: мигрировать курсы/фото с Google Drive на object storage (S3/R2) — сейчас контент завязан на `google_drive_url`, доступ зависит от Google-аккаунта пользователя.
 - TODO: перезалить legacy-записи с внешними URL в `employees.photo` и `events.preview_images` через админ-формы с file upload.
+- TODO: на Railway подключить persistent volume и задать `UPLOADS_DIR`, иначе upload-файлы пропадают при redeploy.
