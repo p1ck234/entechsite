@@ -75,6 +75,19 @@
 
 ## Task Journal
 
+### 2026-06-25 - Устойчивая загрузка превью «Наша жизнь» в Mini App (lh3/google)
+
+- Goal: убрать бесконечную загрузку превью в Mini App для ссылок вида `lh3.google.com/u/0/d/...`, привести UX к логике адресной книги.
+- Changes:
+  - в `imageUtils` для Mini App переставлен порядок Google-кандидатов: сначала proxy и id-based URL (`thumbnail`, `uc`, `drive.usercontent`), исходный `lh3` — в конце;
+  - в `ImageWithLoader` добавлен таймаут кандидата (7s) и автопереход к следующему URL при зависании;
+  - в `Life.tsx` добавлен `EventPreviewTile` с fallback-иконкой вместо пустого серого блока при полном фейле.
+- Files:
+  - `frontend/src/utils/imageUtils.ts`
+  - `frontend/src/components/ImageWithLoader.tsx`
+  - `frontend/src/pages/Life.tsx`
+- Result: Mini App не зависает на одном Google URL; при недоступном файле показывается placeholder, а не вечный спиннер.
+
 ### 2026-06-25 - Прокси Google-изображений для «Наша жизнь» в Mini App
 
 - Goal: починить пустые превью в разделе «Наша жизнь» в Telegram Mini App, где прямые Google Drive URL не открываются в webview.
@@ -186,6 +199,14 @@
 - Result: есть единая точка для фиксации контекста, прогресса и решений.
 
 ## Problems and Resolutions
+
+### 2026-06-25 - Превью «Наша жизнь» зависают в Mini App на Google lh3-ссылках
+
+- Symptom: в Mini App превью «крутятся» бесконечно и не показываются; на вебе те же карточки отображаются; пример URL: `lh3.google.com/u/0/d/<fileId>=w2000-h2166-iv1`.
+- Root cause: такие ссылки часто редиректят в Google Sign-In, а не в image endpoint; `ImageWithLoader` ждал `onload/onerror`, которых webview может не прислать; в `Life` не было fallback-плитки как в адресной книге.
+- Resolution: приоритет proxy/id-based кандидатов в Mini App; таймаут переключения кандидата; fallback-иконка в `EventPreviewTile`.
+- Validation: frontend собирается; линтер без ошибок; для приватных Drive-файлов загрузка всё равно может не сработать без object storage.
+- Related files: `frontend/src/utils/imageUtils.ts`, `frontend/src/components/ImageWithLoader.tsx`, `frontend/src/pages/Life.tsx`
 
 ### 2026-06-25 - Превью «Наша жизнь» пустые в Mini App, на вебе работают
 
@@ -341,6 +362,13 @@
 - Decision: для Google-изображений в Mini App использовать backend proxy с allowlist хостов; прямые ссылки — fallback. Долгосрочно — миграция на object storage.
 - Trade-off: proxy добавляет нагрузку на backend и не решает проблему доступа к курсам (только изображения); нужен деплой backend.
 - Related files: `backend/src/index.ts`, `frontend/src/utils/imageUtils.ts`
+
+### 2026-06-25 - Таймаут и fallback-плитки для Google-превью в Mini App
+
+- Context: `lh3.google.com/u/0/d/...` может не вызывать `onerror` в webview и зависать в вечной загрузке; в «Наша жизнь» не было fallback как в адресной книге.
+- Decision: в Mini App сначала пробовать proxy/id-based Google URL; в `ImageWithLoader` переключать кандидат по таймауту (7s); в `Life` показывать placeholder-иконку после исчерпания кандидатов.
+- Trade-off: до 7s на каждый неудачный кандидат увеличивает worst-case время; зато UI не зависает бесконечно.
+- Related files: `frontend/src/utils/imageUtils.ts`, `frontend/src/components/ImageWithLoader.tsx`, `frontend/src/pages/Life.tsx`
 
 ## Open Risks and TODO
 
