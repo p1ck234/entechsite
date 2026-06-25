@@ -3,19 +3,11 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { authenticateToken } from '../middleware/auth';
+import { ensureUploadsDir, resolveUploadedFilePath } from '../utils/uploads';
 
 const router = express.Router();
 
-// Создаем папку uploads если её нет
-// В production файлы находятся в dist/, поэтому используем правильный путь
-const uploadsDir = process.env.NODE_ENV === 'production' 
-  ? path.join(__dirname, '../uploads')
-  : path.join(__dirname, '../../uploads');
-
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  console.log(`📁 Создана папка для загрузок: ${uploadsDir}`);
-}
+const uploadsDir = ensureUploadsDir();
 
 // Настройка multer для сохранения файлов
 const storage = multer.diskStorage({
@@ -98,10 +90,9 @@ router.post('/', authenticateToken, (req: any, res: any, next: any) => {
 router.get('/:filename', (req: any, res: any) => {
   try {
     const filename = req.params.filename;
-    const filePath = path.join(uploadsDir, filename);
+    const filePath = resolveUploadedFilePath(filename);
 
-    // Проверяем существование файла
-    if (!fs.existsSync(filePath)) {
+    if (!filePath) {
       return res.status(404).json({ message: 'Файл не найден' });
     }
 
@@ -117,10 +108,9 @@ router.get('/:filename', (req: any, res: any) => {
 router.delete('/:filename', authenticateToken, (req: any, res: any) => {
   try {
     const filename = req.params.filename;
-    const filePath = path.join(uploadsDir, filename);
+    const filePath = resolveUploadedFilePath(filename);
 
-    // Проверяем существование файла
-    if (!fs.existsSync(filePath)) {
+    if (!filePath) {
       return res.status(404).json({ message: 'Файл не найден' });
     }
 

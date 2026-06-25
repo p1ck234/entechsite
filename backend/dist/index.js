@@ -19,8 +19,8 @@ const calendar_1 = __importDefault(require("./routes/calendar"));
 const bots_1 = __importDefault(require("./routes/bots"));
 const upload_1 = __importDefault(require("./routes/upload"));
 const db_init_1 = require("./utils/db-init");
+const uploads_1 = require("./utils/uploads");
 const path_1 = __importDefault(require("path"));
-const fs_1 = __importDefault(require("fs"));
 dotenv_1.default.config();
 let databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
@@ -218,13 +218,7 @@ app.use('/api/events', events_1.default);
 app.use('/api/calendar', calendar_1.default);
 app.use('/api/bots', bots_1.default);
 app.use('/api/upload', upload_1.default);
-const uploadsDir = process.env.NODE_ENV === 'production'
-    ? path_1.default.join(__dirname, '../uploads')
-    : path_1.default.join(__dirname, '../../uploads');
-if (!fs_1.default.existsSync(uploadsDir)) {
-    fs_1.default.mkdirSync(uploadsDir, { recursive: true });
-    console.log(`📁 Создана папка для загрузок: ${uploadsDir}`);
-}
+const uploadsDir = (0, uploads_1.ensureUploadsDir)();
 const OPTIMIZABLE_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const MEDIA_PROXY_ALLOWED_HOSTS = new Set([
     'drive.google.com',
@@ -352,8 +346,8 @@ app.get('/api/media/proxy', async (req, res) => {
 });
 app.get('/api/uploads/:filename', async (req, res) => {
     const safeFilename = path_1.default.basename(req.params.filename);
-    const filePath = path_1.default.join(uploadsDir, safeFilename);
-    if (!fs_1.default.existsSync(filePath)) {
+    const filePath = (0, uploads_1.resolveUploadedFilePath)(safeFilename);
+    if (!filePath) {
         return res.status(404).json({ message: 'Файл не найден' });
     }
     const extension = path_1.default.extname(safeFilename).toLowerCase();

@@ -17,8 +17,8 @@ import calendarRoutes from './routes/calendar';
 import botRoutes from './routes/bots';
 import uploadRoutes from './routes/upload';
 import { initializeDatabase } from './utils/db-init';
+import { ensureUploadsDir, resolveUploadedFilePath } from './utils/uploads';
 import path from 'path';
-import fs from 'fs';
 import type sharp from 'sharp';
 
 dotenv.config();
@@ -287,16 +287,7 @@ app.use('/api/calendar', calendarRoutes);
 app.use('/api/bots', botRoutes);
 app.use('/api/upload', uploadRoutes);
 
-// Статическая раздача загруженных файлов
-const uploadsDir = process.env.NODE_ENV === 'production' 
-  ? path.join(__dirname, '../uploads')
-  : path.join(__dirname, '../../uploads');
-
-// Создаем папку если её нет
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  console.log(`📁 Создана папка для загрузок: ${uploadsDir}`);
-}
+const uploadsDir = ensureUploadsDir();
 
 type ResizeFit = 'cover' | 'contain' | 'fill' | 'inside' | 'outside';
 type SharpModule = typeof sharp;
@@ -448,9 +439,9 @@ app.get('/api/media/proxy', async (req, res) => {
 
 app.get('/api/uploads/:filename', async (req, res) => {
   const safeFilename = path.basename(req.params.filename);
-  const filePath = path.join(uploadsDir, safeFilename);
+  const filePath = resolveUploadedFilePath(safeFilename);
 
-  if (!fs.existsSync(filePath)) {
+  if (!filePath) {
     return res.status(404).json({ message: 'Файл не найден' });
   }
 
