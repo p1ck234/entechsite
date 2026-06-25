@@ -24,6 +24,15 @@ const isPositiveNumber = (value: unknown): value is number => {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 };
 
+const isTelegramMiniApp = (): boolean => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const telegramWindow = window as Window & { Telegram?: { WebApp?: unknown } };
+  return Boolean(telegramWindow.Telegram?.WebApp);
+};
+
 const getFallbackOrigin = (): string => {
   if (API_ORIGIN) {
     return API_ORIGIN;
@@ -136,6 +145,16 @@ const toAbsoluteUploadUrl = (sourceUrl: string): string => {
   return trimmedUrl;
 };
 
+const buildMediaProxyUrl = (sourceUrl: string): string | null => {
+  try {
+    const proxyUrl = new URL('/api/media/proxy', getFallbackOrigin());
+    proxyUrl.searchParams.set('url', sourceUrl);
+    return proxyUrl.toString();
+  } catch {
+    return null;
+  }
+};
+
 const isUploadUrl = (sourceUrl: string): boolean => {
   try {
     const parsedUrl = new URL(sourceUrl, getFallbackOrigin());
@@ -200,16 +219,44 @@ const buildGoogleCandidates = (sourceUrl: string, options?: NormalizeImageUrlOpt
   const candidates: string[] = [];
   const cleanedSource = cleanGoogleUrl(sourceUrl);
   const targetSize = resolveGoogleTargetSize(options);
+  const miniApp = isTelegramMiniApp();
+  const cleanedProxy = buildMediaProxyUrl(cleanedSource);
+
+  if (miniApp) {
+    pushUniqueUrl(candidates, cleanedProxy);
+  }
 
   pushUniqueUrl(candidates, sourceUrl);
   pushUniqueUrl(candidates, cleanedSource);
 
   const fileId = extractGoogleFileId(cleanedSource);
   if (fileId) {
-    // Для Mini App пробуем несколько форматов, т.к. часть Google URL ведет себя по-разному в webview.
-    pushUniqueUrl(candidates, `https://lh3.googleusercontent.com/d/${fileId}=s${targetSize}`);
-    pushUniqueUrl(candidates, `https://drive.google.com/thumbnail?id=${fileId}&sz=w${targetSize}`);
-    pushUniqueUrl(candidates, `https://drive.google.com/uc?export=view&id=${fileId}`);
+    const directCandidates = [
+      `https://lh3.googleusercontent.com/d/${fileId}=s${targetSize}`,
+      `https://drive.google.com/thumbnail?id=${fileId}&sz=w${targetSize}`,
+      `https://drive.google.com/uc?export=view&id=${fileId}`,
+    ];
+
+    if (miniApp) {
+      // В Mini App предпочитаем прокси-кандидаты, чтобы не зависеть от ограничений webview.
+      directCandidates.forEach((url) => {
+        pushUniqueUrl(candidates, buildMediaProxyUrl(url));
+      });
+      directCandidates.forEach((url) => {
+        pushUniqueUrl(candidates, url);
+      });
+    } else {
+      directCandidates.forEach((url) => {
+        pushUniqueUrl(candidates, url);
+      });
+      directCandidates.forEach((url) => {
+        pushUniqueUrl(candidates, buildMediaProxyUrl(url));
+      });
+    }
+  }
+
+  if (!miniApp) {
+    pushUniqueUrl(candidates, cleanedProxy);
   }
 
   return candidates;
