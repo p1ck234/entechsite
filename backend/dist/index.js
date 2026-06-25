@@ -19,6 +19,8 @@ const bots_1 = __importDefault(require("./routes/bots"));
 const upload_1 = __importDefault(require("./routes/upload"));
 const db_init_1 = require("./utils/db-init");
 const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
+const sharp_1 = __importDefault(require("sharp"));
 dotenv_1.default.config();
 let databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
@@ -219,11 +221,93 @@ app.use('/api/upload', upload_1.default);
 const uploadsDir = process.env.NODE_ENV === 'production'
     ? path_1.default.join(__dirname, '../uploads')
     : path_1.default.join(__dirname, '../../uploads');
-if (!require('fs').existsSync(uploadsDir)) {
-    require('fs').mkdirSync(uploadsDir, { recursive: true });
+if (!fs_1.default.existsSync(uploadsDir)) {
+    fs_1.default.mkdirSync(uploadsDir, { recursive: true });
     console.log(`📁 Создана папка для загрузок: ${uploadsDir}`);
 }
-app.use('/api/uploads', express_1.default.static(uploadsDir));
+const OPTIMIZABLE_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const parsePositiveInt = (value, max) => {
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        return undefined;
+    }
+    return Math.min(parsed, max);
+};
+const isResizeFit = (value) => {
+    return typeof value === 'string' && ['cover', 'contain', 'fill', 'inside', 'outside'].includes(value);
+};
+app.get('/api/uploads/:filename', async (req, res) => {
+    const safeFilename = path_1.default.basename(req.params.filename);
+    const filePath = path_1.default.join(uploadsDir, safeFilename);
+    if (!fs_1.default.existsSync(filePath)) {
+        return res.status(404).json({ message: 'Файл не найден' });
+    }
+    const extension = path_1.default.extname(safeFilename).toLowerCase();
+    const canOptimize = OPTIMIZABLE_IMAGE_EXTENSIONS.has(extension);
+    const width = parsePositiveInt(req.query.w, 2048);
+    const height = parsePositiveInt(req.query.h, 2048);
+    const quality = parsePositiveInt(req.query.q, 100);
+    const fit = isResizeFit(req.query.fit) ? req.query.fit : 'cover';
+    const shouldOptimize = canOptimize && (width !== undefined ||
+        height !== undefined ||
+        quality !== undefined ||
+        req.query.fit !== undefined);
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Vary', 'Accept');
+    res.setHeader('Cache-Control', shouldOptimize
+        ? 'public, max-age=31536000, immutable'
+        : 'public, max-age=604800, stale-while-revalidate=86400');
+    if (!shouldOptimize) {
+        return res.sendFile(filePath);
+    }
+    try {
+        const acceptHeader = typeof req.headers.accept === 'string' ? req.headers.accept : '';
+        const prefersWebp = acceptHeader.includes('image/webp');
+        const normalizedQuality = quality ?? 76;
+        let transformer = (0, sharp_1.default)(filePath, { failOn: 'none' }).rotate();
+        if (width !== undefined || height !== undefined) {
+            transformer = transformer.resize({
+                width,
+                height,
+                fit,
+                withoutEnlargement: true
+            });
+        }
+        let transformedBuffer;
+        let contentType;
+        if (prefersWebp) {
+            transformedBuffer = await transformer.webp({ quality: normalizedQuality }).toBuffer();
+            contentType = 'image/webp';
+        }
+        else if (extension === '.png') {
+            transformedBuffer = await transformer.png({ compressionLevel: 9 }).toBuffer();
+            contentType = 'image/png';
+        }
+        else {
+            transformedBuffer = await transformer.jpeg({ quality: normalizedQuality, mozjpeg: true }).toBuffer();
+            contentType = 'image/jpeg';
+        }
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Length', transformedBuffer.length.toString());
+        return res.send(transformedBuffer);
+    }
+    catch (error) {
+        console.error('⚠️ Не удалось оптимизировать изображение, отдаем оригинал:', error);
+        return res.sendFile(filePath);
+    }
+});
+app.use('/api/uploads', express_1.default.static(uploadsDir, {
+    maxAge: '7d',
+    etag: true,
+    lastModified: true,
+    setHeaders: (res) => {
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+    }
+}));
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'OK',
