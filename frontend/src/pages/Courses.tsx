@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { coursesAPI, lessonsAPI } from '../api/client';
-import { Course, CoursesResponse, Lesson } from '../types';
+import { Course, CoursesResponse, Lesson, LessonMaterial } from '../types';
 import { Search, Plus, Edit, Trash2, ExternalLink, Play, CheckCircle, Clock, BookOpen, RefreshCw } from 'lucide-react';
 import CourseModal from '../components/CourseModal';
 import LessonModal from '../components/LessonModal';
@@ -168,15 +168,29 @@ const Courses: React.FC = () => {
       window.alert(
         `${result.message}\n` +
         `Курсов найдено: ${result.coursesFound}\n` +
-        `Курсов создано: ${result.coursesCreated}, обновлено: ${result.coursesUpdated}\n` +
-        `Уроков создано: ${result.lessonsCreated}, обновлено: ${result.lessonsUpdated}\n` +
-        `Старых уроков отключено: ${result.lessonsDeactivated}`
+        `Курсов создано: ${result.coursesCreated}, обновлено: ${result.coursesUpdated}, без изменений: ${result.coursesUnchanged}\n` +
+        `Уроков создано: ${result.lessonsCreated}, обновлено: ${result.lessonsUpdated}, без изменений: ${result.lessonsUnchanged}\n` +
+        `Старых файловых уроков заархивировано: ${result.lessonsArchived}`
       );
     } catch (error: any) {
       console.error('Error syncing training from Google Drive:', error);
       window.alert(error.response?.data?.message || error.message || 'Ошибка синхронизации Google Drive');
     } finally {
       setSyncingTraining(false);
+    }
+  };
+
+  const handleOpenDriveMaterial = async (material: LessonMaterial) => {
+    try {
+      const blob = await lessonsAPI.getDriveMaterial(material.id);
+      const fileUrl = window.URL.createObjectURL(blob);
+      window.open(fileUrl, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => {
+        window.URL.revokeObjectURL(fileUrl);
+      }, 60000);
+    } catch (error: any) {
+      console.error('Error opening Drive material:', error);
+      window.alert(error.response?.data?.message || error.message || 'Ошибка открытия материала Google Drive');
     }
   };
 
@@ -340,17 +354,31 @@ const Courses: React.FC = () => {
                 {/* Actions */}
                 <div className="flex items-center justify-between">
                   <div className="flex space-x-2">
-                    {lesson.googleDriveUrl ? (
-                      <a
-                        href={lesson.googleDriveUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                    {lesson.materials?.length ? (
+                      <div className="flex flex-col gap-2">
+                        {lesson.materials.map((material) => (
+                          <button
+                            key={material.id}
+                            type="button"
+                            onClick={() => handleOpenDriveMaterial(material)}
+                            className="btn-primary flex items-center space-x-2 text-sm"
+                            title={`Открыть материал: ${material.name}`}
+                          >
+                            <Play className="w-4 h-4" />
+                            <span>{lesson.materials && lesson.materials.length > 1 ? material.name : 'Начать урок'}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : lesson.googleDriveUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => window.open(lesson.googleDriveUrl, '_blank', 'noopener,noreferrer')}
                         className="btn-primary flex items-center space-x-2 text-sm"
                         title={`Открыть урок: ${lesson.googleDriveUrl}`}
                       >
                         <Play className="w-4 h-4" />
                         <span>Начать урок</span>
-                      </a>
+                      </button>
                     ) : (
                       <button
                         className="btn-primary flex items-center space-x-2 text-sm opacity-50 cursor-not-allowed"

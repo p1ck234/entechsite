@@ -316,9 +316,11 @@ export const coursesAPI = {
     coursesFound: number;
     coursesCreated: number;
     coursesUpdated: number;
+    coursesUnchanged: number;
     lessonsCreated: number;
     lessonsUpdated: number;
-    lessonsDeactivated: number;
+    lessonsUnchanged: number;
+    lessonsArchived: number;
   }> => {
     const response = await api.post('/drive/sync-training', undefined, {
       timeout: DRIVE_SYNC_TIMEOUT_MS,
@@ -339,6 +341,7 @@ export const lessonsAPI = {
       title: lesson.title,
       description: lesson.description,
       googleDriveUrl: lesson.google_drive_url,
+      materials: Array.isArray(lesson.materials) ? lesson.materials : [],
       duration: lesson.duration,
       orderIndex: lesson.order_index,
       isActive: lesson.is_active,
@@ -363,6 +366,7 @@ export const lessonsAPI = {
       title: lesson.title,
       description: lesson.description,
       googleDriveUrl: lesson.google_drive_url,
+      materials: Array.isArray(lesson.materials) ? lesson.materials : [],
       duration: lesson.duration,
       orderIndex: lesson.order_index,
       isActive: lesson.is_active,
@@ -370,6 +374,14 @@ export const lessonsAPI = {
       updatedAt: lesson.updated_at,
       userProgress: lesson.userProgress
     };
+  },
+
+  getDriveMaterial: async (fileId: string): Promise<Blob> => {
+    const response = await api.get(`/drive/files/${fileId}`, {
+      responseType: 'blob',
+      timeout: DRIVE_SYNC_TIMEOUT_MS,
+    });
+    return response.data;
   },
 
   createLesson: async (lesson: Omit<Lesson, 'id' | 'createdAt' | 'updatedAt' | 'userProgress'>): Promise<{ message: string; lesson: Lesson }> => {

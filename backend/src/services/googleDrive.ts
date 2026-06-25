@@ -14,8 +14,12 @@ export interface DriveFileItem {
   modifiedTime?: string;
 }
 
+export interface DriveLessonItem extends DriveFileItem {
+  materials: DriveFileItem[];
+}
+
 export interface DriveCourseFolder extends DriveFileItem {
-  lessons: DriveFileItem[];
+  lessons: DriveLessonItem[];
 }
 
 const sortDriveItemsByName = <T extends DriveFileItem>(items: T[]): T[] => {
@@ -80,6 +84,8 @@ const getDriveClient = (): drive_v3.Drive => {
     auth: getGoogleAuth(),
   });
 };
+
+const GOOGLE_DOC_EXPORT_MIME_TYPE = 'application/pdf';
 
 const getFileWebViewLink = (file: drive_v3.Schema$File): string => {
   if (file.webViewLink) {
@@ -161,9 +167,45 @@ const listFolderChildren = async (drive: drive_v3.Drive, folderId: string): Prom
   return files.map(mapDriveFile);
 };
 
-const listCourseLessons = async (drive: drive_v3.Drive, folderId: string): Promise<DriveFileItem[]> => {
+const listFolderFilesRecursive = async (drive: drive_v3.Drive, folderId: string, prefix = ''): Promise<DriveFileItem[]> => {
   const children = await listFolderChildren(drive, folderId);
-  return sortDriveItemsByName(children);
+  const files: DriveFileItem[] = [];
+
+  for (const child of sortDriveItemsByName(children)) {
+    if (child.mimeType === FOLDER_MIME_TYPE) {
+      const nestedPrefix = prefix ? `${prefix} / ${child.name}` : child.name;
+      files.push(...await listFolderFilesRecursive(drive, child.id, nestedPrefix));
+      continue;
+    }
+
+    files.push({
+      ...child,
+      name: prefix ? `${prefix} / ${child.name}` : child.name,
+    });
+  }
+
+  return files;
+};
+
+const listCourseLessons = async (drive: drive_v3.Drive, folderId: string): Promise<DriveLessonItem[]> => {
+  const children = sortDriveItemsByName(await listFolderChildren(drive, folderId));
+  const lessons = await Promise.all(
+    children.map(async (child): Promise<DriveLessonItem> => {
+      if (child.mimeType === FOLDER_MIME_TYPE) {
+        return {
+          ...child,
+          materials: await listFolderFilesRecursive(drive, child.id),
+        };
+      }
+
+      return {
+        ...child,
+        materials: [child],
+      };
+    })
+  );
+
+  return lessons.filter((lesson) => lesson.materials.length > 0);
 };
 
 export const getTrainingDriveTree = async (): Promise<{ root: DriveFileItem; courses: DriveCourseFolder[] }> => {
@@ -180,4 +222,53 @@ export const getTrainingDriveTree = async (): Promise<{ root: DriveFileItem; cou
   );
 
   return { root, courses };
+};
+
+export const getDriveFileDownload = async (fileId: string): Promise<{
+  filename: string;
+  mimeType: string;
+  stream: NodeJS.ReadableStream;
+}> => {
+  const drive = getDriveClient();
+  const metadataResponse = await drive.files.get({
+    fileId,
+    supportsAllDrives: true,
+    fields: 'id, name, mimeType',
+  });
+  const file = metadataResponse.data;
+
+  if (!file.id || !file.name) {
+    throw new Error('Google Drive returned a file without id or name.');
+  }
+
+  if (file.mimeType?.startsWith('application/vnd.google-apps.')) {
+    const exportResponse = await drive.files.export(
+      {
+        fileId,
+        mimeType: GOOGLE_DOC_EXPORT_MIME_TYPE,
+      },
+      { responseType: 'stream' }
+    );
+
+    return {
+      filename: `${file.name}.pdf`,
+      mimeType: GOOGLE_DOC_EXPORT_MIME_TYPE,
+      stream: exportResponse.data as NodeJS.ReadableStream,
+    };
+  }
+
+  const response = await drive.files.get(
+    {
+      fileId,
+      alt: 'media',
+      supportsAllDrives: true,
+    },
+    { responseType: 'stream' }
+  );
+
+  return {
+    filename: file.name,
+    mimeType: file.mimeType || 'application/octet-stream',
+    stream: response.data as NodeJS.ReadableStream,
+  };
 };
