@@ -18,7 +18,7 @@ import uploadRoutes from './routes/upload';
 import { initializeDatabase } from './utils/db-init';
 import path from 'path';
 import fs from 'fs';
-import sharp from 'sharp';
+import type sharp from 'sharp';
 
 dotenv.config();
 
@@ -298,8 +298,31 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 type ResizeFit = 'cover' | 'contain' | 'fill' | 'inside' | 'outside';
+type SharpModule = typeof sharp;
 
 const OPTIMIZABLE_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+
+let cachedSharpModule: SharpModule | null = null;
+let sharpInitAttempted = false;
+
+const getSharpModule = (): SharpModule | null => {
+  if (sharpInitAttempted) {
+    return cachedSharpModule;
+  }
+
+  sharpInitAttempted = true;
+
+  try {
+    cachedSharpModule = require('sharp') as SharpModule;
+    console.log('✅ Модуль sharp успешно загружен');
+    return cachedSharpModule;
+  } catch (error) {
+    cachedSharpModule = null;
+    console.warn('⚠️ Модуль sharp недоступен, оптимизация изображений отключена');
+    console.warn(error);
+    return null;
+  }
+};
 
 const parsePositiveInt = (value: unknown, max: number): number | undefined => {
   if (typeof value !== 'string') {
@@ -354,12 +377,17 @@ app.get('/api/uploads/:filename', async (req, res) => {
     return res.sendFile(filePath);
   }
 
+  const sharpModule = getSharpModule();
+  if (!sharpModule) {
+    return res.sendFile(filePath);
+  }
+
   try {
     const acceptHeader = typeof req.headers.accept === 'string' ? req.headers.accept : '';
     const prefersWebp = acceptHeader.includes('image/webp');
     const normalizedQuality = quality ?? 76;
 
-    let transformer = sharp(filePath, { failOn: 'none' }).rotate();
+    let transformer = sharpModule(filePath, { failOn: 'none' }).rotate();
     if (width !== undefined || height !== undefined) {
       transformer = transformer.resize({
         width,
