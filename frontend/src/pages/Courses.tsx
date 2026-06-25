@@ -191,9 +191,19 @@ const Courses: React.FC = () => {
     }
   };
 
+  const isVideoMaterial = (material: LessonMaterial): boolean => {
+    const mimeType = material.mimeType?.toLowerCase() || '';
+    const fileName = material.name.toLowerCase();
+
+    return mimeType.startsWith('video/') || /\.(mp4|m4v|mov|webm|mkv|avi)$/i.test(fileName);
+  };
+
   const handleOpenDriveMaterial = async (material: LessonMaterial) => {
     try {
-      const fileUrl = lessonsAPI.getDriveMaterialUrl(material.id);
+      const fileUrl = isVideoMaterial(material) && material.webViewLink
+        ? material.webViewLink
+        : lessonsAPI.getDriveMaterialUrl(material.id);
+
       window.open(fileUrl, '_blank', 'noopener,noreferrer');
     } catch (error: any) {
       console.error('Error opening Drive material:', error);
