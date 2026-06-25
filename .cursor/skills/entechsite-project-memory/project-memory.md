@@ -82,6 +82,24 @@
 
 ## Task Journal
 
+### 2026-06-25 - Возврат простой link-only синхронизации Drive
+
+- Goal: автоматически добавлять курсы/уроки из Google Drive, но сохранять их как обычные `googleDriveUrl` ссылки без файлового proxy/preview.
+- Changes:
+  - возвращён backend `POST /api/drive/sync-training`;
+  - sync читает папку «Обучение» через service account и upsert курсов/уроков по стабильным Drive URL;
+  - подпапки первого уровня = курсы, файлы внутри курсов/подпапок = уроки с обычными Google Drive ссылками;
+  - frontend снова показывает кнопку «Синхронизировать Drive» для admin;
+  - не возвращались `materials JSONB`, portal popup, streaming endpoint и перенос прогресса.
+- Files:
+  - `backend/src/services/googleDrive.ts`
+  - `backend/src/routes/drive.ts`
+  - `backend/src/index.ts`
+  - `backend/package.json`
+  - `frontend/src/api/client.ts`
+  - `frontend/src/pages/Courses.tsx`
+- Result: можно автоматически наполнить базу знаний из Drive, но открытие материалов остаётся ручными Google Drive ссылками как у обычных уроков.
+
 ### 2026-06-25 - Откат Google Drive sync для обучения
 
 - Goal: вернуть ручное заполнение курсов и уроков ссылками Google Drive, убрать автоматическую синхронизацию папки «Обучение».
@@ -102,7 +120,7 @@
   - `frontend/src/types/index.ts`
   - `.gitignore`
 - Result: курсы и уроки снова управляются вручную через существующие формы и `googleDriveUrl`; автоматической синхронизации с Google Drive больше нет.
-- Note: эксперимент с автоматической Drive-синхронизацией, service account traversal, `materials`, popup/preview и переносом прогресса признан неудачным для текущего продукта. Не возвращать эту схему без отдельного согласованного плана.
+- Note: неудачной признана сложная схема с `materials`, popup/preview, streaming endpoint и переносом прогресса. Простая link-only синхронизация Drive допустима.
 
 ### 2026-06-25 - Frontend proxy для `/api/uploads` на production-домене
 

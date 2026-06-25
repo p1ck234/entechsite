@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { coursesAPI, lessonsAPI } from '../api/client';
 import { Course, CoursesResponse, Lesson } from '../types';
-import { Search, Plus, Edit, Trash2, ExternalLink, Play, CheckCircle, Clock, BookOpen } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, ExternalLink, Play, CheckCircle, Clock, BookOpen, RefreshCw } from 'lucide-react';
 import CourseModal from '../components/CourseModal';
 import LessonModal from '../components/LessonModal';
 import { useLocation } from 'react-router-dom';
@@ -21,6 +21,7 @@ const Courses: React.FC = () => {
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [syncingTraining, setSyncingTraining] = useState(false);
 
   // Reset selected course when navigating to courses page
   useEffect(() => {
@@ -157,6 +158,27 @@ const Courses: React.FC = () => {
     }
   };
 
+  const handleSyncTraining = async () => {
+    if (!isAdmin || syncingTraining) return;
+
+    try {
+      setSyncingTraining(true);
+      const result = await coursesAPI.syncTrainingFromDrive();
+      await fetchCourses();
+      window.alert(
+        `${result.message}\n` +
+        `Курсов найдено: ${result.coursesFound}\n` +
+        `Курсов создано: ${result.coursesCreated}, обновлено: ${result.coursesUpdated}, без изменений: ${result.coursesUnchanged}\n` +
+        `Уроков создано: ${result.lessonsCreated}, обновлено: ${result.lessonsUpdated}, без изменений: ${result.lessonsUnchanged}`
+      );
+    } catch (error: any) {
+      console.error('Error syncing training from Google Drive:', error);
+      window.alert(error.response?.data?.message || error.message || 'Ошибка синхронизации Google Drive');
+    } finally {
+      setSyncingTraining(false);
+    }
+  };
+
   const getProgressColor = (progress: number) => {
     if (progress === 100) return 'bg-green-500';
     if (progress >= 50) return 'bg-yellow-500';
@@ -182,13 +204,25 @@ const Courses: React.FC = () => {
           <p className="text-pastel-600 mt-1 text-sm sm:text-base">Образовательные материалы компании</p>
         </div>
         {isAdmin && (
-          <button
-            onClick={handleAdd}
-            className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
-          >
-            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="text-sm sm:text-base">Добавить курс</span>
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <button
+              onClick={handleSyncTraining}
+              disabled={syncingTraining}
+              className="btn-secondary flex items-center justify-center space-x-2 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-4 h-4 sm:w-5 sm:h-5 ${syncingTraining ? 'animate-spin' : ''}`} />
+              <span className="text-sm sm:text-base">
+                {syncingTraining ? 'Синхронизация...' : 'Синхронизировать Drive'}
+              </span>
+            </button>
+            <button
+              onClick={handleAdd}
+              className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto"
+            >
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="text-sm sm:text-base">Добавить курс</span>
+            </button>
+          </div>
         )}
       </div>
 
