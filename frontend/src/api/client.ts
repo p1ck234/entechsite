@@ -318,6 +318,7 @@ export const coursesAPI = {
     coursesUpdated: number;
     lessonsCreated: number;
     lessonsUpdated: number;
+    lessonsDeactivated: number;
   }> => {
     const response = await api.post('/drive/sync-training', undefined, {
       timeout: DRIVE_SYNC_TIMEOUT_MS,

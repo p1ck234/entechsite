@@ -18,6 +18,15 @@ export interface DriveCourseFolder extends DriveFileItem {
   lessons: DriveFileItem[];
 }
 
+const sortDriveItemsByName = <T extends DriveFileItem>(items: T[]): T[] => {
+  return [...items].sort((first, second) =>
+    first.name.localeCompare(second.name, 'ru', {
+      numeric: true,
+      sensitivity: 'base',
+    })
+  );
+};
+
 const escapeDriveQueryValue = (value: string): string => {
   return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 };
@@ -152,36 +161,21 @@ const listFolderChildren = async (drive: drive_v3.Drive, folderId: string): Prom
   return files.map(mapDriveFile);
 };
 
-const listFolderFilesRecursive = async (drive: drive_v3.Drive, folderId: string, prefix = ''): Promise<DriveFileItem[]> => {
+const listCourseLessons = async (drive: drive_v3.Drive, folderId: string): Promise<DriveFileItem[]> => {
   const children = await listFolderChildren(drive, folderId);
-  const files: DriveFileItem[] = [];
-
-  for (const child of children) {
-    if (child.mimeType === FOLDER_MIME_TYPE) {
-      const nestedPrefix = prefix ? `${prefix} / ${child.name}` : child.name;
-      files.push(...await listFolderFilesRecursive(drive, child.id, nestedPrefix));
-      continue;
-    }
-
-    files.push({
-      ...child,
-      name: prefix ? `${prefix} / ${child.name}` : child.name,
-    });
-  }
-
-  return files;
+  return sortDriveItemsByName(children);
 };
 
 export const getTrainingDriveTree = async (): Promise<{ root: DriveFileItem; courses: DriveCourseFolder[] }> => {
   const drive = getDriveClient();
   const root = await findRootFolder(drive);
   const rootChildren = await listFolderChildren(drive, root.id);
-  const courseFolders = rootChildren.filter((item) => item.mimeType === FOLDER_MIME_TYPE);
+  const courseFolders = sortDriveItemsByName(rootChildren.filter((item) => item.mimeType === FOLDER_MIME_TYPE));
 
   const courses = await Promise.all(
     courseFolders.map(async (folder) => ({
       ...folder,
-      lessons: await listFolderFilesRecursive(drive, folder.id),
+      lessons: await listCourseLessons(drive, folder.id),
     }))
   );
 

@@ -4,6 +4,7 @@ import { authenticateToken } from '../middleware/auth';
 import { DriveCourseFolder, getTrainingDriveTree } from '../services/googleDrive';
 
 const router = express.Router();
+const FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
@@ -13,6 +14,7 @@ interface SyncStats {
   coursesUpdated: number;
   lessonsCreated: number;
   lessonsUpdated: number;
+  lessonsDeactivated: number;
 }
 
 const getDriveFolderUrl = (folderId: string): string => {
@@ -21,6 +23,20 @@ const getDriveFolderUrl = (folderId: string): string => {
 
 const getDriveFileUrl = (fileId: string): string => {
   return `https://drive.google.com/file/d/${fileId}/view`;
+};
+
+const getDriveItemUrl = (lesson: DriveCourseFolder['lessons'][number]): string => {
+  if (lesson.webViewLink) {
+    return lesson.webViewLink;
+  }
+
+  return lesson.mimeType === FOLDER_MIME_TYPE
+    ? getDriveFolderUrl(lesson.id)
+    : getDriveFileUrl(lesson.id);
+};
+
+const getLessonDescription = (lesson: DriveCourseFolder['lessons'][number]): string | null => {
+  return lesson.mimeType === FOLDER_MIME_TYPE ? 'Папка материалов Google Drive' : lesson.mimeType || null;
 };
 
 const upsertCourse = async (client: any, courseFolder: DriveCourseFolder, stats: SyncStats): Promise<number> => {
@@ -51,8 +67,13 @@ const upsertCourse = async (client: any, courseFolder: DriveCourseFolder, stats:
 };
 
 const upsertLessons = async (client: any, courseId: number, courseFolder: DriveCourseFolder, stats: SyncStats): Promise<void> => {
+  const activeLessonUrls: string[] = [];
+
   for (const [index, lesson] of courseFolder.lessons.entries()) {
-    const lessonUrl = lesson.webViewLink || getDriveFileUrl(lesson.id);
+    const lessonUrl = getDriveItemUrl(lesson);
+    const lessonDescription = getLessonDescription(lesson);
+    activeLessonUrls.push(lessonUrl);
+
     const existingLesson = await client.query(
       'SELECT id FROM lessons WHERE course_id = $1 AND google_drive_url = $2',
       [courseId, lessonUrl]
@@ -61,9 +82,9 @@ const upsertLessons = async (client: any, courseId: number, courseFolder: DriveC
     if (existingLesson.rows.length > 0) {
       await client.query(
         `UPDATE lessons
-         SET title = $1, order_index = $2, is_active = true, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $3`,
-        [lesson.name, index, existingLesson.rows[0].id]
+         SET title = $1, description = $2, order_index = $3, is_active = true, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $4`,
+        [lesson.name, lessonDescription, index, existingLesson.rows[0].id]
       );
       stats.lessonsUpdated += 1;
       continue;
@@ -72,10 +93,21 @@ const upsertLessons = async (client: any, courseId: number, courseFolder: DriveC
     await client.query(
       `INSERT INTO lessons (course_id, title, description, google_drive_url, duration, order_index, is_active)
        VALUES ($1, $2, $3, $4, $5, $6, true)`,
-      [courseId, lesson.name, lesson.mimeType || null, lessonUrl, null, index]
+      [courseId, lesson.name, lessonDescription, lessonUrl, null, index]
     );
     stats.lessonsCreated += 1;
   }
+
+  const deactivatedLessons = await client.query(
+    `UPDATE lessons
+     SET is_active = false, updated_at = CURRENT_TIMESTAMP
+     WHERE course_id = $1
+       AND google_drive_url IS NOT NULL
+       AND NOT (google_drive_url = ANY($2::text[]))
+       AND is_active = true`,
+    [courseId, activeLessonUrls]
+  );
+  stats.lessonsDeactivated += deactivatedLessons.rowCount || 0;
 };
 
 router.post('/sync-training', authenticateToken, async (req: any, res: any) => {
@@ -89,6 +121,7 @@ router.post('/sync-training', authenticateToken, async (req: any, res: any) => {
     coursesUpdated: 0,
     lessonsCreated: 0,
     lessonsUpdated: 0,
+    lessonsDeactivated: 0,
   };
 
   try {
