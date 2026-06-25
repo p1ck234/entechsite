@@ -71,6 +71,25 @@
 
 ## Task Journal
 
+### 2026-06-25 - Периодическая пересинхронизация Telegram в Mini App и веб-версии
+
+- Goal: обеспечить регулярную проверку и обновление Telegram username/telegram_id без полного разлогина и в Mini App, и на сайте.
+- Changes:
+  - в AuthContext добавлен `syncTelegramAuth(initData)` для фоновой переавторизации через `/auth/telegram`;
+  - в AuthContext добавлен `syncTelegramOAuth()` для фоновой переавторизации через `/auth/telegram-oauth` с сохраненными OAuth-данными (без username во избежание отката на устаревшее значение);
+  - в странице `TelegramAuth` сохранение payload OAuth в `localStorage` после успешного входа;
+  - в Layout добавлен фоновый цикл синхронизации для Mini App:
+    - сразу при входе в защищенную зону;
+    - каждые 5 минут;
+    - при возврате приложения в активный режим (`visibilitychange`).
+  - в Layout для веб-версии добавлен тот же цикл синхронизации при наличии сохраненного OAuth payload.
+- Files:
+  - `frontend/src/contexts/AuthContext.tsx`
+  - `frontend/src/components/Layout.tsx`
+  - `frontend/src/pages/TelegramAuth.tsx`
+  - `frontend/src/api/client.ts`
+- Result: даже при живой локальной сессии Telegram-данные регулярно пересинхронизируются в Mini App и на сайте.
+
 ### 2026-06-25 - Стабилизация Telegram входа и единого формата username
 
 - Goal: убрать зависимость входа от изменяемого `username`, перейти на `telegram_id` и унифицировать отображение Telegram в адресной книге.
@@ -130,6 +149,22 @@
 - Resolution: перевели matching на приоритет `telegram_id`, сохранили fallback и добавили авто-синхронизацию username при логине.
 - Validation: сборка `backend` и `frontend` проходит; логика синхронизации централизована в `auth` роуте.
 - Related files: `backend/src/routes/auth.ts`, `backend/src/routes/employees.ts`, `frontend/src/pages/Employees.tsx`
+
+### 2026-06-25 - В Mini App username не обновлялся при валидной локальной сессии
+
+- Symptom: при входе через Mini App старый username мог сохраняться, если пользователь давно не переавторизовывался.
+- Root cause: при валидном токене фронт вызывал только `/auth/me`, а синхронизация username выполняется в `/auth/telegram`.
+- Resolution: добавлена фоновая переавторизация в Mini App (interval + при возврате вкладки в фокус) без принудительного logout.
+- Validation: сборка фронта проходит; синхронизация выполняется в `Layout`.
+- Related files: `frontend/src/contexts/AuthContext.tsx`, `frontend/src/components/Layout.tsx`, `backend/src/routes/auth.ts`
+
+### 2026-06-25 - На сайте Telegram username не обновлялся автоматически
+
+- Symptom: в веб-версии после первичного OAuth входа username не пересинхронизировался без повторного ручного логина.
+- Root cause: не было фонового вызова Telegram OAuth endpoint и не сохранялись данные OAuth callback для последующих тихих sync-запросов.
+- Resolution: сохранение OAuth payload после успешного входа и периодическая фоновая синхронизация в `Layout`.
+- Validation: фронтенд собирается, цикл синхронизации активируется при наличии OAuth payload.
+- Related files: `frontend/src/pages/TelegramAuth.tsx`, `frontend/src/contexts/AuthContext.tsx`, `frontend/src/components/Layout.tsx`
 
 ### 2026-06-25 - Дрейф схемы `telegram_id`
 
