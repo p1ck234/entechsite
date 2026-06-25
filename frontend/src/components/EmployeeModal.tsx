@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { Trash2, X } from 'lucide-react';
 import { Employee } from '../types';
-import { employeesAPI } from '../api/client';
+import { employeesAPI, uploadAPI } from '../api/client';
+import { useAuth } from '../contexts/AuthContext';
+import { useTelegram } from '../contexts/TelegramContext';
+import ImageWithLoader from './ImageWithLoader';
 
 interface EmployeeModalProps {
   employee: Employee | null;
@@ -9,6 +12,8 @@ interface EmployeeModalProps {
 }
 
 const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
+  const { isAdmin } = useAuth();
+  const { isTelegram } = useTelegram();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -19,12 +24,23 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
     phone: '',
     telegram: '',
     photo: '',
+    role: 'USER' as 'ADMIN' | 'USER',
   });
   const [loading, setLoading] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState('');
 
   const departments = [
-    'IT-Отдел', 'Отдел продаж', 'Отдел финансистов', 'Отдел стройки', 'Отдел производства', 'Отдел управления и планирование'
+    'Отдел IT',
+    'Отдел продаж',
+    'Отдел финансов',
+    'Отдел строительства',
+    'Отдел производства',
+    'Отдел управления и планирования',
+    'Отдел HR',
+    'Отдел бухгалтерии',
+    'Отдел недвижимости',
+    'Отдел проектирования',
   ];
 
   useEffect(() => {
@@ -39,6 +55,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
         phone: employee.phone,
         telegram: employee.telegram || '',
         photo: employee.photo || '',
+        role: (employee.userRole as 'ADMIN' | 'USER') || 'USER',
       });
     } else {
       setFormData({
@@ -51,6 +68,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
         phone: '',
         telegram: '',
         photo: '',
+        role: 'USER',
       });
     }
   }, [employee]);
@@ -64,7 +82,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
       if (employee) {
         await employeesAPI.updateEmployee(employee.id, formData);
       } else {
-        await employeesAPI.createEmployee(formData);
+        await employeesAPI.createEmployee({ ...formData, isActive: true });
       }
       onClose();
     } catch (err: any) {
@@ -81,12 +99,70 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
     });
   };
 
+  const handleUploadPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setUploadingPhoto(true);
+    setError('');
+
+    try {
+      const result = await uploadAPI.uploadPhoto(file);
+      setFormData((prev) => ({
+        ...prev,
+        photo: result.url,
+      }));
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || 'Ошибка при загрузке фото');
+    } finally {
+      setUploadingPhoto(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemovePhoto = () => {
+    setFormData((prev) => ({
+      ...prev,
+      photo: '',
+    }));
+  };
+
+  // Блокируем прокрутку body при открытом попапе
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+    <div 
+      className={`fixed inset-0 z-50 ${isTelegram ? '' : 'flex items-end sm:items-center justify-center p-0 sm:p-4'}`}
+      style={isTelegram ? {} : { touchAction: 'none', overflow: 'hidden' }}
+      onTouchMove={isTelegram ? undefined : (e) => {
+        // Предотвращаем прокрутку фона
+        const target = e.target as HTMLElement;
+        if (!target.closest('.modal-content')) {
+          e.preventDefault();
+        }
+      }}
+    >
+      {!isTelegram && (
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm" 
+          onClick={onClose}
+          style={{ touchAction: 'none' }}
+        />
+      )}
       
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="glass-card rounded-2xl p-6">
+      <div 
+        className={`${isTelegram ? 'fixed inset-0' : 'relative'} w-full ${isTelegram ? 'h-full max-w-none max-h-none' : 'max-w-2xl max-h-[85vh] sm:max-h-[90vh]'} overflow-y-auto bg-white ${isTelegram ? 'rounded-none' : 'rounded-t-2xl sm:rounded-2xl'} modal-content`}
+        style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch', height: isTelegram ? '100vh' : undefined }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className={`glass-card ${isTelegram ? 'rounded-none' : 'rounded-t-2xl sm:rounded-2xl'} p-6 ${isTelegram ? 'pb-24' : 'pb-24 sm:pb-8'}`}>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-pastel-800">
               {employee ? 'Редактировать сотрудника' : 'Добавить сотрудника'}
@@ -238,18 +314,70 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
 
               <div className="md:col-span-2">
                 <label htmlFor="photo" className="block text-sm font-medium text-pastel-700 mb-2">
-                  URL фото
+                  Фото
                 </label>
                 <input
                   id="photo"
-                  name="photo"
-                  type="url"
-                  value={formData.photo}
-                  onChange={handleChange}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handleUploadPhoto}
+                  disabled={uploadingPhoto || loading}
                   className="input-field"
-                  placeholder="https://example.com/photo.jpg"
                 />
+                <p className="text-xs text-pastel-500 mt-1">
+                  Фото сохраняется на сервере и стабильно открывается в Mini App.
+                </p>
+                {uploadingPhoto && (
+                  <p className="text-sm text-pastel-500 mt-2">Загрузка фото...</p>
+                )}
+                {formData.photo && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="w-20 h-20 rounded-full overflow-hidden bg-pastel-100">
+                      <ImageWithLoader
+                        src={formData.photo}
+                        alt="Фото сотрудника"
+                        className="w-full h-full object-cover"
+                        imageOptions={{
+                          width: 160,
+                          height: 160,
+                          quality: 72,
+                          fit: 'cover',
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemovePhoto}
+                      disabled={uploadingPhoto || loading}
+                      className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Удалить фото из карточки"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
+
+              {isAdmin && employee && employee.userRole && (
+                <div className="md:col-span-2">
+                  <label htmlFor="role" className="block text-sm font-medium text-pastel-700 mb-2">
+                    Роль пользователя
+                  </label>
+                  <select
+                    id="role"
+                    name="role"
+                    value={formData.role}
+                    onChange={handleChange}
+                    className="input-field"
+                  >
+                    <option value="USER">Пользователь</option>
+                    <option value="ADMIN">Администратор</option>
+                  </select>
+                  <p className="text-xs text-pastel-500 mt-1">
+                    Изменение роли повлияет на права доступа пользователя в системе
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end space-x-4">
@@ -257,16 +385,16 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
                 type="button"
                 onClick={onClose}
                 className="btn-secondary"
-                disabled={loading}
+                disabled={loading || uploadingPhoto}
               >
                 Отмена
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || uploadingPhoto}
                 className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Сохранение...' : (employee ? 'Обновить' : 'Создать')}
+                {loading ? 'Сохранение...' : uploadingPhoto ? 'Загрузка...' : (employee ? 'Обновить' : 'Создать')}
               </button>
             </div>
           </form>

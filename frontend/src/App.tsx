@@ -4,13 +4,12 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
+import TelegramAuth from './pages/TelegramAuth';
 import Employees from './pages/Employees';
 import Courses from './pages/Courses';
-import Profile from './pages/Profile';
-import ComingSoon from './pages/ComingSoon';
 import Life from './pages/Life';
 import Calendar from './pages/Calendar';
+import Bots from './pages/Bots';
 import LoadingSpinner from './components/LoadingSpinner';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -39,6 +38,7 @@ const AppRoutes: React.FC = () => {
       {/* Public routes */}
       <Route path="/" element={<Home />} />
       <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/home" replace />} />
+      <Route path="/auth" element={!isAuthenticated ? <TelegramAuth /> : <Navigate to="/home" replace />} />
       
       {/* Protected routes with Layout */}
       <Route element={
@@ -47,12 +47,13 @@ const AppRoutes: React.FC = () => {
         </ProtectedRoute>
       }>
         <Route path="/home" element={<Home />} />
-        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/employees" element={<Employees />} />
         <Route path="/courses" element={<Courses />} />
         <Route path="/life" element={<Life />} />
         <Route path="/events" element={<Calendar />} />
-        <Route path="/profile" element={<Profile />} />
+        <Route path="/bots" element={<Bots />} />
+        <Route path="/dashboard" element={<Navigate to="/home" replace />} />
+        <Route path="/profile" element={<Navigate to="/home" replace />} />
       </Route>
       
       {/* Catch all route - redirect to home if not authenticated, home (with layout) if authenticated */}

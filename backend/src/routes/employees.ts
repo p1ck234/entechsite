@@ -1,6 +1,7 @@
 import express from 'express';
 import { body, validationResult, query } from 'express-validator';
 import { Pool } from 'pg';
+import bcrypt from 'bcryptjs';
 import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
@@ -8,13 +9,23 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
 
+const normalizeTelegramUsername = (username?: string | null): string | null => {
+  if (!username) {
+    return null;
+  }
+
+  const normalized = username.trim().replace(/^@+/, '').toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+};
+
 // Get all employees
 router.get('/', authenticateToken, [
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
   query('search').optional().isString(),
   query('department').optional().isString(),
-  query('showInactive').optional().isBoolean()
+  query('showInactive').optional().isBoolean(),
+  query('status').optional().isIn(['APPROVED', 'PENDING', 'REJECTED']) // Added status filter
 ], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
@@ -27,11 +38,30 @@ router.get('/', authenticateToken, [
     const search = req.query.search as string;
     const department = req.query.department as string;
     const showInactive = req.query.showInactive === 'true' && req.user?.role === 'ADMIN';
+    const statusFilter = req.query.status as string; // 'APPROVED', 'PENDING', 'REJECTED'
     const skip = (page - 1) * limit;
 
-    let whereClause = showInactive ? 'WHERE e.is_active = false' : 'WHERE e.is_active = true';
+    // Строим WHERE clause на основе фильтра статуса
+    let whereClause = '';
     const params: any[] = [];
     let paramCount = 0;
+
+    if (statusFilter === 'PENDING') {
+      // Показываем только заявки на согласовании
+      paramCount++;
+      whereClause = `WHERE e.status = $${paramCount}`;
+      params.push('PENDING');
+    } else if (statusFilter === 'REJECTED') {
+      // Показываем отклоненные или неактивные
+      paramCount++;
+      whereClause = `WHERE (e.status = $${paramCount} OR e.is_active = false)`;
+      params.push('REJECTED');
+    } else {
+      // По умолчанию показываем активных и одобренных
+      paramCount++;
+      whereClause = `WHERE e.is_active = true AND e.status = $${paramCount}`;
+      params.push('APPROVED');
+    }
 
     if (search) {
       paramCount++;
@@ -186,6 +216,7 @@ router.post('/', authenticateToken, [
       telegram,
       photo
     } = req.body;
+    const normalizedTelegram = normalizeTelegramUsername(telegram);
 
     // Check if active employee with email already exists
     const existingEmployee = await pool.query('SELECT id FROM employees WHERE email = $1 AND is_active = true', [email]);
@@ -197,7 +228,7 @@ router.post('/', authenticateToken, [
     const result = await pool.query(
       `INSERT INTO employees (first_name, last_name, middle_name, position, department, email, phone, telegram, photo)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [firstName, lastName, middleName, position, department, email, phone, telegram, photo]
+      [firstName, lastName, middleName, position, department, email, phone, normalizedTelegram, photo]
     );
 
     res.status(201).json({
@@ -220,7 +251,8 @@ router.put('/:id', authenticateToken, [
   body('phone').optional().notEmpty().trim(),
   body('telegram').optional().isString(),
   body('photo').optional().isString(),
-  body('isActive').optional().isBoolean()
+  body('isActive').optional().isBoolean(),
+  body('role').optional().isIn(['ADMIN', 'USER']) // Added role field
 ], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
@@ -234,6 +266,10 @@ router.put('/:id', authenticateToken, [
 
     const { id } = req.params;
     const updateData = req.body;
+
+    if (Object.prototype.hasOwnProperty.call(updateData, 'telegram')) {
+      updateData.telegram = normalizeTelegramUsername(updateData.telegram);
+    }
 
     // Check if employee exists
     const existingEmployee = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
@@ -255,9 +291,11 @@ router.put('/:id', authenticateToken, [
     const updateFields: string[] = [];
     const values: any[] = [];
     let paramCount = 0;
+    const roleToUpdate = updateData.role; // Сохраняем роль отдельно, она не в employees
 
     Object.keys(updateData).forEach(key => {
-      if (updateData[key] !== undefined) {
+      // Пропускаем role - это поле из таблицы users, обрабатывается отдельно
+      if (updateData[key] !== undefined && key !== 'role') {
         paramCount++;
         const dbKey = key === 'firstName' ? 'first_name' : 
                      key === 'lastName' ? 'last_name' : 
@@ -268,19 +306,52 @@ router.put('/:id', authenticateToken, [
       }
     });
 
-    if (updateFields.length === 0) {
-      return res.status(400).json({ message: 'No fields to update' });
+    // Если есть поля для обновления в employees, обновляем их
+    if (updateFields.length > 0) {
+      values.push(id);
+      await pool.query(
+        `UPDATE employees SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount + 1}`,
+        values
+      );
     }
 
-    values.push(id);
-    const result = await pool.query(
-      `UPDATE employees SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount + 1} RETURNING *`,
-      values
+    // Если указана роль, обновляем её в таблице users
+    if (roleToUpdate !== undefined) {
+      const employeeEmail = updateData.email || existingEmployee.rows[0].email;
+      const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [employeeEmail]);
+      
+      if (userResult.rows.length > 0) {
+        // Пользователь существует - обновляем роль
+        await pool.query(
+          'UPDATE users SET role = $1, updated_at = CURRENT_TIMESTAMP WHERE email = $2',
+          [roleToUpdate, employeeEmail]
+        );
+        console.log(`✅ Роль пользователя ${employeeEmail} обновлена на ${roleToUpdate}`);
+      } else {
+        // Пользователь не существует - создаем его с указанной ролью
+        const randomPassword = Math.random().toString(36).slice(-12);
+        const hashedPassword = await bcrypt.hash(randomPassword, 10);
+        
+        await pool.query(
+          'INSERT INTO users (email, password, role) VALUES ($1, $2, $3)',
+          [employeeEmail, hashedPassword, roleToUpdate]
+        );
+        console.log(`✅ Пользователь ${employeeEmail} создан с ролью ${roleToUpdate}`);
+      }
+    }
+
+    // Получаем обновленные данные сотрудника с ролью из users
+    const updatedEmployee = await pool.query(
+      `SELECT e.*, u.role as user_role 
+       FROM employees e 
+       LEFT JOIN users u ON e.email = u.email 
+       WHERE e.id = $1`,
+      [id]
     );
 
     res.json({
       message: 'Employee updated successfully',
-      employee: result.rows[0]
+      employee: updatedEmployee.rows[0]
     });
   } catch (error) {
     console.error('Update employee error:', error);

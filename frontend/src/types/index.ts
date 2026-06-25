@@ -17,6 +17,7 @@ export interface Employee {
   telegram?: string;
   photo?: string;
   isActive: boolean;
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED'; // Статус регистрации
   createdAt: string;
   updatedAt: string;
   userRole?: 'ADMIN' | 'USER'; // Role from users table
@@ -78,6 +79,11 @@ export interface AuthResponse {
   message: string;
   user: User;
   token: string;
+  approved?: boolean;
+  employee?: Employee;
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  isNewUser?: boolean;
+  needsApproval?: boolean;
 }
 
 export interface ApiResponse<T> {
@@ -160,6 +166,18 @@ export interface CalendarEvent {
   isAllDay: boolean;
   createdBy?: number;
   createdByEmail?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TelegramBot {
+  id: string;
+  name: string;
+  type: 'BOT' | 'SITE';
+  username?: string; // без @, только для BOT
+  url?: string; // только для SITE
+  description?: string;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }

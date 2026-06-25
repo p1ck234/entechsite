@@ -1,9 +1,11 @@
 // Site configuration
+import { API_BASE_URL } from './api';
+
 export const SITE_CONFIG = {
   name: 'Энтех Групп',
   description: 'Управление компанией',
   url: import.meta.env.VITE_SITE_URL || 'http://localhost:5173',
-  apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:3001/api',
+  apiUrl: API_BASE_URL, // Используем функцию из config/api.ts
   version: '1.0.0',
   author: 'p1ck23',
   contact: {

@@ -2,9 +2,48 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { eventsAPI } from '../api/client';
 import { Event, EventsResponse } from '../types';
-import { ExternalLink, Plus, Edit, Trash2, Calendar } from 'lucide-react';
+import { ExternalLink, Plus, Edit, Trash2, Calendar, ImageOff } from 'lucide-react';
 import EventModal from '../components/EventModal';
 import ImageWithLoader from '../components/ImageWithLoader';
+import { preloadImages } from '../utils/imagePreload';
+
+const EVENT_PREVIEW_IMAGE_OPTIONS = {
+  width: 320,
+  height: 320,
+  quality: 64,
+  fit: 'cover',
+} as const;
+
+const EventPreviewTile: React.FC<{ src: string; alt: string }> = ({ src, alt }) => {
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [src]);
+
+  if (!src?.trim() || imageError) {
+    return (
+      <div className="w-full h-full bg-pastel-100 flex items-center justify-center">
+        <ImageOff className="w-5 h-5 text-pastel-400" />
+      </div>
+    );
+  }
+
+  return (
+    <ImageWithLoader
+      src={src}
+      alt={alt}
+      className="w-full h-full object-cover"
+      imageOptions={EVENT_PREVIEW_IMAGE_OPTIONS}
+      onLoadError={() => {
+        setImageError(true);
+      }}
+      onError={() => {
+        setImageError(true);
+      }}
+    />
+  );
+};
 
 const Life: React.FC = () => {
   const { isAdmin } = useAuth();
@@ -20,6 +59,15 @@ const Life: React.FC = () => {
         page: 1,
         limit: 50,
       });
+
+      const preloadEntries = response.events.flatMap((event) =>
+        (event.previewImages || []).slice(0, 4).map((src) => ({
+          src,
+          options: EVENT_PREVIEW_IMAGE_OPTIONS
+        }))
+      );
+
+      preloadImages(preloadEntries, 80);
       setEvents(response.events);
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -106,19 +154,14 @@ const Life: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {events.map((event) => (
             <div key={event.id} className="card overflow-hidden hover:scale-105 transition-transform">
-              {/* Preview Images */}
               {event.previewImages && event.previewImages.length > 0 && (
                 <div className="relative h-48 bg-pastel-100 overflow-hidden">
                   <div className="grid grid-cols-2 gap-1 h-full">
                     {event.previewImages.slice(0, 4).map((image, index) => (
                       <div key={index} className="relative overflow-hidden">
-                        <ImageWithLoader
+                        <EventPreviewTile
                           src={image}
                           alt={`${event.title} ${index + 1}`}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            // Fallback handled in component
-                          }}
                         />
                       </div>
                     ))}

@@ -3,6 +3,8 @@ import { X } from 'lucide-react';
 import { CalendarEvent } from '../types';
 import { calendarAPI } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import { useTelegram } from '../contexts/TelegramContext';
+import { formatRuDate, toInputDate } from '../utils/date';
 
 interface CalendarEventModalProps {
   event: CalendarEvent | null;
@@ -13,6 +15,7 @@ interface CalendarEventModalProps {
 
 const CalendarEventModal: React.FC<CalendarEventModalProps> = ({ event, selectedDate, onClose, onSuccess }) => {
   const { isAdmin } = useAuth();
+  const { isTelegram } = useTelegram();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -24,13 +27,6 @@ const CalendarEventModal: React.FC<CalendarEventModalProps> = ({ event, selected
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
-
-  const formatDateForInput = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
 
   useEffect(() => {
     if (event) {
@@ -46,14 +42,14 @@ const CalendarEventModal: React.FC<CalendarEventModalProps> = ({ event, selected
       setFormData({
         title: event.title || '',
         description: event.description || '',
-        eventDate: event.eventDate ? event.eventDate.split('T')[0] : '',
+        eventDate: toInputDate(event.eventDate),
         eventTime: eventTime,
         location: event.location || '',
         isAllDay: event.isAllDay || false,
       });
       setIsEditing(isAdmin); // Для админов сразу режим редактирования, для обычных - просмотр
     } else if (selectedDate) {
-      const dateStr = formatDateForInput(selectedDate);
+      const dateStr = toInputDate(selectedDate);
       setFormData({
         title: '',
         description: '',
@@ -64,7 +60,7 @@ const CalendarEventModal: React.FC<CalendarEventModalProps> = ({ event, selected
       });
       setIsEditing(false);
     } else {
-      const today = formatDateForInput(new Date());
+      const today = toInputDate(new Date());
       setFormData({
         title: '',
         description: '',
@@ -134,12 +130,40 @@ const CalendarEventModal: React.FC<CalendarEventModalProps> = ({ event, selected
     });
   };
 
+  // Блокируем прокрутку body при открытом попапе
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+    <div 
+      className={`fixed inset-0 z-50 ${isTelegram ? '' : 'flex items-end sm:items-center justify-center p-0 sm:p-4'}`}
+      style={isTelegram ? {} : { touchAction: 'none', overflow: 'hidden' }}
+      onTouchMove={isTelegram ? undefined : (e) => {
+        // Предотвращаем прокрутку фона
+        const target = e.target as HTMLElement;
+        if (!target.closest('.modal-content')) {
+          e.preventDefault();
+        }
+      }}
+    >
+      {!isTelegram && (
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm" 
+          onClick={onClose}
+          style={{ touchAction: 'none' }}
+        />
+      )}
       
-      <div className="relative w-full max-w-md">
-        <div className="glass-card rounded-2xl p-6">
+      <div 
+        className={`${isTelegram ? 'fixed inset-0' : 'relative'} w-full ${isTelegram ? 'h-full max-w-none max-h-none' : 'max-w-md max-h-[85vh] sm:max-h-[90vh]'} overflow-y-auto bg-white ${isTelegram ? 'rounded-none' : 'rounded-t-2xl sm:rounded-2xl'} modal-content`}
+        style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch', height: isTelegram ? '100vh' : undefined }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className={`glass-card ${isTelegram ? 'rounded-none' : 'rounded-t-2xl sm:rounded-2xl'} p-6 ${isTelegram ? 'pb-24' : 'pb-24 sm:pb-8'}`}>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-pastel-800">
               {event 
@@ -188,11 +212,7 @@ const CalendarEventModal: React.FC<CalendarEventModalProps> = ({ event, selected
                   Дата
                 </label>
                 <div className="input-field bg-pastel-50">
-                  {new Date(formData.eventDate).toLocaleDateString('ru-RU', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
+                  {formatRuDate(formData.eventDate)}
                 </div>
               </div>
 

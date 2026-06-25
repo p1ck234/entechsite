@@ -1,34 +1,65 @@
 import axios from 'axios';
-import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, CalendarEvent } from '../types';
-import { SITE_CONFIG } from '../config/site';
+import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, CalendarEvent, TelegramBot, PaginationInfo } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+import { API_BASE_URL } from '../config/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000, // 30 секунд таймаут
 });
 
-// Request interceptor to add auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+// API для загрузки файлов (с FormData)
+const uploadApi = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 60000, // 60 секунд для загрузки файлов
+});
 
-// Response interceptor to handle auth errors
+type TelegramOAuthPayload = {
+  id: number;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+  photo_url?: string;
+  auth_date: number;
+  hash: string;
+};
+
+// Request interceptor to add auth token
+const addAuthToken = (config: any) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+};
+
+api.interceptors.request.use(addAuthToken, (error) => {
+  return Promise.reject(error);
+});
+
+// Request interceptor для upload API
+uploadApi.interceptors.request.use(addAuthToken, (error) => {
+  return Promise.reject(error);
+});
+
+// Response interceptor to handle auth errors and network errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Логируем все ошибки для отладки
+    console.error('API Error:', {
+      message: error.message,
+      code: error.code,
+      response: error.response?.data,
+      status: error.response?.status,
+      url: error.config?.url,
+      baseURL: error.config?.baseURL,
+      fullURL: error.config?.baseURL + error.config?.url
+    });
+
     if (error.response?.status === 401) {
       console.log('Unauthorized access, redirecting to login');
       localStorage.removeItem('token');
@@ -36,6 +67,18 @@ api.interceptors.response.use(
       // Use replace to avoid back button issues
       window.location.replace('/login');
     }
+    
+    // Обработка сетевых ошибок
+    if (!error.response) {
+      if (error.code === 'ECONNABORTED') {
+        error.message = 'Превышено время ожидания. Проверьте подключение к интернету.';
+      } else if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        error.message = `Ошибка сети. Не удалось подключиться к серверу. URL: ${error.config?.baseURL || API_BASE_URL}`;
+      } else {
+        error.message = `Ошибка подключения: ${error.message || 'Неизвестная ошибка'}`;
+      }
+    }
+    
     return Promise.reject(error);
   }
 );
@@ -47,8 +90,38 @@ export const authAPI = {
     return response.data;
   },
 
-  register: async (email: string, password: string, role?: string): Promise<AuthResponse> => {
-    const response = await api.post('/auth/register', { email, password, role });
+  register: async (email: string, password: string, telegramUsername: string, firstName: string, lastName: string, position?: string, department?: string): Promise<AuthResponse> => {
+    const response = await api.post('/auth/register', { 
+      email, 
+      password, 
+      telegramUsername,
+      firstName,
+      lastName,
+      position,
+      department
+    });
+    return response.data;
+  },
+
+  loginTelegram: async (initData: string): Promise<AuthResponse> => {
+    const response = await api.post('/auth/telegram', { initData });
+    return response.data;
+  },
+
+  loginTelegramOAuth: async (payload: TelegramOAuthPayload): Promise<AuthResponse> => {
+    const response = await api.post('/auth/telegram-oauth', payload);
+    return response.data;
+  },
+
+  registerTelegram: async (initData: string, firstName: string, lastName: string, position?: string, department?: string, phone?: string): Promise<AuthResponse> => {
+    const response = await api.post('/auth/register-telegram', { 
+      initData, 
+      firstName, 
+      lastName, 
+      position, 
+      department, 
+      phone 
+    });
     return response.data;
   },
 
@@ -60,13 +133,14 @@ export const authAPI = {
 
 // Employees API
 export const employeesAPI = {
-  getEmployees: async (params?: {
-    page?: number;
-    limit?: number;
-    search?: string;
-    department?: string;
-    showInactive?: boolean;
-  }): Promise<EmployeesResponse> => {
+      getEmployees: async (params?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        department?: string;
+        showInactive?: boolean;
+        status?: 'APPROVED' | 'PENDING' | 'REJECTED'; // Changed to match backend format
+      }): Promise<EmployeesResponse> => {
     const response = await api.get('/employees', { params });
     
     // Transform snake_case to camelCase
@@ -84,7 +158,8 @@ export const employeesAPI = {
       isActive: emp.is_active,
       createdAt: emp.created_at,
       updatedAt: emp.updated_at,
-      userRole: emp.user_role
+      userRole: emp.user_role,
+      status: emp.status // Добавляем статус
     }));
 
     return {
@@ -324,6 +399,21 @@ export const usersAPI = {
     const response = await api.put('/users/password-by-email', { email, newPassword });
     return response.data;
   },
+
+  getPendingRegistrations: async (): Promise<{ registrations: any[] }> => {
+    const response = await api.get('/users/pending-registrations');
+    return response.data;
+  },
+
+  approveRegistration: async (id: string): Promise<{ message: string; employee: any }> => {
+    const response = await api.post(`/users/approve-registration/${id}`);
+    return response.data;
+  },
+
+  rejectRegistration: async (id: string): Promise<{ message: string; employee: any }> => {
+    const response = await api.post(`/users/reject-registration/${id}`);
+    return response.data;
+  },
 };
 
 // Events API
@@ -455,6 +545,127 @@ export const calendarAPI = {
   deleteEvent: async (id: string): Promise<{ message: string }> => {
     const response = await api.delete(`/calendar/${id}`);
     return response.data;
+  },
+};
+
+// Bots API
+export const botsAPI = {
+  getBots: async (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<{ bots: TelegramBot[]; pagination: PaginationInfo }> => {
+    const response = await api.get('/bots', { params });
+    
+    // Transform snake_case to camelCase
+    const transformedBots = response.data.bots.map((bot: any) => ({
+      id: String(bot.id),
+      name: bot.name,
+      type: bot.type || 'BOT',
+      username: bot.username,
+      url: bot.url,
+      description: bot.description,
+      isActive: bot.is_active,
+      createdAt: bot.created_at,
+      updatedAt: bot.updated_at
+    }));
+
+    return {
+      bots: transformedBots,
+      pagination: response.data.pagination
+    };
+  },
+
+  getBot: async (id: string): Promise<TelegramBot> => {
+    const response = await api.get(`/bots/${id}`);
+    const bot = response.data;
+    
+    return {
+      id: String(bot.id),
+      name: bot.name,
+      type: bot.type || 'BOT',
+      username: bot.username,
+      url: bot.url,
+      description: bot.description,
+      isActive: bot.is_active,
+      createdAt: bot.created_at,
+      updatedAt: bot.updated_at
+    };
+  },
+
+  createBot: async (bot: Omit<TelegramBot, 'id' | 'createdAt' | 'updatedAt'>): Promise<TelegramBot> => {
+    const response = await api.post('/bots', {
+      name: bot.name,
+      type: bot.type,
+      username: bot.username,
+      url: bot.url,
+      description: bot.description,
+      is_active: bot.isActive
+    });
+    const createdBot = response.data;
+    
+    return {
+      id: String(createdBot.id),
+      name: createdBot.name,
+      type: createdBot.type || 'BOT',
+      username: createdBot.username,
+      url: createdBot.url,
+      description: createdBot.description,
+      isActive: createdBot.is_active,
+      createdAt: createdBot.created_at,
+      updatedAt: createdBot.updated_at
+    };
+  },
+
+  updateBot: async (id: string, bot: Partial<TelegramBot>): Promise<TelegramBot> => {
+    const response = await api.put(`/bots/${id}`, {
+      name: bot.name,
+      type: bot.type,
+      username: bot.username,
+      url: bot.url,
+      description: bot.description,
+      is_active: bot.isActive
+    });
+    const updatedBot = response.data;
+    
+    return {
+      id: String(updatedBot.id),
+      name: updatedBot.name,
+      type: updatedBot.type || 'BOT',
+      username: updatedBot.username,
+      url: updatedBot.url,
+      description: updatedBot.description,
+      isActive: updatedBot.is_active,
+      createdAt: updatedBot.created_at,
+      updatedAt: updatedBot.updated_at
+    };
+  },
+
+  deleteBot: async (id: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/bots/${id}`);
+    return response.data;
+  },
+};
+
+// Upload API
+export const uploadAPI = {
+  uploadPhoto: async (file: File): Promise<{ url: string; filename: string; message: string }> => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    
+    // НЕ устанавливаем Content-Type вручную - axios сам установит правильный boundary
+    const response = await uploadApi.post('/upload', formData);
+    
+    return response.data;
+  },
+  
+  deletePhoto: async (filename: string): Promise<{ message: string }> => {
+    const response = await uploadApi.delete(`/upload/${filename}`);
+    return response.data;
+  },
+  
+  getPhotoUrl: (filename: string): string => {
+    return `${API_BASE_URL}/uploads/${filename}`;
   },
 };
 

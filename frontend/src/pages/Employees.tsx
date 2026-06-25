@@ -1,15 +1,82 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { employeesAPI } from '../api/client';
+import { useTelegram } from '../contexts/TelegramContext';
+import { employeesAPI, usersAPI } from '../api/client';
 import { Employee, EmployeesResponse } from '../types';
-import { Search, Edit, Trash2, Phone, Mail, MessageCircle, UserPlus, RotateCcw, Lock } from 'lucide-react';
+import { Search, Edit, Trash2, Phone, Mail, MessageCircle, RotateCcw, CheckCircle, XCircle, Clock, Copy, Check } from 'lucide-react';
 import EmployeeModal from '../components/EmployeeModal';
-import UserModal from '../components/UserModal';
-import ChangePasswordModal from '../components/ChangePasswordModal';
 import ImageWithLoader from '../components/ImageWithLoader';
+import { preloadImages } from '../utils/imagePreload';
+
+const EMPLOYEE_AVATAR_IMAGE_OPTIONS = {
+  width: 192,
+  height: 192,
+  quality: 72,
+  fit: 'cover',
+} as const;
+
+// Компонент для отображения аватара сотрудника с fallback на инициалы
+const EmployeeAvatar: React.FC<{ employee: Employee }> = ({ employee }) => {
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [employee.photo]);
+
+  // Если нет фото - сразу показываем инициалы
+  if (!employee.photo) {
+    return (
+      <div className="w-16 h-16 bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
+        <span className="text-white font-bold text-lg">
+          {employee.firstName?.charAt(0) || '?'}{employee.lastName?.charAt(0) || '?'}
+        </span>
+      </div>
+    );
+  }
+
+  // Если есть фото - пытаемся загрузить, при ошибке показываем инициалы
+  return (
+    <div className="w-16 h-16 bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden relative">
+      {!imageError ? (
+        <ImageWithLoader
+          src={employee.photo}
+          alt={`${employee.firstName} ${employee.lastName}`}
+          className="w-16 h-16 rounded-full object-cover"
+          imageOptions={EMPLOYEE_AVATAR_IMAGE_OPTIONS}
+          onLoadError={() => {
+            setImageError(true);
+          }}
+          onError={() => {
+            setImageError(true);
+          }}
+        />
+      ) : null}
+      {/* Показываем инициалы если произошла ошибка загрузки */}
+      {imageError && (
+        <span className="text-white font-bold text-lg absolute inset-0 flex items-center justify-center">
+          {employee.firstName?.charAt(0) || '?'}{employee.lastName?.charAt(0) || '?'}
+        </span>
+      )}
+    </div>
+  );
+};
+
+const normalizeTelegramUsername = (username?: string | null): string => {
+  if (!username) {
+    return '';
+  }
+
+  return username.trim().replace(/^@+/, '').toLowerCase();
+};
+
+const formatTelegramUsername = (username?: string | null): string => {
+  const normalized = normalizeTelegramUsername(username);
+  return normalized ? `@${normalized}` : '';
+};
 
 const Employees: React.FC = () => {
   const { isAdmin } = useAuth();
+  const { isTelegram, webApp } = useTelegram();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -17,11 +84,10 @@ const Employees: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [showModal, setShowModal] = useState(false);
-  const [showUserModal, setShowUserModal] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [passwordEmployee, setPasswordEmployee] = useState<Employee | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showInactive, setShowInactive] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'active' | 'pending' | 'rejected'>('active');
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // Ensure showInactive is always false for non-admin users
   useEffect(() => {
@@ -31,19 +97,48 @@ const Employees: React.FC = () => {
   }, [isAdmin, showInactive]);
 
   const departments = [
-    'IT-Отдел', 'Отдел продаж', 'Отдел финансистов', 'Отдел стройки', 'Отдел производства', 'Отдел управления и планирование'
+    'Отдел IT',
+    'Отдел продаж',
+    'Отдел финансов',
+    'Отдел строительства',
+    'Отдел производства',
+    'Отдел управления и планирования',
+    'Отдел HR',
+    'Отдел бухгалтерии',
+    'Отдел недвижимости',
+    'Отдел проектирования',
   ];
 
   const fetchEmployees = async () => {
     try {
       setLoading(true);
+      // Преобразуем статус фильтр в формат, который ожидает backend
+      let statusParam: 'APPROVED' | 'PENDING' | 'REJECTED' | undefined;
+      if (statusFilter === 'active') {
+        statusParam = 'APPROVED';
+      } else if (statusFilter === 'pending') {
+        statusParam = 'PENDING';
+      } else if (statusFilter === 'rejected') {
+        statusParam = 'REJECTED';
+      }
+      
       const response: EmployeesResponse = await employeesAPI.getEmployees({
         page: currentPage,
         limit: 12,
         search: searchTerm || undefined,
         department: selectedDepartment || undefined,
         showInactive: isAdmin && showInactive,
+        status: statusParam,
       });
+
+      const preloadEntries = response.employees
+        .filter((employee) => Boolean(employee.photo))
+        .map((employee) => ({
+          src: employee.photo as string,
+          options: EMPLOYEE_AVATAR_IMAGE_OPTIONS
+        }));
+
+      preloadImages(preloadEntries, 24);
       setEmployees(response.employees);
       setTotalPages(response.pagination.pages);
     } catch (error) {
@@ -57,7 +152,7 @@ const Employees: React.FC = () => {
   useEffect(() => {
     setCurrentPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, selectedDepartment, showInactive]);
+  }, [searchTerm, selectedDepartment, showInactive, statusFilter]);
 
   // Fetch employees with debounce for search
   useEffect(() => {
@@ -67,7 +162,7 @@ const Employees: React.FC = () => {
 
     return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, searchTerm, selectedDepartment, showInactive]);
+  }, [currentPage, searchTerm, selectedDepartment, showInactive, statusFilter]);
 
 
   const handleDelete = async (id: string) => {
@@ -101,60 +196,117 @@ const Employees: React.FC = () => {
     setShowModal(true);
   };
 
+  const handleApprove = async (id: string) => {
+    if (!isAdmin) return;
+    if (window.confirm('Вы уверены, что хотите одобрить эту заявку?')) {
+      try {
+        await usersAPI.approveRegistration(id);
+        fetchEmployees(); // Refresh data
+      } catch (error) {
+        console.error('Error approving registration:', error);
+      }
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    if (!isAdmin) return;
+    if (window.confirm('Вы уверены, что хотите отклонить эту заявку?')) {
+      try {
+        await usersAPI.rejectRegistration(id);
+        fetchEmployees(); // Refresh data
+      } catch (error) {
+        console.error('Error rejecting registration:', error);
+      }
+    }
+  };
+
   const handleModalClose = () => {
     setShowModal(false);
     setEditingEmployee(null);
     fetchEmployees();
   };
 
+  const handleCopy = async (text: string, fieldId: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(fieldId);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      // Fallback для старых браузеров
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setCopiedField(fieldId);
+        setTimeout(() => setCopiedField(null), 2000);
+      } catch (err) {
+        console.error('Fallback copy failed:', err);
+      }
+      document.body.removeChild(textArea);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-pastel-800">Сотрудники</h1>
-          <p className="text-pastel-600 mt-1">Адресная книга компании</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-pastel-800">Адресная книга</h1>
+          <p className="text-pastel-600 mt-1 text-sm sm:text-base">Адресная книга сотрудников компании</p>
         </div>
-        {isAdmin && (
-          <button
-            onClick={() => setShowUserModal(true)}
-            className="mt-4 sm:mt-0 btn-primary flex items-center space-x-2"
-          >
-            <UserPlus className="w-5 h-5" />
-            <span>Создать пользователя</span>
-          </button>
-        )}
+        {/* Кнопка создания пользователя убрана - теперь регистрация только через Telegram */}
       </div>
 
       {/* Filters */}
-      <div className="glass-card p-6 space-y-4">
+      <div className="glass-card p-4 sm:p-6 space-y-4">
         {isAdmin && (
-          <div className="flex items-center space-x-4 pb-4 border-b border-pastel-200">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 pb-4 border-b border-pastel-200">
             <button
               onClick={() => {
-                setShowInactive(false);
+                setStatusFilter('active');
                 setCurrentPage(1);
               }}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                !showInactive
+              className={`px-3 sm:px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 text-sm sm:text-base ${
+                statusFilter === 'active'
                   ? 'bg-primary-500 text-white'
                   : 'bg-pastel-100 text-pastel-700 hover:bg-pastel-200'
               }`}
             >
-              Активные
+              <CheckCircle className="w-4 h-4 flex-shrink-0" />
+              <span>Активные</span>
             </button>
             <button
               onClick={() => {
-                setShowInactive(true);
+                setStatusFilter('pending');
                 setCurrentPage(1);
               }}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                showInactive
+              className={`px-3 sm:px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 text-sm sm:text-base ${
+                statusFilter === 'pending'
                   ? 'bg-primary-500 text-white'
                   : 'bg-pastel-100 text-pastel-700 hover:bg-pastel-200'
               }`}
             >
-              Удаленные
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="whitespace-nowrap">На согласовании</span>
+            </button>
+            <button
+              onClick={() => {
+                setStatusFilter('rejected');
+                setCurrentPage(1);
+              }}
+              className={`px-3 sm:px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 text-sm sm:text-base ${
+                statusFilter === 'rejected'
+                  ? 'bg-primary-500 text-white'
+                  : 'bg-pastel-100 text-pastel-700 hover:bg-pastel-200'
+              }`}
+            >
+              <XCircle className="w-4 h-4 flex-shrink-0" />
+              <span>Удаленные</span>
             </button>
           </div>
         )}
@@ -199,27 +351,25 @@ const Employees: React.FC = () => {
               }`}
             >
               <div className="flex items-start space-x-4">
-                <div className="w-16 h-16 bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
-                  {employee.photo ? (
-                    <ImageWithLoader
-                      src={employee.photo}
-                      alt={`${employee.firstName} ${employee.lastName}`}
-                      className="w-16 h-16 rounded-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-white font-bold text-lg">
-                      {employee.firstName?.charAt(0) || '?'}{employee.lastName?.charAt(0) || '?'}
-                    </span>
-                  )}
-                </div>
+                <EmployeeAvatar employee={employee} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2 mb-1">
                     <h3 className="text-lg font-semibold text-pastel-800 truncate">
                       {employee.firstName} {employee.lastName} {employee.middleName}
                     </h3>
-                    {!employee.isActive && (
+                    {employee.status === 'PENDING' && (
+                      <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-semibold rounded">
+                        На согласовании
+                      </span>
+                    )}
+                    {employee.status === 'REJECTED' && (
                       <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-semibold rounded">
-                        Удален
+                        Отклонен
+                      </span>
+                    )}
+                    {!employee.isActive && employee.status === 'APPROVED' && (
+                      <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded">
+                        Неактивен
                       </span>
                     )}
                   </div>
@@ -236,25 +386,130 @@ const Employees: React.FC = () => {
                   )}
                   
                   <div className="space-y-2">
-                    <div className="flex items-center space-x-2 text-sm text-pastel-600">
-                      <Mail className="w-4 h-4" />
-                      <span className="truncate">{employee.email}</span>
+                    <div className="flex items-center justify-between group">
+                      <div className="flex items-center space-x-2 text-sm text-pastel-600 flex-1 min-w-0">
+                        <Mail className="w-4 h-4 flex-shrink-0" />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isTelegram && webApp) {
+                              // В Telegram Mini App используем openLink для открытия почтового клиента
+                              try {
+                                webApp.openLink(`mailto:${employee.email}`);
+                              } catch (error) {
+                                console.error('Error opening email link:', error);
+                              }
+                            } else {
+                              // В обычном браузере используем стандартный способ
+                              window.location.href = `mailto:${employee.email}`;
+                            }
+                          }}
+                          className="text-primary-600 hover:text-primary-700 hover:underline transition-colors text-left truncate"
+                        >
+                          {employee.email}
+                        </button>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopy(employee.email, `email-${employee.id}`);
+                        }}
+                        className="ml-2 p-1 text-pastel-400 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Скопировать email"
+                      >
+                        {copiedField === `email-${employee.id}` ? (
+                          <Check className="w-3.5 h-3.5 text-green-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
                     </div>
-                    <div className="flex items-center space-x-2 text-sm text-pastel-600">
-                      <Phone className="w-4 h-4" />
-                      <span>{employee.phone}</span>
+                    <div className="flex items-center justify-between group">
+                      <div className="flex items-center space-x-2 text-sm text-pastel-600 flex-1 min-w-0">
+                        <Phone className="w-4 h-4 flex-shrink-0" />
+                        <a
+                          href={`tel:${employee.phone.replace(/[^\d+]/g, '')}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const phoneNumber = employee.phone.replace(/[^\d+]/g, '');
+
+                            if (isTelegram && webApp) {
+                              // В Telegram Mini App пробуем открыть звонилку через WebApp API,
+                              // если Telegram это заблокирует, сработает стандартное поведение ссылки tel:
+                              try {
+                                webApp.openLink(`tel:${phoneNumber}`);
+                              } catch (error) {
+                                console.error('Error opening phone link in Telegram WebApp:', error);
+                              }
+                            }
+                            // В браузере (и как fallback в Mini App) сработает обычная tel:-ссылка
+                          }}
+                          className="text-primary-600 hover:text-primary-700 hover:underline transition-colors text-left"
+                        >
+                          {employee.phone}
+                        </a>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopy(employee.phone, `phone-${employee.id}`);
+                        }}
+                        className="ml-2 p-1 text-pastel-400 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Скопировать телефон"
+                      >
+                        {copiedField === `phone-${employee.id}` ? (
+                          <Check className="w-3.5 h-3.5 text-green-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
                     </div>
                     {employee.telegram && (
-                      <div className="flex items-center space-x-2 text-sm text-pastel-600">
-                        <MessageCircle className="w-4 h-4" />
-                        <a
-                          href={`https://t.me/${employee.telegram.replace('@', '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary-600 hover:text-primary-700 hover:underline transition-colors"
+                      <div className="flex items-center justify-between group">
+                        <div className="flex items-center space-x-2 text-sm text-pastel-600 flex-1 min-w-0">
+                          <MessageCircle className="w-4 h-4 flex-shrink-0" />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const telegramUsername = normalizeTelegramUsername(employee.telegram);
+                              if (telegramUsername) {
+                                if (isTelegram && webApp) {
+                                  // В Telegram Mini App используем openTelegramLink
+                                  try {
+                                    webApp.openTelegramLink(`https://t.me/${telegramUsername}`);
+                                  } catch (error) {
+                                    console.error('Error opening Telegram link:', error);
+                                    // Fallback: используем openLink
+                                    webApp.openLink(`https://t.me/${telegramUsername}`);
+                                  }
+                                } else {
+                                  // В обычном браузере используем window.open
+                                  window.open(`https://t.me/${telegramUsername}`, '_blank');
+                                }
+                              }
+                            }}
+                            className="text-primary-600 hover:text-primary-700 hover:underline transition-colors text-left"
+                          >
+                            {formatTelegramUsername(employee.telegram)}
+                          </button>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const telegramToCopy = formatTelegramUsername(employee.telegram);
+                            if (telegramToCopy) {
+                              handleCopy(telegramToCopy, `telegram-${employee.id}`);
+                            }
+                          }}
+                          className="ml-2 p-1 text-pastel-400 hover:text-primary-600 transition-colors opacity-0 group-hover:opacity-100"
+                          title="Скопировать Telegram"
                         >
-                          {employee.telegram}
-                        </a>
+                          {copiedField === `telegram-${employee.id}` ? (
+                            <Check className="w-3.5 h-3.5 text-green-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
                       </div>
                     )}
                   </div>
@@ -263,7 +518,25 @@ const Employees: React.FC = () => {
               
               {isAdmin && (
                 <div className="flex justify-end space-x-2 mt-4 pt-4 border-t border-pastel-200">
-                  {!employee.isActive ? (
+                  {employee.status === 'PENDING' ? (
+                    // Кнопки для заявок на согласовании
+                    <>
+                      <button
+                        onClick={() => handleApprove(employee.id)}
+                        className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Одобрить"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleReject(employee.id)}
+                        className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Отклонить"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    </>
+                  ) : !employee.isActive ? (
                     <button
                       onClick={() => handleRestore(employee.id)}
                       className="p-2 text-pastel-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
@@ -273,18 +546,6 @@ const Employees: React.FC = () => {
                     </button>
                   ) : (
                     <>
-                      {employee.userRole && (
-                        <button
-                          onClick={() => {
-                            setPasswordEmployee(employee);
-                            setShowPasswordModal(true);
-                          }}
-                          className="p-2 text-pastel-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Изменить пароль"
-                        >
-                          <Lock className="w-4 h-4" />
-                        </button>
-                      )}
                       <button
                         onClick={() => handleEdit(employee)}
                         className="p-2 text-pastel-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
@@ -339,30 +600,7 @@ const Employees: React.FC = () => {
         />
       )}
 
-      {/* User Modal */}
-      {showUserModal && (
-        <UserModal
-          onClose={() => {
-            setShowUserModal(false);
-            fetchEmployees();
-          }}
-        />
-      )}
-
-      {/* Change Password Modal */}
-      {showPasswordModal && passwordEmployee && (
-        <ChangePasswordModal
-          employeeEmail={passwordEmployee.email}
-          employeeName={`${passwordEmployee.firstName} ${passwordEmployee.lastName}`}
-          onClose={() => {
-            setShowPasswordModal(false);
-            setPasswordEmployee(null);
-          }}
-          onSuccess={() => {
-            // Optionally show success message or refresh data
-          }}
-        />
-      )}
+      {/* User Modal убран - регистрация только через Telegram */}
     </div>
   );
 };
