@@ -3,6 +3,8 @@ import { Loader2 } from 'lucide-react';
 import { getImageUrlCandidates, NormalizeImageUrlOptions } from '../utils/imageUtils';
 import { getCachedImageCandidate, rememberImageCandidate } from '../utils/imagePreload';
 
+const IMAGE_LOAD_TIMEOUT_MS = 7000;
+
 interface ImageWithLoaderProps {
   src: string;
   alt: string;
@@ -33,6 +35,31 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
   }, [src, imageOptions?.width, imageOptions?.height, imageOptions?.quality, imageOptions?.fit]);
 
   const currentSrc = srcCandidates[candidateIndex] || '';
+  const hasNextCandidate = candidateIndex < srcCandidates.length - 1;
+
+  const tryMoveToNextCandidate = (): boolean => {
+    if (!hasNextCandidate) {
+      return false;
+    }
+
+    setCandidateIndex((prev) => prev + 1);
+    setLoading(true);
+    setError(false);
+    return true;
+  };
+
+  const finalizeLoadFailure = (e?: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    setLoading(false);
+    setError(true);
+
+    if (onLoadError) {
+      onLoadError();
+    }
+
+    if (e && onError) {
+      onError(e);
+    }
+  };
 
   const handleLoad = () => {
     if (src && currentSrc) {
@@ -43,23 +70,11 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
   };
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    if (candidateIndex < srcCandidates.length - 1) {
-      setCandidateIndex((prev) => prev + 1);
-      setLoading(true);
-      setError(false);
+    if (tryMoveToNextCandidate()) {
       return;
     }
 
-    setLoading(false);
-    setError(true);
-
-    // Уведомляем родителя об ошибке загрузки
-    if (onLoadError) {
-      onLoadError();
-    }
-    if (onError) {
-      onError(e);
-    }
+    finalizeLoadFailure(e);
   };
 
   // Сбрасываем состояние при изменении src
@@ -71,6 +86,31 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
     setLoading(true);
     setError(false);
   }, [src, srcCandidates, imageOptions?.width, imageOptions?.height, imageOptions?.quality, imageOptions?.fit]);
+
+  useEffect(() => {
+    if (!loading || !currentSrc) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (candidateIndex < srcCandidates.length - 1) {
+        setCandidateIndex((prev) => prev + 1);
+        setLoading(true);
+        setError(false);
+        return;
+      }
+
+      setLoading(false);
+      setError(true);
+      if (onLoadError) {
+        onLoadError();
+      }
+    }, IMAGE_LOAD_TIMEOUT_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [loading, currentSrc, candidateIndex, srcCandidates.length, onLoadError]);
 
   if (!currentSrc || error) {
     return null; // Если ошибка или нет src, возвращаем null - родитель покажет fallback
@@ -84,6 +124,7 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
         </div>
       )}
       <img
+        key={currentSrc}
         src={currentSrc}
         alt={alt}
         className={`${className} ${loading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}

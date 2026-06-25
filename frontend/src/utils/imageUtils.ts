@@ -221,43 +221,40 @@ const buildGoogleCandidates = (sourceUrl: string, options?: NormalizeImageUrlOpt
   const targetSize = resolveGoogleTargetSize(options);
   const miniApp = isTelegramMiniApp();
   const cleanedProxy = buildMediaProxyUrl(cleanedSource);
+  const fileId = extractGoogleFileId(cleanedSource);
+  const idBasedCandidates = fileId
+    ? [
+        `https://drive.google.com/thumbnail?id=${fileId}&sz=w${targetSize}`,
+        `https://drive.google.com/uc?export=view&id=${fileId}`,
+        `https://drive.usercontent.google.com/download?id=${fileId}&export=view`,
+        `https://lh3.googleusercontent.com/d/${fileId}=s${targetSize}`,
+      ]
+    : [];
 
   if (miniApp) {
+    // В Mini App сначала пробуем proxy/id-based варианты, чтобы не зависнуть на
+    // ссылках, которые в webview отправляют в Google Sign-In.
     pushUniqueUrl(candidates, cleanedProxy);
+    idBasedCandidates.forEach((url) => {
+      pushUniqueUrl(candidates, buildMediaProxyUrl(url));
+    });
+    idBasedCandidates.forEach((url) => {
+      pushUniqueUrl(candidates, url);
+    });
+    pushUniqueUrl(candidates, sourceUrl);
+    pushUniqueUrl(candidates, cleanedSource);
+    return candidates;
   }
 
   pushUniqueUrl(candidates, sourceUrl);
   pushUniqueUrl(candidates, cleanedSource);
-
-  const fileId = extractGoogleFileId(cleanedSource);
-  if (fileId) {
-    const directCandidates = [
-      `https://lh3.googleusercontent.com/d/${fileId}=s${targetSize}`,
-      `https://drive.google.com/thumbnail?id=${fileId}&sz=w${targetSize}`,
-      `https://drive.google.com/uc?export=view&id=${fileId}`,
-    ];
-
-    if (miniApp) {
-      // В Mini App предпочитаем прокси-кандидаты, чтобы не зависеть от ограничений webview.
-      directCandidates.forEach((url) => {
-        pushUniqueUrl(candidates, buildMediaProxyUrl(url));
-      });
-      directCandidates.forEach((url) => {
-        pushUniqueUrl(candidates, url);
-      });
-    } else {
-      directCandidates.forEach((url) => {
-        pushUniqueUrl(candidates, url);
-      });
-      directCandidates.forEach((url) => {
-        pushUniqueUrl(candidates, buildMediaProxyUrl(url));
-      });
-    }
-  }
-
-  if (!miniApp) {
-    pushUniqueUrl(candidates, cleanedProxy);
-  }
+  idBasedCandidates.forEach((url) => {
+    pushUniqueUrl(candidates, url);
+  });
+  idBasedCandidates.forEach((url) => {
+    pushUniqueUrl(candidates, buildMediaProxyUrl(url));
+  });
+  pushUniqueUrl(candidates, cleanedProxy);
 
   return candidates;
 };

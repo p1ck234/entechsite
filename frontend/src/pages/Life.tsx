@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { eventsAPI } from '../api/client';
 import { Event, EventsResponse } from '../types';
-import { ExternalLink, Plus, Edit, Trash2, Calendar } from 'lucide-react';
+import { ExternalLink, Plus, Edit, Trash2, Calendar, ImageOff } from 'lucide-react';
 import EventModal from '../components/EventModal';
 import ImageWithLoader from '../components/ImageWithLoader';
 import { preloadImages } from '../utils/imagePreload';
@@ -13,6 +13,37 @@ const EVENT_PREVIEW_IMAGE_OPTIONS = {
   quality: 64,
   fit: 'cover',
 } as const;
+
+const EventPreviewTile: React.FC<{ src: string; alt: string }> = ({ src, alt }) => {
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [src]);
+
+  if (!src?.trim() || imageError) {
+    return (
+      <div className="w-full h-full bg-pastel-100 flex items-center justify-center">
+        <ImageOff className="w-5 h-5 text-pastel-400" />
+      </div>
+    );
+  }
+
+  return (
+    <ImageWithLoader
+      src={src}
+      alt={alt}
+      className="w-full h-full object-cover"
+      imageOptions={EVENT_PREVIEW_IMAGE_OPTIONS}
+      onLoadError={() => {
+        setImageError(true);
+      }}
+      onError={() => {
+        setImageError(true);
+      }}
+    />
+  );
+};
 
 const Life: React.FC = () => {
   const { isAdmin } = useAuth();
@@ -128,14 +159,9 @@ const Life: React.FC = () => {
                   <div className="grid grid-cols-2 gap-1 h-full">
                     {event.previewImages.slice(0, 4).map((image, index) => (
                       <div key={index} className="relative overflow-hidden">
-                        <ImageWithLoader
+                        <EventPreviewTile
                           src={image}
                           alt={`${event.title} ${index + 1}`}
-                          className="w-full h-full object-cover"
-                          imageOptions={EVENT_PREVIEW_IMAGE_OPTIONS}
-                          onError={() => {
-                            // Fallback handled in component
-                          }}
                         />
                       </div>
                     ))}
