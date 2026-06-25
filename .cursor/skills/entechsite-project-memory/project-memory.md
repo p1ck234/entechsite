@@ -102,8 +102,9 @@
 
 - Goal: исправить открытие видео из Drive-материалов и снизить лаги на страницах с большим количеством сотрудников/курсов/уроков.
 - Changes:
-  - материалы Drive открываются прямым streaming URL `/api/drive/files/:fileId?token=...`, без предварительного скачивания в `Blob`;
-  - backend прокидывает `Range` в Google Drive и возвращает `Content-Range`/`Content-Length`, чтобы видео могло стримиться и перематываться;
+  - видео-материалы (`video/*`, `mp4/mov/webm/mkv/avi`) открываются через Google Drive `webViewLink`, как в нативном Drive preview;
+  - остальные материалы Drive открываются через backend endpoint `/api/drive/files/:fileId?token=...`, без предварительного скачивания в `Blob`;
+  - backend endpoint сохраняет поддержку `Range` для случаев, когда материал всё же открывается через portal/service account;
   - `Courses` получил debounce поиска и локальную пагинацию уроков внутри выбранного курса;
   - пагинация курсов больше не показывается внутри выбранного курса;
   - backend `courses` убрал N+1 запросы прогресса и подтягивает `course_progress` через `LEFT JOIN`;
@@ -117,7 +118,7 @@
   - `frontend/src/pages/Courses.tsx`
   - `frontend/src/pages/Employees.tsx`
   - `frontend/dist/index.html`
-- Result: видео должно открываться быстрее и надёжнее, а страницы адресной книги/базы знаний меньше нагружают браузер и backend при больших списках.
+- Result: видео снова открывается в Google Drive preview, а страницы адресной книги/базы знаний меньше нагружают браузер и backend при больших списках.
 
 ### 2026-06-25 - Drive-папка как урок с материалами внутри портала
 
@@ -341,10 +342,10 @@
 ### 2026-06-25 - Видео Drive не открывалось после перехода на материалы урока
 
 - Symptom: файлы в уроке отображались, но видео не открывалось/зависало, хотя раньше Drive-ссылка открывалась.
-- Root cause: frontend открывал материал через `axios -> Blob -> URL.createObjectURL`; для больших видео это требует полного скачивания и ломает streaming/перемотку.
-- Resolution: материалы открываются прямым URL на backend endpoint; endpoint принимает token в query для новой вкладки, стримит файл через service account и поддерживает `Range`.
-- Validation: `npm run build` в `backend` и `frontend` прошли успешно.
-- Related files: `backend/src/services/googleDrive.ts`, `backend/src/routes/drive.ts`, `frontend/src/api/client.ts`, `frontend/src/pages/Courses.tsx`
+- Root cause: frontend открывал материал через `axios -> Blob -> URL.createObjectURL`; для больших видео это требует полного скачивания и ломает привычный Drive preview.
+- Resolution: видео определяется по MIME/расширению и открывается через `webViewLink` Google Drive; остальные материалы продолжают открываться через portal/backend endpoint.
+- Validation: пользователь подтвердил, что видео после изменения открывается корректно; `npm run build` в `frontend` прошёл успешно.
+- Related files: `frontend/src/pages/Courses.tsx`, `frontend/dist/index.html`
 
 ### 2026-06-25 - Drive sync падал по `ECONNABORTED` через 30 секунд
 

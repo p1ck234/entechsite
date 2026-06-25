@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { coursesAPI, lessonsAPI } from '../api/client';
 import { Course, CoursesResponse, Lesson, LessonMaterial } from '../types';
-import { Search, Plus, Edit, Trash2, ExternalLink, Play, CheckCircle, Clock, BookOpen, RefreshCw } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, ExternalLink, Play, CheckCircle, Clock, BookOpen, RefreshCw, X } from 'lucide-react';
 import CourseModal from '../components/CourseModal';
 import LessonModal from '../components/LessonModal';
 import { useLocation } from 'react-router-dom';
@@ -25,6 +25,7 @@ const Courses: React.FC = () => {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [lessonPage, setLessonPage] = useState(1);
   const [syncingTraining, setSyncingTraining] = useState(false);
+  const [previewMaterial, setPreviewMaterial] = useState<LessonMaterial | null>(null);
 
   // Reset selected course when navigating to courses page
   useEffect(() => {
@@ -198,17 +199,31 @@ const Courses: React.FC = () => {
     return mimeType.startsWith('video/') || /\.(mp4|m4v|mov|webm|mkv|avi)$/i.test(fileName);
   };
 
-  const handleOpenDriveMaterial = async (material: LessonMaterial) => {
-    try {
-      const fileUrl = isVideoMaterial(material) && material.webViewLink
-        ? material.webViewLink
-        : lessonsAPI.getDriveMaterialUrl(material.id);
-
-      window.open(fileUrl, '_blank', 'noopener,noreferrer');
-    } catch (error: any) {
-      console.error('Error opening Drive material:', error);
-      window.alert(error.response?.data?.message || error.message || 'Ошибка открытия материала Google Drive');
+  const getGoogleDrivePreviewUrl = (material: LessonMaterial): string | null => {
+    if (!material.webViewLink) {
+      return null;
     }
+
+    const fileIdFromPath = material.webViewLink.match(/\/file\/d\/([^/]+)/)?.[1];
+    const fileIdFromQuery = material.webViewLink.match(/[?&]id=([^&]+)/)?.[1];
+    const fileId = fileIdFromPath || fileIdFromQuery || material.id;
+
+    return `https://drive.google.com/file/d/${fileId}/preview`;
+  };
+
+  const getMaterialPreviewUrl = (material: LessonMaterial): string => {
+    if (isVideoMaterial(material)) {
+      const googlePreviewUrl = getGoogleDrivePreviewUrl(material);
+      if (googlePreviewUrl) {
+        return googlePreviewUrl;
+      }
+    }
+
+    return lessonsAPI.getDriveMaterialUrl(material.id);
+  };
+
+  const handleOpenDriveMaterial = (material: LessonMaterial) => {
+    setPreviewMaterial(material);
   };
 
   const paginatedLessons = useMemo(() => {
@@ -611,6 +626,40 @@ const Courses: React.FC = () => {
           courseId={selectedCourse.id}
           onClose={handleLessonModalClose}
         />
+      )}
+
+      {previewMaterial && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between gap-3 p-4 border-b border-pastel-200">
+              <div className="min-w-0">
+                <h3 className="text-lg font-semibold text-pastel-800 truncate">
+                  {previewMaterial.name}
+                </h3>
+                {isVideoMaterial(previewMaterial) && (
+                  <p className="text-xs text-pastel-500">
+                    Видео открывается через Google Drive preview
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewMaterial(null)}
+                className="p-2 text-pastel-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Закрыть"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <iframe
+              src={getMaterialPreviewUrl(previewMaterial)}
+              title={previewMaterial.name}
+              className="w-full flex-1 bg-black"
+              allow="autoplay; fullscreen"
+              allowFullScreen
+            />
+          </div>
+        </div>
       )}
     </div>
   );
