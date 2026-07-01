@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { calendarAPI } from '../api/client';
 import { CalendarEvent } from '../types';
-import { ChevronLeft, ChevronRight, Plus, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Clock, MapPin } from 'lucide-react';
 import CalendarEventModal from '../components/CalendarEventModal';
-import { extractIsoDate } from '../utils/date';
+import { extractIsoDate, formatRuDate } from '../utils/date';
 
 const Calendar: React.FC = () => {
   const { isAdmin } = useAuth();
@@ -14,6 +14,7 @@ const Calendar: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [todayEvents, setTodayEvents] = useState<CalendarEvent[]>([]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -50,6 +51,67 @@ const Calendar: React.FC = () => {
     fetchEvents();
   }, [currentDate]);
 
+  const getTodayDateStr = (): string => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const filterEventsByDateStr = (items: CalendarEvent[], dateStr: string): CalendarEvent[] =>
+    items.filter((event) => extractIsoDate(event.eventDate) === dateStr);
+
+  const sortEventsByTime = (items: CalendarEvent[]): CalendarEvent[] =>
+    [...items].sort((a, b) => {
+      if (a.isAllDay !== b.isAllDay) {
+        return a.isAllDay ? -1 : 1;
+      }
+      if (!a.eventTime || !b.eventTime) {
+        return 0;
+      }
+      return a.eventTime.localeCompare(b.eventTime);
+    });
+
+  useEffect(() => {
+    const todayDateStr = getTodayDateStr();
+    const now = new Date();
+    const isViewingCurrentMonth =
+      month === now.getMonth() && year === now.getFullYear();
+
+    if (isViewingCurrentMonth) {
+      setTodayEvents(sortEventsByTime(filterEventsByDateStr(events, todayDateStr)));
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchTodayEvents = async () => {
+      try {
+        const response = await calendarAPI.getEvents({
+          month: now.getMonth() + 1,
+          year: now.getFullYear(),
+        });
+        if (!cancelled) {
+          setTodayEvents(
+            sortEventsByTime(filterEventsByDateStr(response.events, todayDateStr))
+          );
+        }
+      } catch (error) {
+        console.error('Error fetching today events:', error);
+        if (!cancelled) {
+          setTodayEvents([]);
+        }
+      }
+    };
+
+    fetchTodayEvents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [events, month, year]);
+
   const handlePreviousMonth = () => {
     setCurrentDate(new Date(year, month - 1, 1));
   };
@@ -84,8 +146,8 @@ const Calendar: React.FC = () => {
     }
   };
 
-  const handleEventClick = (event: CalendarEvent, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleEventClick = (event: CalendarEvent, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setEditingEvent(event);
     // Нормализуем дату из разных форматов API (с T, пробелом и т.д.)
     const dateStr = extractIsoDate(event.eventDate);
@@ -162,6 +224,71 @@ const Calendar: React.FC = () => {
           </button>
         )}
       </div>
+
+      {/* Сегодняшние мероприятия — над календарём для удобства на телефоне */}
+      {!loading && todayEvents.length > 0 && (
+        <div className="glass-card p-4 sm:p-5 border-2 border-primary-200 bg-primary-50/40">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <p className="text-xs sm:text-sm font-semibold uppercase tracking-wide text-primary-600">
+                Сегодня
+              </p>
+              <p className="text-sm sm:text-base text-pastel-700">
+                {formatRuDate(getTodayDateStr())}
+              </p>
+            </div>
+            <span className="text-xs sm:text-sm font-medium text-primary-700 bg-primary-100 px-2.5 py-1 rounded-full">
+              {todayEvents.length}{' '}
+              {todayEvents.length === 1
+                ? 'мероприятие'
+                : todayEvents.length < 5
+                  ? 'мероприятия'
+                  : 'мероприятий'}
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {todayEvents.map((event) => (
+              <button
+                key={event.id}
+                type="button"
+                onClick={() => handleEventClick(event)}
+                className="w-full text-left p-3 sm:p-4 rounded-xl bg-white/80 border border-primary-100 hover:bg-white hover:border-primary-200 transition-colors"
+              >
+                <p className="font-semibold text-pastel-900 text-sm sm:text-base">
+                  {event.title}
+                </p>
+
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-pastel-600">
+                  {event.isAllDay ? (
+                    <span className="inline-flex items-center gap-1 text-primary-700 font-medium">
+                      Весь день
+                    </span>
+                  ) : event.eventTime ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                      {event.eventTime.substring(0, 5)}
+                    </span>
+                  ) : null}
+
+                  {event.location && (
+                    <span className="inline-flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                      {event.location}
+                    </span>
+                  )}
+                </div>
+
+                {event.description && (
+                  <p className="mt-2 text-xs sm:text-sm text-pastel-600 line-clamp-2">
+                    {event.description}
+                  </p>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Calendar Navigation */}
       <div className="glass-card p-4 sm:p-6">

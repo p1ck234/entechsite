@@ -47,10 +47,26 @@ allVars.forEach(key => {
   }
 });
 
+console.log('\n📁 Хранилище фото (uploads):');
+const uploadsVars = ['UPLOADS_DIR', 'RAILWAY_VOLUME_MOUNT_PATH', 'RAILWAY_VOLUME_NAME'];
+uploadsVars.forEach((key) => {
+  const value = process.env[key];
+  console.log(`   ${key}: ${value || '❌ не установлена'}`);
+});
+if (process.env.RAILWAY_VOLUME_MOUNT_PATH) {
+  console.log(`   → Фото сохраняются в: ${process.env.RAILWAY_VOLUME_MOUNT_PATH}/avatars`);
+} else if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) {
+  console.log('   ⚠️ Volume не подключён — фото пропадут при redeploy');
+  console.log('   → Backend → Volumes → mount path: /data/uploads');
+} else {
+  console.log(`   → Локально: ${process.env.UPLOADS_DIR || './uploads'}`);
+}
+
 console.log('\n💡 Для Railway:');
 console.log('   1. Откройте проект в Railway');
 console.log('   2. Посмотрите список сервисов');
 console.log('   3. Найдите PostgreSQL сервис (обычно называется "Postgres" или "PostgreSQL")');
 console.log('   4. В backend сервисе → Variables → DATABASE_URL');
 console.log('   5. Используйте: ${{ИМЯ_СЕРВИСА.DATABASE_URL}}');
+console.log('   6. Для аватарок: backend → Volumes → Add Volume → /data/uploads');
 
