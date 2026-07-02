@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { bookingsAPI } from '../api/client';
-import type { Booking, BookingResource } from '../types';
+import { bookingResourcesAPI, bookingTagsAPI, bookingsAPI } from '../api/client';
+import type { Booking, BookingResource, BookingTag } from '../types';
 import DatePicker from './DatePicker';
+import { Plus } from 'lucide-react';
 import {
   WEEKDAY_OPTIONS,
   expandRecurrenceDates,
@@ -9,13 +10,16 @@ import {
   getWeekdayFromDate,
   normalizeWeekdays,
 } from '../utils/bookingRecurrence';
+import { formatBookingTime } from '../utils/bookingTime';
 
 interface BookingModalProps {
   resource: BookingResource;
   date: string;
   booking?: Booking | null;
   canManage?: boolean;
+  isAdmin?: boolean;
   onClose: () => void;
+  onResourceUpdated?: () => void;
 }
 
 const BookingModal: React.FC<BookingModalProps> = ({
@@ -23,17 +27,45 @@ const BookingModal: React.FC<BookingModalProps> = ({
   date,
   booking,
   canManage = true,
+  isAdmin = false,
   onClose,
+  onResourceUpdated,
 }) => {
   const [title, setTitle] = useState(booking?.title || '');
   const [description, setDescription] = useState(booking?.description || '');
   const [startTime, setStartTime] = useState('10:00');
   const [endTime, setEndTime] = useState('11:00');
+  const [availableTags, setAvailableTags] = useState<BookingTag[]>(resource.tags || []);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(resource.tags?.map((tag) => tag.id) || []);
+  const [newTagName, setNewTagName] = useState('');
+  const [creatingTag, setCreatingTag] = useState(false);
+  const [savingTags, setSavingTags] = useState(false);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([getWeekdayFromDate(date)]);
   const [untilDate, setUntilDate] = useState(getDefaultRecurrenceUntilDate(date));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+
+    const loadTags = async () => {
+      try {
+        const response = await bookingTagsAPI.getTags();
+        setAvailableTags(response.tags);
+      } catch (loadError) {
+        console.error('Error loading booking tags:', loadError);
+      }
+    };
+
+    void loadTags();
+  }, [isAdmin]);
+
+  useEffect(() => {
+    setSelectedTagIds(resource.tags?.map((tag) => tag.id) || []);
+  }, [resource]);
 
   useEffect(() => {
     if (!booking) {
@@ -48,16 +80,12 @@ const BookingModal: React.FC<BookingModalProps> = ({
       return;
     }
 
-    const startsAt = new Date(booking.startsAt);
-    const endsAt = new Date(booking.endsAt);
+    const startsAt = booking.startTime || formatBookingTime(booking.startsAt);
+    const endsAt = booking.endTime || formatBookingTime(booking.endsAt);
     setTitle(booking.title);
     setDescription(booking.description || '');
-    setStartTime(
-      `${String(startsAt.getHours()).padStart(2, '0')}:${String(startsAt.getMinutes()).padStart(2, '0')}`
-    );
-    setEndTime(
-      `${String(endsAt.getHours()).padStart(2, '0')}:${String(endsAt.getMinutes()).padStart(2, '0')}`
-    );
+    setStartTime(startsAt);
+    setEndTime(endsAt);
     setRepeatEnabled(false);
     setError(null);
   }, [booking, date]);
@@ -83,6 +111,58 @@ const BookingModal: React.FC<BookingModalProps> = ({
 
       return normalizeWeekdays([...current, weekday]);
     });
+  };
+
+  const toggleTag = (tagId: string) => {
+    setSelectedTagIds((current) =>
+      current.includes(tagId) ? current.filter((id) => id !== tagId) : [...current, tagId]
+    );
+  };
+
+  const handleCreateTag = async () => {
+    const trimmed = newTagName.trim();
+    if (!trimmed || !isAdmin) {
+      return;
+    }
+
+    try {
+      setCreatingTag(true);
+      setError(null);
+      const response = await bookingTagsAPI.createTag(trimmed);
+      setAvailableTags((current) => {
+        if (current.some((tag) => tag.id === response.tag.id)) {
+          return current;
+        }
+        return [...current, response.tag].sort((left, right) => left.name.localeCompare(right.name, 'ru'));
+      });
+      setSelectedTagIds((current) =>
+        current.includes(response.tag.id) ? current : [...current, response.tag.id]
+      );
+      setNewTagName('');
+    } catch (createError: any) {
+      setError(createError.response?.data?.message || 'Не удалось создать тег');
+    } finally {
+      setCreatingTag(false);
+    }
+  };
+
+  const handleSaveTags = async () => {
+    if (!isAdmin) {
+      return;
+    }
+
+    try {
+      setSavingTags(true);
+      setError(null);
+      await bookingResourcesAPI.updateResource(resource.id, {
+        tagIds: selectedTagIds,
+      });
+      onResourceUpdated?.();
+    } catch (saveTagsError: any) {
+      setError(saveTagsError.response?.data?.message || 'Не удалось сохранить теги');
+    } finally {
+      setSavingTags(false);
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -179,8 +259,20 @@ const BookingModal: React.FC<BookingModalProps> = ({
             {booking ? 'Редактировать бронь' : 'Новое бронирование'}
           </h2>
           <p className="text-sm text-pastel-500 mt-1">
-            {resource.name} · {date}
+            {resource.name} · {booking?.date || date}
           </p>
+          {resource.tags && resource.tags.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {resource.tags.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="inline-flex items-center rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold tracking-wide text-primary-700"
+                >
+                  {tag.name}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -220,6 +312,68 @@ const BookingModal: React.FC<BookingModalProps> = ({
               />
             </div>
           </div>
+
+          {isAdmin && (
+            <div className="rounded-xl border border-pastel-200 bg-pastel-50/60 p-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-pastel-700 mb-2">Теги ресурса</label>
+                {availableTags.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {availableTags.map((tag) => {
+                      const isSelected = selectedTagIds.includes(tag.id);
+                      return (
+                        <button
+                          key={tag.id}
+                          type="button"
+                          onClick={() => toggleTag(tag.id)}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide transition-colors ${
+                            isSelected
+                              ? 'bg-primary-500 text-white'
+                              : 'bg-white text-pastel-700 border border-pastel-200 hover:border-primary-300'
+                          }`}
+                        >
+                          {tag.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-pastel-500">Пока нет тегов. Создайте первый ниже.</p>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newTagName}
+                  onChange={(e) => setNewTagName(e.target.value)}
+                  className="input-field"
+                  placeholder="Новый тег, например SCRUM"
+                  maxLength={50}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleCreateTag()}
+                  disabled={creatingTag || !newTagName.trim()}
+                  className="btn-secondary whitespace-nowrap disabled:opacity-50"
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <Plus className="w-4 h-4" />
+                    {creatingTag ? '...' : 'Тег'}
+                  </span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void handleSaveTags()}
+                disabled={savingTags}
+                className="btn-secondary disabled:opacity-50"
+              >
+                {savingTags ? 'Сохранение тегов...' : 'Сохранить теги ресурса'}
+              </button>
+            </div>
+          )}
 
           {!booking && (
             <>

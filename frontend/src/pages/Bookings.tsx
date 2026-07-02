@@ -17,13 +17,14 @@ import {
   isSameDate,
   toInputDate,
 } from '../utils/date';
+import { formatBookingTimeRange, getBookingDate } from '../utils/bookingTime';
 
 const formatTimeRange = (booking: Booking): string => {
-  const startsAt = new Date(booking.startsAt);
-  const endsAt = new Date(booking.endsAt);
-  const start = `${String(startsAt.getHours()).padStart(2, '0')}:${String(startsAt.getMinutes()).padStart(2, '0')}`;
-  const end = `${String(endsAt.getHours()).padStart(2, '0')}:${String(endsAt.getMinutes()).padStart(2, '0')}`;
-  return `${start}–${end}`;
+  if (booking.startTime && booking.endTime) {
+    return `${booking.startTime}–${booking.endTime}`;
+  }
+
+  return formatBookingTimeRange(booking.startsAt, booking.endsAt);
 };
 
 const Bookings: React.FC = () => {
@@ -49,6 +50,14 @@ const Bookings: React.FC = () => {
     [resources, activeTab]
   );
 
+  const bookingModalResource = useMemo(() => {
+    if (!bookingModal) {
+      return null;
+    }
+
+    return resources.find((resource) => resource.id === bookingModal.resource.id) || bookingModal.resource;
+  }, [bookingModal, resources]);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -73,7 +82,8 @@ const Bookings: React.FC = () => {
     bookings
       .filter(
         (booking) =>
-          booking.resourceId === resourceId && extractIsoDate(booking.startsAt) === extractIsoDate(day)
+          booking.resourceId === resourceId &&
+          (booking.date || getBookingDate(booking.startsAt)) === extractIsoDate(day)
       )
       .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
 
@@ -293,7 +303,7 @@ const Bookings: React.FC = () => {
                                   setBookingModal({
                                     resource,
                                     booking,
-                                    date: extractIsoDate(booking.startsAt),
+                                    date: booking.date || getBookingDate(booking.startsAt),
                                   });
                                 }}
                                 className={`w-full text-left rounded-lg border px-2 py-2 transition-colors ${
@@ -346,12 +356,14 @@ const Bookings: React.FC = () => {
         />
       )}
 
-      {bookingModal && (
+      {bookingModal && bookingModalResource && (
         <BookingModal
-          resource={bookingModal.resource}
+          resource={bookingModalResource}
           booking={bookingModal.booking}
           canManage={bookingModal.booking ? canManageBooking(bookingModal.booking) : true}
+          isAdmin={isAdmin}
           date={bookingModal.date}
+          onResourceUpdated={() => void loadData()}
           onClose={() => {
             setBookingModal(null);
             void loadData();

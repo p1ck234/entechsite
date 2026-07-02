@@ -7,6 +7,7 @@ import {
   combineDateAndTime,
   expandRecurrenceDates,
   formatDateOnly,
+  formatTimeFromDate,
   normalizeWeekdays,
   validateBookingWindow,
   validateRecurrenceInput,
@@ -27,6 +28,9 @@ const mapBooking = (row: any) => ({
   employeeName: row.employee_name || undefined,
   title: row.title,
   description: row.description || undefined,
+  date: formatDateOnly(row.starts_at),
+  startTime: formatTimeFromDate(row.starts_at),
+  endTime: formatTimeFromDate(row.ends_at),
   startsAt: row.starts_at,
   endsAt: row.ends_at,
   status: row.status,
@@ -308,14 +312,9 @@ router.put(
       }
 
       const currentStart = new Date(booking.starts_at);
-      const currentEnd = new Date(booking.ends_at);
-      const date = req.body.date || currentStart.toISOString().slice(0, 10);
-      const startTime =
-        req.body.startTime ||
-        `${String(currentStart.getHours()).padStart(2, '0')}:${String(currentStart.getMinutes()).padStart(2, '0')}`;
-      const endTime =
-        req.body.endTime ||
-        `${String(currentEnd.getHours()).padStart(2, '0')}:${String(currentEnd.getMinutes()).padStart(2, '0')}`;
+      const date = req.body.date || formatDateOnly(currentStart);
+      const startTime = req.body.startTime || formatTimeFromDate(currentStart);
+      const endTime = req.body.endTime || formatTimeFromDate(new Date(booking.ends_at));
 
       const startsAt = combineDateAndTime(date, startTime);
       const endsAt = combineDateAndTime(date, endTime);

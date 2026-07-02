@@ -252,6 +252,9 @@ export interface Booking {
   employeeName?: string;
   title: string;
   description?: string;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
   startsAt: string;
   endsAt: string;
   status: 'confirmed' | 'cancelled';

@@ -4,6 +4,8 @@ export const BOOKING_WORK_END_HOUR = 19;
 export const BOOKING_MAX_DURATION_HOURS = 4;
 export const BOOKING_MAX_RECURRENCE_OCCURRENCES = 366;
 
+export const BOOKING_TIMEZONE = 'Europe/Moscow';
+
 export type BookingRecurrenceType = 'none' | 'weekly';
 
 export interface BookingRecurrenceInput {
@@ -12,11 +14,34 @@ export interface BookingRecurrenceInput {
   untilDate?: string;
 }
 
-const pad = (value: number): string => String(value).padStart(2, '0');
+const getMoscowDateTimeParts = (value: Date) => {
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: BOOKING_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(value);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value || '00';
+
+  return {
+    year: get('year'),
+    month: get('month'),
+    day: get('day'),
+    hour: get('hour'),
+    minute: get('minute'),
+  };
+};
 
 export const combineDateAndTime = (date: string, time: string): Date => {
-  const normalizedTime = time.length === 5 ? `${time}:00` : time;
-  return new Date(`${date}T${normalizedTime}`);
+  const normalizedTime = time.length === 5 ? `${time}:00` : time.slice(0, 8);
+  return new Date(`${date}T${normalizedTime}+03:00`);
 };
 
 export const validateBookingWindow = (startsAt: Date, endsAt: Date): string | null => {
@@ -37,23 +62,24 @@ export const validateBookingWindow = (startsAt: Date, endsAt: Date): string | nu
     return `Максимальная длительность — ${BOOKING_MAX_DURATION_HOURS} часа`;
   }
 
-  const startHour = startsAt.getHours() + startsAt.getMinutes() / 60;
-  const endHour = endsAt.getHours() + endsAt.getMinutes() / 60;
+  const startParts = getMoscowDateTimeParts(startsAt);
+  const endParts = getMoscowDateTimeParts(endsAt);
+  const startHour = Number(startParts.hour) + Number(startParts.minute) / 60;
+  const endHour = Number(endParts.hour) + Number(endParts.minute) / 60;
 
   if (startHour < BOOKING_WORK_START_HOUR || endHour > BOOKING_WORK_END_HOUR) {
     return `Бронирование доступно с ${BOOKING_WORK_START_HOUR}:00 до ${BOOKING_WORK_END_HOUR}:00`;
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const bookingDay = new Date(startsAt);
-  bookingDay.setHours(0, 0, 0, 0);
+  const todayParts = getMoscowDateTimeParts(new Date());
+  const todayMoscow = `${todayParts.year}-${todayParts.month}-${todayParts.day}`;
+  const bookingDay = formatDateOnly(startsAt);
 
-  if (bookingDay < today) {
+  if (bookingDay < todayMoscow) {
     return 'Нельзя бронировать прошедшие даты';
   }
 
-  if (startsAt.toDateString() !== endsAt.toDateString()) {
+  if (formatDateOnly(startsAt) !== formatDateOnly(endsAt)) {
     return 'Бронирование должно начинаться и заканчиваться в один день';
   }
 
@@ -62,21 +88,24 @@ export const validateBookingWindow = (startsAt: Date, endsAt: Date): string | nu
 
 export const formatTimeFromDate = (value: Date | string): string => {
   const date = value instanceof Date ? value : new Date(value);
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const parts = getMoscowDateTimeParts(date);
+  return `${parts.hour}:${parts.minute}`;
 };
 
 export const formatDateOnly = (value: Date | string): string => {
   const date = value instanceof Date ? value : new Date(value);
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const parts = getMoscowDateTimeParts(date);
+  return `${parts.year}-${parts.month}-${parts.day}`;
 };
 
-const parseInputDate = (value: string): Date => {
-  const date = new Date(`${value}T12:00:00`);
-  date.setHours(0, 0, 0, 0);
-  return date;
+const getWeekdayFromIsoDate = (value: string): number => {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
 };
 
-export const getWeekdayFromDate = (date: string): number => parseInputDate(date).getDay();
+const parseInputDate = (value: string): Date => new Date(`${value}T12:00:00+03:00`);
+
+export const getWeekdayFromDate = (date: string): number => getWeekdayFromIsoDate(date);
 
 export const normalizeWeekdays = (weekdays?: number[]): number[] => {
   if (!Array.isArray(weekdays)) {
@@ -145,8 +174,9 @@ export const expandRecurrenceDates = (
   const current = new Date(start);
 
   while (current <= endDate && dates.length < BOOKING_MAX_RECURRENCE_OCCURRENCES) {
-    if (weekdays.includes(current.getDay())) {
-      dates.push(formatDateOnly(current));
+    const isoDate = formatDateOnly(current);
+    if (weekdays.includes(getWeekdayFromIsoDate(isoDate))) {
+      dates.push(isoDate);
     }
     current.setDate(current.getDate() + 1);
   }
