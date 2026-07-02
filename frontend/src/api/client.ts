@@ -2,6 +2,7 @@ import axios from 'axios';
 import { AuthResponse, User, Employee, Course, Lesson, LessonMaterialsResponse, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, BookingResource, Booking, PaginationInfo } from '../types';
 
 import { API_BASE_URL } from '../config/api';
+import { clearEventPhotosCache, getCachedEventPhotos, rememberEventPhotos } from '../utils/eventPhotosCache';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -484,10 +485,22 @@ export const eventsAPI = {
     };
   },
 
-  getEventPhotos: async (id: string): Promise<EventPhotosResponse> => {
-    const response = await api.get(`/events/${id}/photos`);
+  getEventPhotos: async (id: string, options?: { refresh?: boolean }): Promise<EventPhotosResponse> => {
+    if (!options?.refresh) {
+      const cached = getCachedEventPhotos(id);
+      if (cached) {
+        return cached;
+      }
+    }
+
+    const response = await api.get(`/events/${id}/photos`, {
+      params: options?.refresh ? { refresh: '1' } : undefined,
+    });
+    rememberEventPhotos(id, response.data);
     return response.data;
   },
+
+  clearEventPhotosCache,
 
   createEvent: async (event: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>): Promise<{ message: string; event: Event }> => {
     const response = await api.post('/events', event);

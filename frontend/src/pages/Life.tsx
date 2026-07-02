@@ -118,6 +118,7 @@ const Life: React.FC = () => {
     try {
       setSyncingLife(true);
       const result = await eventsAPI.syncLifeFromDrive();
+      eventsAPI.clearEventPhotosCache();
       await fetchEvents();
       window.alert(
         `${result.message}\n` +

@@ -8,10 +8,29 @@ const express_validator_1 = require("express-validator");
 const pg_1 = require("pg");
 const auth_1 = require("../middleware/auth");
 const googleDrive_1 = require("../services/googleDrive");
+const eventMedia_1 = require("../utils/eventMedia");
+const driveListCache_1 = require("../utils/driveListCache");
 const router = express_1.default.Router();
 const pool = new pg_1.Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
+const persistEventPhotos = async (eventId, photos) => {
+    await pool.query(`UPDATE events
+     SET media_items = $1::jsonb,
+         media_synced_at = CURRENT_TIMESTAMP,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $2`, [JSON.stringify(photos), eventId]);
+};
+const loadEventPhotosFromDrive = async (eventId, googleDriveUrl) => {
+    const resourceId = (0, googleDrive_1.extractDriveResourceIdFromUrl)(googleDriveUrl);
+    if (resourceId) {
+        (0, driveListCache_1.invalidateDriveListCache)('media', resourceId);
+    }
+    const mediaItems = await (0, googleDrive_1.listMediaInDriveResource)(googleDriveUrl);
+    const photos = (0, eventMedia_1.mapDriveItemsToEventPhotos)(mediaItems);
+    await persistEventPhotos(eventId, photos);
+    return photos;
+};
 router.get('/', auth_1.authenticateToken, [
     (0, express_validator_1.query)('page').optional().isInt({ min: 1 }),
     (0, express_validator_1.query)('limit').optional().isInt({ min: 1, max: 100 }),
@@ -51,22 +70,24 @@ router.get('/', auth_1.authenticateToken, [
 router.get('/:id/photos', auth_1.authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await pool.query('SELECT id, title, google_drive_url FROM events WHERE id = $1 AND is_active = true', [id]);
+        const forceRefresh = req.query.refresh === '1' && req.user?.role === 'ADMIN';
+        const result = await pool.query(`SELECT id, title, google_drive_url, media_items, media_synced_at
+       FROM events
+       WHERE id = $1 AND is_active = true`, [id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'Event not found' });
         }
         const event = result.rows[0];
-        const mediaItems = await (0, googleDrive_1.listMediaInDriveResource)(event.google_drive_url);
+        let photos = (0, eventMedia_1.parseStoredEventPhotos)(event.media_items);
+        if (!photos.length || forceRefresh) {
+            photos = await loadEventPhotosFromDrive(String(event.id), event.google_drive_url);
+        }
+        res.setHeader('Cache-Control', 'private, max-age=600');
         res.json({
             eventId: String(event.id),
             title: event.title,
-            photos: mediaItems.map((item) => ({
-                id: item.id,
-                name: item.name,
-                mimeType: item.mimeType,
-                ref: (0, googleDrive_1.toDriveImageRef)(item.id),
-                mediaType: (0, googleDrive_1.getDriveMediaKind)(item.mimeType) || 'image',
-            })),
+            photos,
+            cached: !forceRefresh && Boolean(event.media_synced_at),
         });
     }
     catch (error) {
@@ -154,6 +175,15 @@ router.put('/:id', auth_1.authenticateToken, [
                 values.push(updateData[key]);
             }
         });
+        if (updateData.googleDriveUrl !== undefined &&
+            updateData.googleDriveUrl !== existingEvent.rows[0].google_drive_url) {
+            updateFields.push('media_items = NULL');
+            updateFields.push('media_synced_at = NULL');
+            const resourceId = (0, googleDrive_1.extractDriveResourceIdFromUrl)(updateData.googleDriveUrl);
+            if (resourceId) {
+                (0, driveListCache_1.invalidateDriveListCache)('media', resourceId);
+            }
+        }
         if (updateFields.length === 0) {
             return res.status(400).json({ message: 'No fields to update' });
         }

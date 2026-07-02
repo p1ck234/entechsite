@@ -2,12 +2,44 @@ import express from 'express';
 import { body, validationResult, query } from 'express-validator';
 import { Pool } from 'pg';
 import { authenticateToken } from '../middleware/auth';
-import { getDriveMediaKind, listMediaInDriveResource, toDriveImageRef } from '../services/googleDrive';
+import { extractDriveResourceIdFromUrl, listMediaInDriveResource } from '../services/googleDrive';
+import {
+  mapDriveItemsToEventPhotos,
+  parseStoredEventPhotos,
+  type StoredEventPhoto,
+} from '../utils/eventMedia';
+import { invalidateDriveListCache } from '../utils/driveListCache';
 
 const router = express.Router();
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
+
+const persistEventPhotos = async (eventId: string, photos: StoredEventPhoto[]): Promise<void> => {
+  await pool.query(
+    `UPDATE events
+     SET media_items = $1::jsonb,
+         media_synced_at = CURRENT_TIMESTAMP,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $2`,
+    [JSON.stringify(photos), eventId]
+  );
+};
+
+const loadEventPhotosFromDrive = async (
+  eventId: string,
+  googleDriveUrl: string
+): Promise<StoredEventPhoto[]> => {
+  const resourceId = extractDriveResourceIdFromUrl(googleDriveUrl);
+  if (resourceId) {
+    invalidateDriveListCache('media', resourceId);
+  }
+
+  const mediaItems = await listMediaInDriveResource(googleDriveUrl);
+  const photos = mapDriveItemsToEventPhotos(mediaItems);
+  await persistEventPhotos(eventId, photos);
+  return photos;
+};
 
 // Get all events
 router.get('/', authenticateToken, [
@@ -57,9 +89,12 @@ router.get('/', authenticateToken, [
 router.get('/:id/photos', authenticateToken, async (req: any, res: any) => {
   try {
     const { id } = req.params;
+    const forceRefresh = req.query.refresh === '1' && req.user?.role === 'ADMIN';
 
     const result = await pool.query(
-      'SELECT id, title, google_drive_url FROM events WHERE id = $1 AND is_active = true',
+      `SELECT id, title, google_drive_url, media_items, media_synced_at
+       FROM events
+       WHERE id = $1 AND is_active = true`,
       [id]
     );
 
@@ -68,18 +103,18 @@ router.get('/:id/photos', authenticateToken, async (req: any, res: any) => {
     }
 
     const event = result.rows[0];
-    const mediaItems = await listMediaInDriveResource(event.google_drive_url);
+    let photos = parseStoredEventPhotos(event.media_items);
 
+    if (!photos.length || forceRefresh) {
+      photos = await loadEventPhotosFromDrive(String(event.id), event.google_drive_url);
+    }
+
+    res.setHeader('Cache-Control', 'private, max-age=600');
     res.json({
       eventId: String(event.id),
       title: event.title,
-      photos: mediaItems.map((item) => ({
-        id: item.id,
-        name: item.name,
-        mimeType: item.mimeType,
-        ref: toDriveImageRef(item.id),
-        mediaType: getDriveMediaKind(item.mimeType) || 'image',
-      })),
+      photos,
+      cached: !forceRefresh && Boolean(event.media_synced_at),
     });
   } catch (error: any) {
     console.error('Get event photos error:', error);
@@ -194,6 +229,19 @@ router.put('/:id', authenticateToken, [
         values.push(updateData[key]);
       }
     });
+
+    if (
+      updateData.googleDriveUrl !== undefined &&
+      updateData.googleDriveUrl !== existingEvent.rows[0].google_drive_url
+    ) {
+      updateFields.push('media_items = NULL');
+      updateFields.push('media_synced_at = NULL');
+
+      const resourceId = extractDriveResourceIdFromUrl(updateData.googleDriveUrl);
+      if (resourceId) {
+        invalidateDriveListCache('media', resourceId);
+      }
+    }
 
     if (updateFields.length === 0) {
       return res.status(400).json({ message: 'No fields to update' });

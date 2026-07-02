@@ -138,6 +138,8 @@ export async function initializeDatabase(pool: Pool) {
           description TEXT,
           google_drive_url VARCHAR(500) NOT NULL,
           preview_images TEXT[],
+          media_items JSONB,
+          media_synced_at TIMESTAMP,
           event_date DATE,
           is_active BOOLEAN DEFAULT true,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -344,6 +346,12 @@ export async function initializeDatabase(pool: Pool) {
       `);
       await pool.query(`
         CREATE UNIQUE INDEX IF NOT EXISTS idx_bots_username ON bots(username) WHERE username IS NOT NULL;
+      `);
+
+      await pool.query(`
+        ALTER TABLE events
+          ADD COLUMN IF NOT EXISTS media_items JSONB,
+          ADD COLUMN IF NOT EXISTS media_synced_at TIMESTAMP;
       `);
 
       await pool.query(`

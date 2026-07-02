@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { google, drive_v3 } from 'googleapis';
+import { getDriveListCache, setDriveListCache } from '../utils/driveListCache';
 
 const DRIVE_READONLY_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 const FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
@@ -387,7 +388,6 @@ const collectMediaFromFolder = async (
 };
 
 export const listMediaInDriveResource = async (resourceIdOrUrl: string): Promise<DriveFileItem[]> => {
-  const drive = getDriveClient();
   const resourceId = resourceIdOrUrl.includes('http')
     ? extractDriveResourceIdFromUrl(resourceIdOrUrl)
     : resourceIdOrUrl;
@@ -396,6 +396,12 @@ export const listMediaInDriveResource = async (resourceIdOrUrl: string): Promise
     throw new Error('Не удалось определить ID папки или файла Google Drive.');
   }
 
+  const cached = getDriveListCache<DriveFileItem[]>('media', resourceId);
+  if (cached) {
+    return cached;
+  }
+
+  const drive = getDriveClient();
   const resourceResponse = await drive.files.get({
     fileId: resourceId,
     supportsAllDrives: true,
@@ -405,14 +411,19 @@ export const listMediaInDriveResource = async (resourceIdOrUrl: string): Promise
   const resource = mapDriveFile(resourceResponse.data);
 
   if (isGalleryMediaMimeType(resource.mimeType)) {
-    return [resource];
+    const items = [resource];
+    setDriveListCache('media', resourceId, items);
+    return items;
   }
 
   if (resource.mimeType !== FOLDER_MIME_TYPE) {
+    setDriveListCache('media', resourceId, []);
     return [];
   }
 
-  return collectMediaFromFolder(drive, resource.id);
+  const items = await collectMediaFromFolder(drive, resource.id);
+  setDriveListCache('media', resourceId, items);
+  return items;
 };
 
 const MAX_DRIVE_LESSON_SEARCH_DEPTH = 5;
@@ -478,7 +489,6 @@ const collectLessonMaterialsFromFolder = async (
 };
 
 export const listLessonMaterialsInDriveResource = async (resourceIdOrUrl: string): Promise<DriveFileItem[]> => {
-  const drive = getDriveClient();
   const resourceId = resourceIdOrUrl.includes('http')
     ? extractDriveResourceIdFromUrl(resourceIdOrUrl)
     : resourceIdOrUrl;
@@ -487,6 +497,12 @@ export const listLessonMaterialsInDriveResource = async (resourceIdOrUrl: string
     throw new Error('Не удалось определить ID папки или файла Google Drive.');
   }
 
+  const cached = getDriveListCache<DriveFileItem[]>('lesson-materials', resourceId);
+  if (cached) {
+    return cached;
+  }
+
+  const drive = getDriveClient();
   const resourceResponse = await drive.files.get({
     fileId: resourceId,
     supportsAllDrives: true,
@@ -496,19 +512,25 @@ export const listLessonMaterialsInDriveResource = async (resourceIdOrUrl: string
   const resource = mapDriveFile(resourceResponse.data);
 
   if (isIgnoredDriveFileName(resource.name)) {
+    setDriveListCache('lesson-materials', resourceId, []);
     return [];
   }
 
   const contentKind = getDriveContentKind(resource.mimeType);
   if (contentKind) {
-    return [resource];
+    const items = [resource];
+    setDriveListCache('lesson-materials', resourceId, items);
+    return items;
   }
 
   if (resource.mimeType !== FOLDER_MIME_TYPE) {
+    setDriveListCache('lesson-materials', resourceId, []);
     return [];
   }
 
-  return collectLessonMaterialsFromFolder(drive, resource.id);
+  const items = await collectLessonMaterialsFromFolder(drive, resource.id);
+  setDriveListCache('lesson-materials', resourceId, items);
+  return items;
 };
 
 export const listImagesInDriveResource = async (resourceIdOrUrl: string): Promise<DriveFileItem[]> => {

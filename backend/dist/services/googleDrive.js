@@ -7,6 +7,7 @@ exports.streamDriveFileContent = exports.readDriveFileBuffer = exports.streamDri
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const googleapis_1 = require("googleapis");
+const driveListCache_1 = require("../utils/driveListCache");
 const DRIVE_READONLY_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 const FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
 const DEFAULT_ROOT_FOLDER_NAME = 'Обучение';
@@ -294,13 +295,17 @@ const collectMediaFromFolder = async (drive, folderId, maxDepth = MAX_DRIVE_MEDI
     return sortDriveItemsByName(mediaItems);
 };
 const listMediaInDriveResource = async (resourceIdOrUrl) => {
-    const drive = getDriveClient();
     const resourceId = resourceIdOrUrl.includes('http')
         ? (0, exports.extractDriveResourceIdFromUrl)(resourceIdOrUrl)
         : resourceIdOrUrl;
     if (!resourceId) {
         throw new Error('Не удалось определить ID папки или файла Google Drive.');
     }
+    const cached = (0, driveListCache_1.getDriveListCache)('media', resourceId);
+    if (cached) {
+        return cached;
+    }
+    const drive = getDriveClient();
     const resourceResponse = await drive.files.get({
         fileId: resourceId,
         supportsAllDrives: true,
@@ -308,12 +313,17 @@ const listMediaInDriveResource = async (resourceIdOrUrl) => {
     });
     const resource = mapDriveFile(resourceResponse.data);
     if (isGalleryMediaMimeType(resource.mimeType)) {
-        return [resource];
+        const items = [resource];
+        (0, driveListCache_1.setDriveListCache)('media', resourceId, items);
+        return items;
     }
     if (resource.mimeType !== FOLDER_MIME_TYPE) {
+        (0, driveListCache_1.setDriveListCache)('media', resourceId, []);
         return [];
     }
-    return collectMediaFromFolder(drive, resource.id);
+    const items = await collectMediaFromFolder(drive, resource.id);
+    (0, driveListCache_1.setDriveListCache)('media', resourceId, items);
+    return items;
 };
 exports.listMediaInDriveResource = listMediaInDriveResource;
 const MAX_DRIVE_LESSON_SEARCH_DEPTH = 5;
@@ -363,13 +373,17 @@ const collectLessonMaterialsFromFolder = async (drive, folderId, maxDepth = MAX_
     return sortLessonMaterials(materials);
 };
 const listLessonMaterialsInDriveResource = async (resourceIdOrUrl) => {
-    const drive = getDriveClient();
     const resourceId = resourceIdOrUrl.includes('http')
         ? (0, exports.extractDriveResourceIdFromUrl)(resourceIdOrUrl)
         : resourceIdOrUrl;
     if (!resourceId) {
         throw new Error('Не удалось определить ID папки или файла Google Drive.');
     }
+    const cached = (0, driveListCache_1.getDriveListCache)('lesson-materials', resourceId);
+    if (cached) {
+        return cached;
+    }
+    const drive = getDriveClient();
     const resourceResponse = await drive.files.get({
         fileId: resourceId,
         supportsAllDrives: true,
@@ -377,16 +391,22 @@ const listLessonMaterialsInDriveResource = async (resourceIdOrUrl) => {
     });
     const resource = mapDriveFile(resourceResponse.data);
     if (isIgnoredDriveFileName(resource.name)) {
+        (0, driveListCache_1.setDriveListCache)('lesson-materials', resourceId, []);
         return [];
     }
     const contentKind = (0, exports.getDriveContentKind)(resource.mimeType);
     if (contentKind) {
-        return [resource];
+        const items = [resource];
+        (0, driveListCache_1.setDriveListCache)('lesson-materials', resourceId, items);
+        return items;
     }
     if (resource.mimeType !== FOLDER_MIME_TYPE) {
+        (0, driveListCache_1.setDriveListCache)('lesson-materials', resourceId, []);
         return [];
     }
-    return collectLessonMaterialsFromFolder(drive, resource.id);
+    const items = await collectLessonMaterialsFromFolder(drive, resource.id);
+    (0, driveListCache_1.setDriveListCache)('lesson-materials', resourceId, items);
+    return items;
 };
 exports.listLessonMaterialsInDriveResource = listLessonMaterialsInDriveResource;
 const listImagesInDriveResource = async (resourceIdOrUrl) => {

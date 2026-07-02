@@ -2,7 +2,13 @@ import express from 'express';
 import { Pool } from 'pg';
 import type sharp from 'sharp';
 import { authenticateToken } from '../middleware/auth';
-import { DriveCourseFolder, DriveFileItem, getDriveMediaKind, getLifeDriveItems, getTrainingDriveTree, listImagesInDriveResource, readDriveFileBuffer, streamDriveMediaContent, toDriveImageRef } from '../services/googleDrive';
+import { DriveCourseFolder, DriveFileItem, getDriveMediaKind, getLifeDriveItems, getTrainingDriveTree, listMediaInDriveResource, readDriveFileBuffer, streamDriveMediaContent, toDriveImageRef } from '../services/googleDrive';
+import {
+  areEventPhotosEqual,
+  extractPreviewImageRefs,
+  mapDriveItemsToEventPhotos,
+} from '../utils/eventMedia';
+import { invalidateAllDriveListCaches } from '../utils/driveListCache';
 
 const router = express.Router();
 const pool = new Pool({
@@ -209,13 +215,20 @@ const parseDriveLifeTitle = (name: string): { title: string; eventDate: string |
   return { title: name.trim(), eventDate: null };
 };
 
-const buildLifePreviewImages = async (item: DriveFileItem): Promise<string[]> => {
+const buildLifeEventMedia = async (item: DriveFileItem) => {
   try {
-    const images = await listImagesInDriveResource(item.id);
-    return images.slice(0, 4).map((image) => toDriveImageRef(image.id));
+    const mediaItems = await listMediaInDriveResource(item.id);
+    const photos = mapDriveItemsToEventPhotos(mediaItems);
+    return {
+      photos,
+      previewImages: extractPreviewImageRefs(photos),
+    };
   } catch (error) {
-    console.warn(`Не удалось получить превью для "${item.name}":`, error);
-    return [];
+    console.warn(`Не удалось получить медиа для "${item.name}":`, error);
+    return {
+      photos: [],
+      previewImages: [],
+    };
   }
 };
 
@@ -403,9 +416,9 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
       }
 
       activeEventUrls.push(eventUrl);
-      const previewImages = await buildLifePreviewImages(item);
+      const { photos, previewImages } = await buildLifeEventMedia(item);
       const existingEvent = await client.query(
-        `SELECT id, title, description, google_drive_url, event_date, preview_images, is_active
+        `SELECT id, title, description, google_drive_url, event_date, preview_images, media_items, is_active
          FROM events
          WHERE google_drive_url = ANY($1::text[])
          LIMIT 1`,
@@ -421,6 +434,7 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
           existing.google_drive_url === eventUrl &&
           existingDate === eventDate &&
           arePreviewImagesEqual(existing.preview_images, previewImages) &&
+          areEventPhotosEqual(existing.media_items, photos) &&
           existing.is_active === true;
 
         if (unchanged) {
@@ -435,19 +449,21 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
                google_drive_url = $3,
                preview_images = $4,
                event_date = $5,
+               media_items = $6::jsonb,
+               media_synced_at = CURRENT_TIMESTAMP,
                is_active = true,
                updated_at = CURRENT_TIMESTAMP
-           WHERE id = $6`,
-          [title, DRIVE_LIFE_DESCRIPTION, eventUrl, previewImages, eventDate, existing.id]
+           WHERE id = $7`,
+          [title, DRIVE_LIFE_DESCRIPTION, eventUrl, previewImages, eventDate, JSON.stringify(photos), existing.id]
         );
         stats.eventsUpdated += 1;
         continue;
       }
 
       await client.query(
-        `INSERT INTO events (title, description, google_drive_url, preview_images, event_date, is_active)
-         VALUES ($1, $2, $3, $4, $5, true)`,
-        [title, DRIVE_LIFE_DESCRIPTION, eventUrl, previewImages, eventDate]
+        `INSERT INTO events (title, description, google_drive_url, preview_images, event_date, media_items, media_synced_at, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, CURRENT_TIMESTAMP, true)`,
+        [title, DRIVE_LIFE_DESCRIPTION, eventUrl, previewImages, eventDate, JSON.stringify(photos)]
       );
       stats.eventsCreated += 1;
     }
@@ -463,6 +479,7 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
     stats.eventsArchived += archivedEvents.rowCount || 0;
 
     await client.query('COMMIT');
+    invalidateAllDriveListCaches();
 
     res.json({
       message: 'Наша жизнь синхронизирована из Google Drive',
