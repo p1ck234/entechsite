@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingResourcesAPI, bookingsAPI } from '../api/client';
 import type { Booking, BookingResource, BookingResourceType } from '../types';
-import { CalendarDays, Clock, ExternalLink, Plus, Settings, Video } from 'lucide-react';
+import { Clock, ExternalLink, Plus, Settings, Video } from 'lucide-react';
 import BookingModal from '../components/BookingModal';
 import BookingResourceModal from '../components/BookingResourceModal';
-import { formatRuDate } from '../utils/date';
+import DatePicker from '../components/DatePicker';
+import { formatRuDate, toInputDate } from '../utils/date';
 
 const formatTimeRange = (booking: Booking): string => {
   const startsAt = new Date(booking.startsAt);
@@ -15,12 +16,7 @@ const formatTimeRange = (booking: Booking): string => {
   return `${start}–${end}`;
 };
 
-const toInputDate = (value: Date): string => {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+const BOOKING_MAX_ADVANCE_DAYS = 30;
 
 const Bookings: React.FC = () => {
   const { isAdmin, user } = useAuth();
@@ -39,6 +35,13 @@ const Bookings: React.FC = () => {
     () => resources.filter((resource) => resource.type === activeTab),
     [resources, activeTab]
   );
+
+  const minBookingDate = useMemo(() => toInputDate(new Date()), []);
+  const maxBookingDate = useMemo(() => {
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + BOOKING_MAX_ADVANCE_DAYS);
+    return toInputDate(maxDate);
+  }, []);
 
   const loadData = async () => {
     try {
@@ -81,20 +84,19 @@ const Bookings: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-pastel-800">Бронирование</h1>
-          <p className="text-pastel-600 mt-1">Переговорки и Zoom без пересечений по времени</p>
+          <h1 className="text-3xl font-bold text-pastel-800">Расписание</h1>
+          <p className="text-pastel-600 mt-1">Переговорки и Zoom — бронирование без пересечений</p>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
-          <label className="flex items-center gap-2 bg-white/70 border border-pastel-200 rounded-xl px-4 py-2">
-            <CalendarDays className="w-4 h-4 text-pastel-500" />
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-transparent outline-none text-pastel-800"
-            />
-          </label>
+          <DatePicker
+            value={selectedDate}
+            onChange={setSelectedDate}
+            min={minBookingDate}
+            max={maxBookingDate}
+            allowClear={false}
+            className="w-full sm:w-[260px]"
+          />
           {isAdmin && (
             <button
               type="button"

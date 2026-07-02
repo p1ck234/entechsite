@@ -161,7 +161,7 @@ const Layout: React.FC = () => {
     { name: 'База знаний', href: '/courses', icon: BookOpen },
     { name: 'Наша жизнь', href: '/life', icon: Heart },
     { name: 'Календарь мероприятий', href: '/events', icon: Calendar },
-    { name: 'Бронирование', href: '/bookings', icon: DoorOpen },
+    { name: 'Расписание', href: '/bookings', icon: DoorOpen },
     { name: 'Боты', href: '/bots', icon: Bot },
   ];
 
@@ -295,8 +295,8 @@ const Layout: React.FC = () => {
                 shortName = 'АК';
               } else if (item.name === 'Календарь мероприятий') {
                 shortName = 'КМ';
-              } else if (item.name === 'Бронирование') {
-                shortName = 'БР';
+              } else if (item.name === 'Расписание') {
+                shortName = 'РС';
               } else if (item.name === 'База знаний') {
                 shortName = 'БЗ';
               } else if (item.name === 'Наша жизнь') {

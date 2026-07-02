@@ -3,6 +3,7 @@ import { X, Trash2 } from 'lucide-react';
 import { Event } from '../types';
 import { eventsAPI, uploadAPI } from '../api/client';
 import ImageWithLoader from './ImageWithLoader';
+import DatePicker from './DatePicker';
 import { useTelegram } from '../contexts/TelegramContext';
 
 interface EventModalProps {
@@ -216,13 +217,10 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose }) => {
               <label htmlFor="eventDate" className="block text-sm font-medium text-pastel-700 mb-2">
                 Дата мероприятия
               </label>
-              <input
+              <DatePicker
                 id="eventDate"
-                name="eventDate"
-                type="date"
                 value={formData.eventDate}
-                onChange={handleChange}
-                className="input-field"
+                onChange={(eventDate) => setFormData((prev) => ({ ...prev, eventDate }))}
               />
             </div>
 

@@ -5,6 +5,7 @@ import { calendarAPI } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { useTelegram } from '../contexts/TelegramContext';
 import { formatRuDate, toInputDate } from '../utils/date';
+import DatePicker from './DatePicker';
 
 interface CalendarEventModalProps {
   event: CalendarEvent | null;
@@ -282,14 +283,10 @@ const CalendarEventModal: React.FC<CalendarEventModalProps> = ({ event, selected
               <label htmlFor="eventDate" className="block text-sm font-medium text-pastel-700 mb-2">
                 Дата *
               </label>
-              <input
+              <DatePicker
                 id="eventDate"
-                name="eventDate"
-                type="date"
-                required
                 value={formData.eventDate}
-                onChange={handleChange}
-                className="input-field"
+                onChange={(eventDate) => setFormData((prev) => ({ ...prev, eventDate }))}
               />
             </div>
 
