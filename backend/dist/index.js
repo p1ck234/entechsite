@@ -7,8 +7,8 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const dotenv_1 = __importDefault(require("dotenv"));
-const pg_1 = require("pg");
 const stream_1 = require("stream");
+const pool_1 = require("./db/pool");
 const auth_1 = __importDefault(require("./routes/auth"));
 const employees_1 = __importDefault(require("./routes/employees"));
 const courses_1 = __importDefault(require("./routes/courses"));
@@ -26,78 +26,7 @@ const db_init_1 = require("./utils/db-init");
 const uploads_1 = require("./utils/uploads");
 const path_1 = __importDefault(require("path"));
 dotenv_1.default.config();
-let databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
-    const pgHost = process.env.PGHOST;
-    const pgPort = process.env.PGPORT || '5432';
-    const pgUser = process.env.PGUSER;
-    const pgPassword = process.env.PGPASSWORD;
-    const pgDatabase = process.env.PGDATABASE;
-    if (pgHost && pgUser && pgPassword && pgDatabase) {
-        databaseUrl = `postgresql://${pgUser}:${pgPassword}@${pgHost}:${pgPort}/${pgDatabase}`;
-        console.log('✅ DATABASE_URL собран из переменных PostgreSQL');
-    }
-    else {
-        databaseUrl = process.env.POSTGRES_URL ||
-            process.env.POSTGRES_DATABASE_URL ||
-            process.env.DATABASE_CONNECTION_STRING;
-    }
-    if ((!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') && !pgHost) {
-        const possibleServiceNames = ['Postgres', 'PostgreSQL', 'Database', 'Postgresql', 'DB', 'pg'];
-        const allEnvKeys = Object.keys(process.env);
-        for (const serviceName of possibleServiceNames) {
-            const possibleKeys = [
-                `${serviceName}_DATABASE_URL`,
-                `${serviceName.toUpperCase()}_DATABASE_URL`,
-                `${serviceName.toLowerCase()}_DATABASE_URL`,
-            ];
-            for (const key of possibleKeys) {
-                if (process.env[key] && !process.env[key].includes('{{')) {
-                    databaseUrl = process.env[key];
-                    console.log(`✅ DATABASE_URL найден в переменной: ${key}`);
-                    break;
-                }
-            }
-            if (databaseUrl && !databaseUrl.includes('{{'))
-                break;
-        }
-    }
-    if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
-        const railwayInternalUrl = 'postgresql://postgres:fMRvspHdgKpSjCIPQDizWQFwpYPNNtJf@postgres.railway.internal:5432/railway';
-        console.warn('⚠️ DATABASE_URL не найден в переменных окружения');
-        console.warn('📦 Используем fallback Railway internal URL');
-        databaseUrl = railwayInternalUrl;
-        console.log('\n📊 Доступные переменные PostgreSQL:');
-        const pgVars = ['PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE'];
-        pgVars.forEach(key => {
-            const value = process.env[key];
-            console.log(`   ${key}: ${value ? '✓ установлена' : '✗ не установлена'}`);
-        });
-        console.log('\n📋 Все переменные, содержащие "DATABASE" или "POSTGRES":');
-        const dbRelatedVars = Object.keys(process.env).filter(key => key.toUpperCase().includes('DATABASE') ||
-            key.toUpperCase().includes('POSTGRES') ||
-            key.toUpperCase().includes('PG'));
-        if (dbRelatedVars.length > 0) {
-            dbRelatedVars.forEach(key => {
-                const value = process.env[key];
-                const masked = value && value.length > 30
-                    ? `${value.substring(0, 15)}...${value.substring(value.length - 10)}`
-                    : (value || '<empty>');
-                console.log(`   ${key}: ${masked}`);
-            });
-        }
-        else {
-            console.log('   (переменные не найдены)');
-        }
-    }
-    else {
-        console.log('✅ DATABASE_URL найден в переменных окружения');
-    }
-}
 const app = (0, express_1.default)();
-const pool = new pg_1.Pool({
-    connectionString: databaseUrl || 'postgresql://localhost:5432/entechsite',
-});
 const PORT = parseInt(process.env.PORT || '3001', 10);
 console.log(`🔧 PORT from environment: ${process.env.PORT || 'NOT SET'}, using: ${PORT}`);
 console.log(`🔧 All environment variables:`, Object.keys(process.env).filter(k => k.includes('PORT') || k.includes('NODE') || k.includes('RAILWAY')));
@@ -452,14 +381,21 @@ app.use((err, req, res, next) => {
 app.use('*', (req, res) => {
     res.status(404).json({ message: 'Route not found' });
 });
+process.on('unhandledRejection', (reason) => {
+    console.error('unhandledRejection:', reason);
+});
+process.on('uncaughtException', (error) => {
+    console.error('uncaughtException:', error);
+    process.exit(1);
+});
 process.on('SIGINT', async () => {
     console.log('Shutting down gracefully...');
-    await pool.end();
+    await pool_1.pool.end();
     process.exit(0);
 });
 process.on('SIGTERM', async () => {
     console.log('Shutting down gracefully...');
-    await pool.end();
+    await pool_1.pool.end();
     process.exit(0);
 });
 const server = app.listen(PORT, '0.0.0.0', () => {
@@ -494,15 +430,16 @@ server.on('close', () => {
 async function initializeDatabaseConnection() {
     try {
         console.log('🔗 Попытка подключения к базе данных...');
+        const databaseUrl = (0, pool_1.getDatabaseUrl)();
         if (databaseUrl) {
             const maskedUrl = databaseUrl.length > 30
                 ? `${databaseUrl.substring(0, 20)}...${databaseUrl.substring(databaseUrl.length - 10)}`
                 : '***';
             console.log(`📊 DATABASE_URL: ${maskedUrl}`);
         }
-        await pool.query('SELECT 1');
+        await pool_1.pool.query('SELECT 1');
         console.log('✅ Подключение к базе данных установлено');
-        await (0, db_init_1.initializeDatabase)(pool);
+        await (0, db_init_1.initializeDatabase)(pool_1.pool);
         console.log('✅ База данных инициализирована');
     }
     catch (error) {

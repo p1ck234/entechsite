@@ -5,12 +5,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const express_validator_1 = require("express-validator");
-const pg_1 = require("pg");
+const pool_1 = require("../db/pool");
 const auth_1 = require("../middleware/auth");
 const router = express_1.default.Router();
-const pool = new pg_1.Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
-});
 router.get('/', auth_1.authenticateToken, [
     (0, express_validator_1.query)('startDate').optional().isISO8601(),
     (0, express_validator_1.query)('endDate').optional().isISO8601(),
@@ -43,7 +40,7 @@ router.get('/', auth_1.authenticateToken, [
             const lastDay = new Date(year, month, 0).getDate();
             endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
         }
-        const result = await pool.query(`SELECT 
+        const result = await pool_1.pool.query(`SELECT 
          ce.id,
          ce.title,
          ce.description,
@@ -69,7 +66,7 @@ router.get('/', auth_1.authenticateToken, [
 router.get('/:id', auth_1.authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await pool.query(`SELECT 
+        const result = await pool_1.pool.query(`SELECT 
          ce.id,
          ce.title,
          ce.description,
@@ -132,7 +129,7 @@ router.post('/', auth_1.authenticateToken, [
             console.error('User not found in request');
             return res.status(401).json({ message: 'User not authenticated' });
         }
-        const result = await pool.query(`INSERT INTO calendar_events (title, description, event_date, event_time, location, is_all_day, created_by)
+        const result = await pool_1.pool.query(`INSERT INTO calendar_events (title, description, event_date, event_time, location, is_all_day, created_by)
        VALUES ($1, $2, $3::DATE, $4, $5, $6, $7) 
        RETURNING 
          id,
@@ -187,7 +184,7 @@ router.put('/:id', auth_1.authenticateToken, [
             }
             updateData.eventTime = timeStr;
         }
-        const existingEvent = await pool.query('SELECT * FROM calendar_events WHERE id = $1', [id]);
+        const existingEvent = await pool_1.pool.query('SELECT * FROM calendar_events WHERE id = $1', [id]);
         if (existingEvent.rows.length === 0) {
             return res.status(404).json({ message: 'Event not found' });
         }
@@ -213,7 +210,7 @@ router.put('/:id', auth_1.authenticateToken, [
             return res.status(400).json({ message: 'No fields to update' });
         }
         values.push(id);
-        const result = await pool.query(`UPDATE calendar_events 
+        const result = await pool_1.pool.query(`UPDATE calendar_events 
        SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP 
        WHERE id = $${paramCount + 1} 
        RETURNING 
@@ -243,11 +240,11 @@ router.delete('/:id', auth_1.authenticateToken, async (req, res) => {
             return res.status(403).json({ message: 'Admin access required' });
         }
         const { id } = req.params;
-        const event = await pool.query('SELECT id FROM calendar_events WHERE id = $1', [id]);
+        const event = await pool_1.pool.query('SELECT id FROM calendar_events WHERE id = $1', [id]);
         if (event.rows.length === 0) {
             return res.status(404).json({ message: 'Event not found' });
         }
-        await pool.query('DELETE FROM calendar_events WHERE id = $1', [id]);
+        await pool_1.pool.query('DELETE FROM calendar_events WHERE id = $1', [id]);
         res.json({ message: 'Calendar event deleted successfully' });
     }
     catch (error) {

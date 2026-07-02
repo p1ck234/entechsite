@@ -6,12 +6,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const express_validator_1 = require("express-validator");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const pg_1 = require("pg");
+const pool_1 = require("../db/pool");
 const auth_1 = require("../middleware/auth");
 const router = express_1.default.Router();
-const pool = new pg_1.Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
-});
 const normalizeTelegramUsername = (username) => {
     if (!username) {
         return null;
@@ -39,18 +36,18 @@ router.post('/', auth_1.authenticateToken, auth_1.requireAdmin, [
         }
         const { email, password, role, firstName, lastName, middleName, position, department, phone, telegram, photo } = req.body;
         const normalizedTelegram = normalizeTelegramUsername(telegram);
-        const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+        const existingUser = await pool_1.pool.query('SELECT id FROM users WHERE email = $1', [email]);
         if (existingUser.rows.length > 0) {
             return res.status(400).json({ message: 'User with this email already exists' });
         }
-        const existingEmployee = await pool.query('SELECT id FROM employees WHERE email = $1 AND is_active = true', [email]);
+        const existingEmployee = await pool_1.pool.query('SELECT id FROM employees WHERE email = $1 AND is_active = true', [email]);
         if (existingEmployee.rows.length > 0) {
             return res.status(400).json({ message: 'Employee with this email already exists' });
         }
         const hashedPassword = await bcryptjs_1.default.hash(password, 12);
-        const userResult = await pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING id, email, role, created_at', [email, hashedPassword, role]);
+        const userResult = await pool_1.pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING id, email, role, created_at', [email, hashedPassword, role]);
         const user = userResult.rows[0];
-        const employeeResult = await pool.query(`INSERT INTO employees (first_name, last_name, middle_name, position, department, email, phone, telegram, photo)
+        const employeeResult = await pool_1.pool.query(`INSERT INTO employees (first_name, last_name, middle_name, position, department, email, phone, telegram, photo)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`, [firstName, lastName, middleName, position, department, email, phone, normalizedTelegram, photo]);
         res.status(201).json({
             message: 'User and employee created successfully',
@@ -65,7 +62,7 @@ router.post('/', auth_1.authenticateToken, auth_1.requireAdmin, [
 });
 router.get('/', auth_1.authenticateToken, auth_1.requireAdmin, async (req, res) => {
     try {
-        const result = await pool.query('SELECT id, email, role, created_at, updated_at FROM users ORDER BY created_at DESC');
+        const result = await pool_1.pool.query('SELECT id, email, role, created_at, updated_at FROM users ORDER BY created_at DESC');
         res.json({ users: result.rows });
     }
     catch (error) {
@@ -75,7 +72,7 @@ router.get('/', auth_1.authenticateToken, auth_1.requireAdmin, async (req, res) 
 });
 router.get('/pending-registrations', auth_1.authenticateToken, auth_1.requireAdmin, async (req, res) => {
     try {
-        const result = await pool.query(`SELECT id, first_name, last_name, middle_name, position, department, email, phone, telegram, status, created_at
+        const result = await pool_1.pool.query(`SELECT id, first_name, last_name, middle_name, position, department, email, phone, telegram, status, created_at
        FROM employees 
        WHERE status = 'PENDING' 
        ORDER BY created_at DESC`);
@@ -89,7 +86,7 @@ router.get('/pending-registrations', auth_1.authenticateToken, auth_1.requireAdm
 router.post('/approve-registration/:id', auth_1.authenticateToken, auth_1.requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        const employeeResult = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
+        const employeeResult = await pool_1.pool.query('SELECT * FROM employees WHERE id = $1', [id]);
         if (employeeResult.rows.length === 0) {
             return res.status(404).json({ message: 'Заявка не найдена' });
         }
@@ -97,12 +94,12 @@ router.post('/approve-registration/:id', auth_1.authenticateToken, auth_1.requir
         if (employee.status !== 'PENDING') {
             return res.status(400).json({ message: `Заявка уже обработана. Текущий статус: ${employee.status}` });
         }
-        await pool.query('UPDATE employees SET status = $1, is_active = $2 WHERE id = $3', ['APPROVED', true, id]);
-        const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [employee.email]);
+        await pool_1.pool.query('UPDATE employees SET status = $1, is_active = $2 WHERE id = $3', ['APPROVED', true, id]);
+        const userResult = await pool_1.pool.query('SELECT id FROM users WHERE email = $1', [employee.email]);
         if (userResult.rows.length === 0) {
             const randomPassword = Math.random().toString(36).slice(-12);
             const hashedPassword = await bcryptjs_1.default.hash(randomPassword, 12);
-            await pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3)', [employee.email, hashedPassword, 'USER']);
+            await pool_1.pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3)', [employee.email, hashedPassword, 'USER']);
         }
         console.log('✅ Заявка одобрена:', {
             employeeId: id,
@@ -126,7 +123,7 @@ router.post('/approve-registration/:id', auth_1.authenticateToken, auth_1.requir
 router.post('/reject-registration/:id', auth_1.authenticateToken, auth_1.requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        const employeeResult = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
+        const employeeResult = await pool_1.pool.query('SELECT * FROM employees WHERE id = $1', [id]);
         if (employeeResult.rows.length === 0) {
             return res.status(404).json({ message: 'Заявка не найдена' });
         }
@@ -134,7 +131,7 @@ router.post('/reject-registration/:id', auth_1.authenticateToken, auth_1.require
         if (employee.status !== 'PENDING') {
             return res.status(400).json({ message: `Заявка уже обработана. Текущий статус: ${employee.status}` });
         }
-        await pool.query('UPDATE employees SET status = $1, is_active = $2 WHERE id = $3', ['REJECTED', false, id]);
+        await pool_1.pool.query('UPDATE employees SET status = $1, is_active = $2 WHERE id = $3', ['REJECTED', false, id]);
         console.log('❌ Заявка отклонена:', {
             employeeId: id,
             email: employee.email,
@@ -157,7 +154,7 @@ router.post('/reject-registration/:id', auth_1.authenticateToken, auth_1.require
 router.get('/:id', auth_1.authenticateToken, auth_1.requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await pool.query('SELECT id, email, role, created_at, updated_at FROM users WHERE id = $1', [id]);
+        const result = await pool_1.pool.query('SELECT id, email, role, created_at, updated_at FROM users WHERE id = $1', [id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
@@ -181,11 +178,11 @@ router.put('/:id/role', auth_1.authenticateToken, auth_1.requireAdmin, [
         if (id === req.user?.id) {
             return res.status(400).json({ message: 'Cannot change your own role' });
         }
-        const user = await pool.query('SELECT id FROM users WHERE id = $1', [id]);
+        const user = await pool_1.pool.query('SELECT id FROM users WHERE id = $1', [id]);
         if (user.rows.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
-        const result = await pool.query('UPDATE users SET role = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id, email, role, updated_at', [role, id]);
+        const result = await pool_1.pool.query('UPDATE users SET role = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id, email, role, updated_at', [role, id]);
         res.json({
             message: 'User role updated successfully',
             user: result.rows[0]
@@ -206,12 +203,12 @@ router.put('/password-by-email', auth_1.authenticateToken, auth_1.requireAdmin, 
             return res.status(400).json({ errors: errors.array() });
         }
         const { email, newPassword } = req.body;
-        const user = await pool.query('SELECT id, email FROM users WHERE email = $1', [email]);
+        const user = await pool_1.pool.query('SELECT id, email FROM users WHERE email = $1', [email]);
         if (user.rows.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
         const hashedPassword = await bcryptjs_1.default.hash(newPassword, 12);
-        await pool.query('UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE email = $2', [hashedPassword, email]);
+        await pool_1.pool.query('UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE email = $2', [hashedPassword, email]);
         res.json({
             message: 'Password changed successfully',
             email: email
@@ -233,7 +230,7 @@ router.put('/change-password', auth_1.authenticateToken, [
         }
         const { currentPassword, newPassword } = req.body;
         const userId = req.user.id;
-        const result = await pool.query('SELECT password FROM users WHERE id = $1', [userId]);
+        const result = await pool_1.pool.query('SELECT password FROM users WHERE id = $1', [userId]);
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
@@ -242,7 +239,7 @@ router.put('/change-password', auth_1.authenticateToken, [
             return res.status(400).json({ message: 'Current password is incorrect' });
         }
         const hashedNewPassword = await bcryptjs_1.default.hash(newPassword, 12);
-        await pool.query('UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [hashedNewPassword, userId]);
+        await pool_1.pool.query('UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [hashedNewPassword, userId]);
         res.json({ message: 'Password changed successfully' });
     }
     catch (error) {
@@ -256,11 +253,11 @@ router.delete('/:id', auth_1.authenticateToken, auth_1.requireAdmin, async (req,
         if (id === req.user?.id) {
             return res.status(400).json({ message: 'Cannot delete your own account' });
         }
-        const user = await pool.query('SELECT id FROM users WHERE id = $1', [id]);
+        const user = await pool_1.pool.query('SELECT id FROM users WHERE id = $1', [id]);
         if (user.rows.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
-        await pool.query('DELETE FROM users WHERE id = $1', [id]);
+        await pool_1.pool.query('DELETE FROM users WHERE id = $1', [id]);
         res.json({ message: 'User deleted successfully' });
     }
     catch (error) {

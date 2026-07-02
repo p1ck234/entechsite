@@ -1,5 +1,5 @@
 import express from 'express';
-import { Pool } from 'pg';
+import { pool } from '../db/pool';
 import type sharp from 'sharp';
 import { authenticateToken } from '../middleware/auth';
 import { DriveCourseFolder, DriveFileItem, getDriveMediaKind, getLifeDriveItems, getTrainingDriveTree, listMediaInDriveResource, readDriveFileBuffer, streamDriveMediaContent, toDriveImageRef } from '../services/googleDrive';
@@ -11,9 +11,6 @@ import {
 import { invalidateAllDriveListCaches } from '../utils/driveListCache';
 
 const router = express.Router();
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
-});
 
 interface SyncStats {
   coursesCreated: number;
@@ -345,7 +342,6 @@ router.post('/sync-training', authenticateToken, async (req: any, res: any) => {
     return res.status(403).json({ message: 'Admin access required' });
   }
 
-  const client = await pool.connect();
   const stats: SyncStats = {
     coursesCreated: 0,
     coursesUpdated: 0,
@@ -356,8 +352,11 @@ router.post('/sync-training', authenticateToken, async (req: any, res: any) => {
     lessonsArchived: 0,
   };
 
+  let client;
+
   try {
     const driveTree = await getTrainingDriveTree();
+    client = await pool.connect();
 
     await client.query('BEGIN');
     for (const courseFolder of driveTree.courses) {
@@ -373,13 +372,19 @@ router.post('/sync-training', authenticateToken, async (req: any, res: any) => {
       ...stats,
     });
   } catch (error: any) {
-    await client.query('ROLLBACK');
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // транзакция могла не начаться
+      }
+    }
     console.error('Google Drive training sync error:', error);
     res.status(500).json({
       message: error?.message || 'Ошибка синхронизации Google Drive',
     });
   } finally {
-    client.release();
+    client?.release();
   }
 });
 
@@ -388,7 +393,6 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
     return res.status(403).json({ message: 'Admin access required' });
   }
 
-  const client = await pool.connect();
   const stats: LifeSyncStats = {
     eventsFound: 0,
     eventsCreated: 0,
@@ -397,16 +401,25 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
     eventsArchived: 0,
     eventsSkippedNoDate: 0,
   };
-  const activeEventUrls: string[] = [];
+
+  let client;
 
   try {
     const driveLife = await getLifeDriveItems();
     stats.eventsFound = driveLife.items.length;
 
-    await client.query('BEGIN');
+    const preparedEvents: Array<{
+      eventUrl: string;
+      eventUrlCandidates: string[];
+      title: string;
+      eventDate: string;
+      photos: ReturnType<typeof mapDriveItemsToEventPhotos>;
+      previewImages: string[];
+    }> = [];
 
     for (const item of driveLife.items) {
-      const eventUrl = item.webViewLink || (isDriveFolder(item) ? getDriveFolderUrl(item.id) : getDriveFileUrl(item.id));
+      const eventUrl =
+        item.webViewLink || (isDriveFolder(item) ? getDriveFolderUrl(item.id) : getDriveFileUrl(item.id));
       const eventUrlCandidates = getUniqueUrls(eventUrl, item.webViewLink);
       const { title, eventDate } = parseDriveLifeTitle(item.name);
 
@@ -415,26 +428,42 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
         continue;
       }
 
-      activeEventUrls.push(eventUrl);
       const { photos, previewImages } = await buildLifeEventMedia(item);
+      preparedEvents.push({
+        eventUrl,
+        eventUrlCandidates,
+        title,
+        eventDate,
+        photos,
+        previewImages,
+      });
+    }
+
+    const activeEventUrls = preparedEvents.map((event) => event.eventUrl);
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    for (const prepared of preparedEvents) {
       const existingEvent = await client.query(
         `SELECT id, title, description, google_drive_url, event_date, preview_images, media_items, is_active
          FROM events
          WHERE google_drive_url = ANY($1::text[])
          LIMIT 1`,
-        [eventUrlCandidates]
+        [prepared.eventUrlCandidates]
       );
 
       if (existingEvent.rows.length > 0) {
         const existing = existingEvent.rows[0];
-        const existingDate = existing.event_date ? new Date(existing.event_date).toISOString().slice(0, 10) : null;
+        const existingDate = existing.event_date
+          ? new Date(existing.event_date).toISOString().slice(0, 10)
+          : null;
         const unchanged =
-          existing.title === title &&
+          existing.title === prepared.title &&
           (existing.description || null) === DRIVE_LIFE_DESCRIPTION &&
-          existing.google_drive_url === eventUrl &&
-          existingDate === eventDate &&
-          arePreviewImagesEqual(existing.preview_images, previewImages) &&
-          areEventPhotosEqual(existing.media_items, photos) &&
+          existing.google_drive_url === prepared.eventUrl &&
+          existingDate === prepared.eventDate &&
+          arePreviewImagesEqual(existing.preview_images, prepared.previewImages) &&
+          areEventPhotosEqual(existing.media_items, prepared.photos) &&
           existing.is_active === true;
 
         if (unchanged) {
@@ -454,7 +483,15 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
                is_active = true,
                updated_at = CURRENT_TIMESTAMP
            WHERE id = $7`,
-          [title, DRIVE_LIFE_DESCRIPTION, eventUrl, previewImages, eventDate, JSON.stringify(photos), existing.id]
+          [
+            prepared.title,
+            DRIVE_LIFE_DESCRIPTION,
+            prepared.eventUrl,
+            prepared.previewImages,
+            prepared.eventDate,
+            JSON.stringify(prepared.photos),
+            existing.id,
+          ]
         );
         stats.eventsUpdated += 1;
         continue;
@@ -463,7 +500,14 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
       await client.query(
         `INSERT INTO events (title, description, google_drive_url, preview_images, event_date, media_items, media_synced_at, is_active)
          VALUES ($1, $2, $3, $4, $5, $6::jsonb, CURRENT_TIMESTAMP, true)`,
-        [title, DRIVE_LIFE_DESCRIPTION, eventUrl, previewImages, eventDate, JSON.stringify(photos)]
+        [
+          prepared.title,
+          DRIVE_LIFE_DESCRIPTION,
+          prepared.eventUrl,
+          prepared.previewImages,
+          prepared.eventDate,
+          JSON.stringify(prepared.photos),
+        ]
       );
       stats.eventsCreated += 1;
     }
@@ -487,13 +531,19 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
       ...stats,
     });
   } catch (error: any) {
-    await client.query('ROLLBACK');
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // транзакция могла не начаться
+      }
+    }
     console.error('Google Drive life sync error:', error);
     res.status(500).json({
       message: error?.message || 'Ошибка синхронизации Google Drive',
     });
   } finally {
-    client.release();
+    client?.release();
   }
 });
 

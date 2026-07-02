@@ -2,12 +2,9 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
-import { Pool } from 'pg';
+import { pool } from '../db/pool';
 
 const router = express.Router();
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
-});
 
 const normalizeTelegramUsername = (username?: string | null): string | null => {
   if (!username) {

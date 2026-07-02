@@ -3,8 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import { Pool } from 'pg';
 import { Readable } from 'stream';
+import { getDatabaseUrl, pool } from './db/pool';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -27,96 +27,7 @@ import type sharp from 'sharp';
 
 dotenv.config();
 
-// Проверяем DATABASE_URL и пытаемся собрать его из отдельных переменных PostgreSQL
-let databaseUrl = process.env.DATABASE_URL;
-
-// Если DATABASE_URL не настроен или содержит шаблон Railway, пытаемся собрать из отдельных переменных
-if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
-  // Проверяем переменные PostgreSQL (Railway автоматически создает их для PostgreSQL сервиса)
-  const pgHost = process.env.PGHOST;
-  const pgPort = process.env.PGPORT || '5432';
-  const pgUser = process.env.PGUSER;
-  const pgPassword = process.env.PGPASSWORD;
-  const pgDatabase = process.env.PGDATABASE;
-  
-  // Если есть все необходимые переменные, собираем DATABASE_URL
-  if (pgHost && pgUser && pgPassword && pgDatabase) {
-    databaseUrl = `postgresql://${pgUser}:${pgPassword}@${pgHost}:${pgPort}/${pgDatabase}`;
-    console.log('✅ DATABASE_URL собран из переменных PostgreSQL');
-  } else {
-    // Проверяем альтернативные имена переменных
-    databaseUrl = process.env.POSTGRES_URL || 
-                  process.env.POSTGRES_DATABASE_URL ||
-                  process.env.DATABASE_CONNECTION_STRING;
-  }
-  
-  // Пытаемся найти переменные через возможные имена сервисов Railway
-  if ((!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') && !pgHost) {
-    // Проверяем все переменные окружения на наличие DATABASE_URL от разных сервисов
-    const possibleServiceNames = ['Postgres', 'PostgreSQL', 'Database', 'Postgresql', 'DB', 'pg'];
-    const allEnvKeys = Object.keys(process.env);
-    
-    for (const serviceName of possibleServiceNames) {
-      // Railway может создавать переменные в формате SERVICE_NAME_DATABASE_URL
-      const possibleKeys = [
-        `${serviceName}_DATABASE_URL`,
-        `${serviceName.toUpperCase()}_DATABASE_URL`,
-        `${serviceName.toLowerCase()}_DATABASE_URL`,
-      ];
-      
-      for (const key of possibleKeys) {
-        if (process.env[key] && !process.env[key].includes('{{')) {
-          databaseUrl = process.env[key];
-          console.log(`✅ DATABASE_URL найден в переменной: ${key}`);
-          break;
-        }
-      }
-      if (databaseUrl && !databaseUrl.includes('{{')) break;
-    }
-  }
-  
-  if (!databaseUrl || databaseUrl.includes('{{') || databaseUrl.trim() === '') {
-    // Fallback: используем внутренний Railway URL для PostgreSQL
-    const railwayInternalUrl = 'postgresql://postgres:fMRvspHdgKpSjCIPQDizWQFwpYPNNtJf@postgres.railway.internal:5432/railway';
-    console.warn('⚠️ DATABASE_URL не найден в переменных окружения');
-    console.warn('📦 Используем fallback Railway internal URL');
-    databaseUrl = railwayInternalUrl;
-    
-    console.log('\n📊 Доступные переменные PostgreSQL:');
-    const pgVars = ['PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE'];
-    pgVars.forEach(key => {
-      const value = process.env[key];
-      console.log(`   ${key}: ${value ? '✓ установлена' : '✗ не установлена'}`);
-    });
-    
-    console.log('\n📋 Все переменные, содержащие "DATABASE" или "POSTGRES":');
-    const dbRelatedVars = Object.keys(process.env).filter(key => 
-      key.toUpperCase().includes('DATABASE') || 
-      key.toUpperCase().includes('POSTGRES') ||
-      key.toUpperCase().includes('PG')
-    );
-    if (dbRelatedVars.length > 0) {
-      dbRelatedVars.forEach(key => {
-        const value = process.env[key];
-        const masked = value && value.length > 30 
-          ? `${value.substring(0, 15)}...${value.substring(value.length - 10)}`
-          : (value || '<empty>');
-        console.log(`   ${key}: ${masked}`);
-      });
-    } else {
-      console.log('   (переменные не найдены)');
-    }
-  } else {
-    console.log('✅ DATABASE_URL найден в переменных окружения');
-  }
-}
-
 const app = express();
-
-// Создаем pool - Railway всегда предоставляет DATABASE_URL
-const pool = new Pool({
-  connectionString: databaseUrl || 'postgresql://localhost:5432/entechsite',
-});
 
 // Railway автоматически устанавливает PORT, но если его нет, используем 3001
 // В Railway PORT всегда должен быть установлен
@@ -569,6 +480,15 @@ app.use('*', (req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
+process.on('unhandledRejection', (reason) => {
+  console.error('unhandledRejection:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('uncaughtException:', error);
+  process.exit(1);
+});
+
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('Shutting down gracefully...');
@@ -627,6 +547,7 @@ server.on('close', () => {
 async function initializeDatabaseConnection() {
   try {
     console.log('🔗 Попытка подключения к базе данных...');
+    const databaseUrl = getDatabaseUrl();
     if (databaseUrl) {
       const maskedUrl = databaseUrl.length > 30 
         ? `${databaseUrl.substring(0, 20)}...${databaseUrl.substring(databaseUrl.length - 10)}`

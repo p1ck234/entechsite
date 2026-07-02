@@ -5,18 +5,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const express_validator_1 = require("express-validator");
-const pg_1 = require("pg");
+const pool_1 = require("../db/pool");
 const auth_1 = require("../middleware/auth");
 const googleDrive_1 = require("../services/googleDrive");
 const router = express_1.default.Router();
-const pool = new pg_1.Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
-});
 router.get('/course/:courseId', auth_1.authenticateToken, async (req, res) => {
     try {
         const { courseId } = req.params;
         const userId = req.user.id;
-        const lessonsResult = await pool.query(`SELECT l.*, 
+        const lessonsResult = await pool_1.pool.query(`SELECT l.*, 
               lp.completed, lp.started_at, lp.completed_at
        FROM lessons l
        LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
@@ -40,7 +37,7 @@ router.get('/course/:courseId', auth_1.authenticateToken, async (req, res) => {
 router.get('/:id/materials', auth_1.authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const lessonResult = await pool.query('SELECT id, title, google_drive_url FROM lessons WHERE id = $1 AND is_active = true', [id]);
+        const lessonResult = await pool_1.pool.query('SELECT id, title, google_drive_url FROM lessons WHERE id = $1 AND is_active = true', [id]);
         if (lessonResult.rows.length === 0) {
             return res.status(404).json({ message: 'Lesson not found' });
         }
@@ -76,7 +73,7 @@ router.get('/:id', auth_1.authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user.id;
-        const lessonResult = await pool.query(`SELECT l.*, 
+        const lessonResult = await pool_1.pool.query(`SELECT l.*, 
               lp.completed, lp.started_at, lp.completed_at
        FROM lessons l
        LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
@@ -117,11 +114,11 @@ router.post('/', auth_1.authenticateToken, [
             return res.status(403).json({ message: 'Admin access required' });
         }
         const { courseId, title, description, googleDriveUrl, duration, orderIndex = 0 } = req.body;
-        const courseResult = await pool.query('SELECT id FROM courses WHERE id = $1', [courseId]);
+        const courseResult = await pool_1.pool.query('SELECT id FROM courses WHERE id = $1', [courseId]);
         if (courseResult.rows.length === 0) {
             return res.status(404).json({ message: 'Course not found' });
         }
-        const result = await pool.query(`INSERT INTO lessons (course_id, title, description, google_drive_url, duration, order_index)
+        const result = await pool_1.pool.query(`INSERT INTO lessons (course_id, title, description, google_drive_url, duration, order_index)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`, [courseId, title, description, googleDriveUrl, duration, orderIndex]);
         res.status(201).json({
             message: 'Lesson created successfully',
@@ -151,7 +148,7 @@ router.put('/:id', auth_1.authenticateToken, [
         }
         const { id } = req.params;
         const updateData = req.body;
-        const lesson = await pool.query('SELECT id FROM lessons WHERE id = $1', [id]);
+        const lesson = await pool_1.pool.query('SELECT id FROM lessons WHERE id = $1', [id]);
         if (lesson.rows.length === 0) {
             return res.status(404).json({ message: 'Lesson not found' });
         }
@@ -172,7 +169,7 @@ router.put('/:id', auth_1.authenticateToken, [
             return res.status(400).json({ message: 'No fields to update' });
         }
         values.push(id);
-        const result = await pool.query(`UPDATE lessons SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount + 1} RETURNING *`, values);
+        const result = await pool_1.pool.query(`UPDATE lessons SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount + 1} RETURNING *`, values);
         res.json({
             message: 'Lesson updated successfully',
             lesson: result.rows[0]
@@ -189,11 +186,11 @@ router.delete('/:id', auth_1.authenticateToken, async (req, res) => {
             return res.status(403).json({ message: 'Admin access required' });
         }
         const { id } = req.params;
-        const lesson = await pool.query('SELECT id FROM lessons WHERE id = $1', [id]);
+        const lesson = await pool_1.pool.query('SELECT id FROM lessons WHERE id = $1', [id]);
         if (lesson.rows.length === 0) {
             return res.status(404).json({ message: 'Lesson not found' });
         }
-        await pool.query('UPDATE lessons SET is_active = false WHERE id = $1', [id]);
+        await pool_1.pool.query('UPDATE lessons SET is_active = false WHERE id = $1', [id]);
         res.json({ message: 'Lesson deactivated successfully' });
     }
     catch (error) {
@@ -212,12 +209,12 @@ router.post('/:id/progress', auth_1.authenticateToken, [
         const { id } = req.params;
         const { completed } = req.body;
         const userId = req.user.id;
-        const lesson = await pool.query('SELECT id, course_id FROM lessons WHERE id = $1', [id]);
+        const lesson = await pool_1.pool.query('SELECT id, course_id FROM lessons WHERE id = $1', [id]);
         if (lesson.rows.length === 0) {
             return res.status(404).json({ message: 'Lesson not found' });
         }
         const courseId = lesson.rows[0].course_id;
-        const result = await pool.query(`INSERT INTO lesson_progress (user_id, lesson_id, completed, completed_at)
+        const result = await pool_1.pool.query(`INSERT INTO lesson_progress (user_id, lesson_id, completed, completed_at)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (user_id, lesson_id)
        DO UPDATE SET completed = $3, completed_at = $4
@@ -235,15 +232,15 @@ router.post('/:id/progress', auth_1.authenticateToken, [
 });
 async function updateCourseProgress(userId, courseId) {
     try {
-        const totalLessonsResult = await pool.query('SELECT COUNT(*) FROM lessons WHERE course_id = $1 AND is_active = true', [courseId]);
+        const totalLessonsResult = await pool_1.pool.query('SELECT COUNT(*) FROM lessons WHERE course_id = $1 AND is_active = true', [courseId]);
         const totalLessons = parseInt(totalLessonsResult.rows[0].count);
-        const completedLessonsResult = await pool.query(`SELECT COUNT(*) FROM lesson_progress lp
+        const completedLessonsResult = await pool_1.pool.query(`SELECT COUNT(*) FROM lesson_progress lp
        JOIN lessons l ON lp.lesson_id = l.id
        WHERE lp.user_id = $1 AND l.course_id = $2 AND lp.completed = true`, [userId, courseId]);
         const completedLessons = parseInt(completedLessonsResult.rows[0].count);
         const progress = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
         const completed = progress === 100;
-        await pool.query(`INSERT INTO course_progress (user_id, course_id, progress, completed, completed_at)
+        await pool_1.pool.query(`INSERT INTO course_progress (user_id, course_id, progress, completed, completed_at)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (user_id, course_id)
        DO UPDATE SET progress = $3, completed = $4, completed_at = $5`, [userId, courseId, progress, completed, completed ? new Date() : null]);

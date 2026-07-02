@@ -1,13 +1,10 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import { Pool } from 'pg';
+import { pool } from '../db/pool';
 import { authenticateToken } from '../middleware/auth';
 import { getDriveContentKind, listLessonMaterialsInDriveResource, toDriveImageRef } from '../services/googleDrive';
 
 const router = express.Router();
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
-});
 
 // Get lessons for a course
 router.get('/course/:courseId', authenticateToken, async (req: any, res: any) => {

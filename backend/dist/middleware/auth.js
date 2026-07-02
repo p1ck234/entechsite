@@ -5,10 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.requireAdmin = exports.authenticateToken = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const pg_1 = require("pg");
-const pool = new pg_1.Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
-});
+const pool_1 = require("../db/pool");
 const resolveRequestToken = (req) => {
     const authHeader = req.headers['authorization'];
     const headerToken = authHeader && authHeader.split(' ')[1];
@@ -23,7 +20,7 @@ const authenticateToken = async (req, res, next) => {
     try {
         const jwtSecret = process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-change-this-in-production';
         const decoded = jsonwebtoken_1.default.verify(token, jwtSecret);
-        const result = await pool.query('SELECT id, email, role FROM users WHERE id = $1', [decoded.userId]);
+        const result = await pool_1.pool.query('SELECT id, email, role FROM users WHERE id = $1', [decoded.userId]);
         if (result.rows.length === 0) {
             return res.status(401).json({ message: 'Invalid token' });
         }

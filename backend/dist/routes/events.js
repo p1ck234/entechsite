@@ -5,17 +5,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const express_validator_1 = require("express-validator");
-const pg_1 = require("pg");
+const pool_1 = require("../db/pool");
 const auth_1 = require("../middleware/auth");
 const googleDrive_1 = require("../services/googleDrive");
 const eventMedia_1 = require("../utils/eventMedia");
 const driveListCache_1 = require("../utils/driveListCache");
 const router = express_1.default.Router();
-const pool = new pg_1.Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
-});
 const persistEventPhotos = async (eventId, photos) => {
-    await pool.query(`UPDATE events
+    await pool_1.pool.query(`UPDATE events
      SET media_items = $1::jsonb,
          media_synced_at = CURRENT_TIMESTAMP,
          updated_at = CURRENT_TIMESTAMP
@@ -44,11 +41,11 @@ router.get('/', auth_1.authenticateToken, [
         const limit = parseInt(req.query.limit) || 20;
         const skip = (page - 1) * limit;
         const [eventsResult, totalResult] = await Promise.all([
-            pool.query(`SELECT * FROM events 
+            pool_1.pool.query(`SELECT * FROM events 
          WHERE is_active = true 
          ORDER BY event_date DESC NULLS LAST, created_at DESC 
          LIMIT $1 OFFSET $2`, [limit, skip]),
-            pool.query('SELECT COUNT(*) FROM events WHERE is_active = true')
+            pool_1.pool.query('SELECT COUNT(*) FROM events WHERE is_active = true')
         ]);
         const events = eventsResult.rows;
         const total = parseInt(totalResult.rows[0].count);
@@ -71,7 +68,7 @@ router.get('/:id/photos', auth_1.authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         const forceRefresh = req.query.refresh === '1' && req.user?.role === 'ADMIN';
-        const result = await pool.query(`SELECT id, title, google_drive_url, media_items, media_synced_at
+        const result = await pool_1.pool.query(`SELECT id, title, google_drive_url, media_items, media_synced_at
        FROM events
        WHERE id = $1 AND is_active = true`, [id]);
         if (result.rows.length === 0) {
@@ -100,7 +97,7 @@ router.get('/:id/photos', auth_1.authenticateToken, async (req, res) => {
 router.get('/:id', auth_1.authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await pool.query('SELECT * FROM events WHERE id = $1', [id]);
+        const result = await pool_1.pool.query('SELECT * FROM events WHERE id = $1', [id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'Event not found' });
         }
@@ -127,7 +124,7 @@ router.post('/', auth_1.authenticateToken, [
             return res.status(400).json({ errors: errors.array() });
         }
         const { title, description, googleDriveUrl, previewImages = [], eventDate } = req.body;
-        const result = await pool.query(`INSERT INTO events (title, description, google_drive_url, preview_images, event_date)
+        const result = await pool_1.pool.query(`INSERT INTO events (title, description, google_drive_url, preview_images, event_date)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`, [title, description, googleDriveUrl, previewImages, eventDate || null]);
         res.status(201).json({
             message: 'Event created successfully',
@@ -157,7 +154,7 @@ router.put('/:id', auth_1.authenticateToken, [
         }
         const { id } = req.params;
         const updateData = req.body;
-        const existingEvent = await pool.query('SELECT * FROM events WHERE id = $1', [id]);
+        const existingEvent = await pool_1.pool.query('SELECT * FROM events WHERE id = $1', [id]);
         if (existingEvent.rows.length === 0) {
             return res.status(404).json({ message: 'Event not found' });
         }
@@ -188,7 +185,7 @@ router.put('/:id', auth_1.authenticateToken, [
             return res.status(400).json({ message: 'No fields to update' });
         }
         values.push(id);
-        const result = await pool.query(`UPDATE events SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount + 1} RETURNING *`, values);
+        const result = await pool_1.pool.query(`UPDATE events SET ${updateFields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramCount + 1} RETURNING *`, values);
         res.json({
             message: 'Event updated successfully',
             event: result.rows[0]
@@ -205,11 +202,11 @@ router.delete('/:id', auth_1.authenticateToken, async (req, res) => {
             return res.status(403).json({ message: 'Admin access required' });
         }
         const { id } = req.params;
-        const event = await pool.query('SELECT id FROM events WHERE id = $1', [id]);
+        const event = await pool_1.pool.query('SELECT id FROM events WHERE id = $1', [id]);
         if (event.rows.length === 0) {
             return res.status(404).json({ message: 'Event not found' });
         }
-        await pool.query('UPDATE events SET is_active = false WHERE id = $1', [id]);
+        await pool_1.pool.query('UPDATE events SET is_active = false WHERE id = $1', [id]);
         res.json({ message: 'Event deleted successfully' });
     }
     catch (error) {

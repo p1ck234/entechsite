@@ -5,12 +5,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const express_validator_1 = require("express-validator");
-const pg_1 = require("pg");
+const pool_1 = require("../db/pool");
 const auth_1 = require("../middleware/auth");
 const router = express_1.default.Router();
-const pool = new pg_1.Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
-});
 router.get('/', auth_1.authenticateToken, [
     (0, express_validator_1.query)('page').optional().isInt({ min: 1 }),
     (0, express_validator_1.query)('limit').optional().isInt({ min: 1, max: 100 }),
@@ -34,8 +31,8 @@ router.get('/', auth_1.authenticateToken, [
             params.push(`%${search}%`);
         }
         const [botsResult, totalResult] = await Promise.all([
-            pool.query(`SELECT * FROM bots ${whereClause} ORDER BY created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`, [...params, limit, skip]),
-            pool.query(`SELECT COUNT(*) FROM bots ${whereClause}`, params)
+            pool_1.pool.query(`SELECT * FROM bots ${whereClause} ORDER BY created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`, [...params, limit, skip]),
+            pool_1.pool.query(`SELECT COUNT(*) FROM bots ${whereClause}`, params)
         ]);
         const bots = botsResult.rows;
         const total = parseInt(totalResult.rows[0].count);
@@ -57,7 +54,7 @@ router.get('/', auth_1.authenticateToken, [
 router.get('/:id', auth_1.authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await pool.query('SELECT * FROM bots WHERE id = $1', [id]);
+        const result = await pool_1.pool.query('SELECT * FROM bots WHERE id = $1', [id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'Bot not found' });
         }
@@ -89,7 +86,7 @@ router.post('/', auth_1.authenticateToken, auth_1.requireAdmin, [
             return res.status(400).json({ message: 'URL is required for site type' });
         }
         const cleanUsername = username ? (username.startsWith('@') ? username.substring(1) : username) : null;
-        const result = await pool.query(`INSERT INTO bots (name, type, username, url, description, is_active) 
+        const result = await pool_1.pool.query(`INSERT INTO bots (name, type, username, url, description, is_active) 
        VALUES ($1, $2, $3, $4, $5, $6) 
        RETURNING *`, [name, type, type === 'BOT' ? cleanUsername : null, type === 'SITE' ? url : null, description || null, is_active]);
         res.status(201).json(result.rows[0]);
@@ -117,7 +114,7 @@ router.put('/:id', auth_1.authenticateToken, auth_1.requireAdmin, [
         }
         const { id } = req.params;
         const { name, type, username, url, description, is_active } = req.body;
-        const existingBot = await pool.query('SELECT * FROM bots WHERE id = $1', [id]);
+        const existingBot = await pool_1.pool.query('SELECT * FROM bots WHERE id = $1', [id]);
         if (existingBot.rows.length === 0) {
             return res.status(404).json({ message: 'Bot not found' });
         }
@@ -161,14 +158,14 @@ router.put('/:id', auth_1.authenticateToken, auth_1.requireAdmin, [
         }
         updates.push(`updated_at = CURRENT_TIMESTAMP`);
         values.push(id);
-        const result = await pool.query(`UPDATE bots SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`, values);
+        const result = await pool_1.pool.query(`UPDATE bots SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`, values);
         if (type === 'SITE') {
-            await pool.query('UPDATE bots SET username = NULL WHERE id = $1', [id]);
+            await pool_1.pool.query('UPDATE bots SET username = NULL WHERE id = $1', [id]);
         }
         else if (type === 'BOT') {
-            await pool.query('UPDATE bots SET url = NULL WHERE id = $1', [id]);
+            await pool_1.pool.query('UPDATE bots SET url = NULL WHERE id = $1', [id]);
         }
-        const refreshed = await pool.query('SELECT * FROM bots WHERE id = $1', [id]);
+        const refreshed = await pool_1.pool.query('SELECT * FROM bots WHERE id = $1', [id]);
         res.json(refreshed.rows[0]);
     }
     catch (error) {
@@ -182,7 +179,7 @@ router.put('/:id', auth_1.authenticateToken, auth_1.requireAdmin, [
 router.delete('/:id', auth_1.authenticateToken, auth_1.requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await pool.query('DELETE FROM bots WHERE id = $1 RETURNING *', [id]);
+        const result = await pool_1.pool.query('DELETE FROM bots WHERE id = $1 RETURNING *', [id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'Bot not found' });
         }

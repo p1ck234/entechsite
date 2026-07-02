@@ -7,11 +7,8 @@ const express_1 = __importDefault(require("express"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const express_validator_1 = require("express-validator");
-const pg_1 = require("pg");
+const pool_1 = require("../db/pool");
 const router = express_1.default.Router();
-const pool = new pg_1.Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
-});
 const normalizeTelegramUsername = (username) => {
     if (!username) {
         return null;
@@ -52,7 +49,7 @@ const syncEmployeeTelegramData = async (employee, telegramId, normalizedUsername
         return;
     }
     values.push(employee.id);
-    await pool.query(`UPDATE employees SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex}`, values);
+    await pool_1.pool.query(`UPDATE employees SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex}`, values);
 };
 router.post('/register-telegram', [
     (0, express_validator_1.body)('initData').notEmpty(),
@@ -86,14 +83,14 @@ router.post('/register-telegram', [
         if (!telegramNormalized) {
             return res.status(400).json({ message: 'Telegram username required for registration' });
         }
-        const usersCount = await pool.query('SELECT COUNT(*) as count FROM users');
+        const usersCount = await pool_1.pool.query('SELECT COUNT(*) as count FROM users');
         const totalUsers = parseInt(usersCount.rows[0].count);
         if (totalUsers === 0) {
             const userEmail = `${telegramNormalized}@telegram.local`;
             const randomPassword = Math.random().toString(36).slice(-12);
             const hashedPassword = await bcryptjs_1.default.hash(randomPassword, 12);
-            const userResult = await pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING *', [userEmail, hashedPassword, 'ADMIN']);
-            const employeeResult = await pool.query(`INSERT INTO employees (first_name, last_name, position, department, email, phone, telegram, telegram_id, is_active, status)
+            const userResult = await pool_1.pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING *', [userEmail, hashedPassword, 'ADMIN']);
+            const employeeResult = await pool_1.pool.query(`INSERT INTO employees (first_name, last_name, position, department, email, phone, telegram, telegram_id, is_active, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`, [
                 firstName || telegramUser.first_name || 'Пользователь',
                 lastName || telegramUser.last_name || 'Telegram',
@@ -119,7 +116,7 @@ router.post('/register-telegram', [
                 approved: true
             });
         }
-        const existingEmployee = await pool.query('SELECT id, status FROM employees WHERE telegram_id = $1 OR LOWER(REPLACE(telegram, \'@\', \'\')) = $2', [telegramId, telegramNormalized]);
+        const existingEmployee = await pool_1.pool.query('SELECT id, status FROM employees WHERE telegram_id = $1 OR LOWER(REPLACE(telegram, \'@\', \'\')) = $2', [telegramId, telegramNormalized]);
         if (existingEmployee.rows.length > 0) {
             const existing = existingEmployee.rows[0];
             if (existing.status === 'APPROVED') {
@@ -133,7 +130,7 @@ router.post('/register-telegram', [
             }
         }
         const userEmail = `${telegramNormalized}@telegram.local`;
-        const employeeResult = await pool.query(`INSERT INTO employees (first_name, last_name, position, department, email, phone, telegram, telegram_id, is_active, status)
+        const employeeResult = await pool_1.pool.query(`INSERT INTO employees (first_name, last_name, position, department, email, phone, telegram, telegram_id, is_active, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`, [
             firstName || telegramUser.first_name || 'Пользователь',
             lastName || telegramUser.last_name || 'Telegram',
@@ -201,7 +198,7 @@ router.post('/register', [
             return res.status(400).json({ errors: errors.array() });
         }
         const { email, password, telegramUsername, firstName, lastName, position, department } = req.body;
-        const existingUsers = await pool.query('SELECT COUNT(*) as count FROM users');
+        const existingUsers = await pool_1.pool.query('SELECT COUNT(*) as count FROM users');
         const userCount = parseInt(existingUsers.rows[0].count);
         if (userCount > 0) {
             return res.status(403).json({
@@ -209,7 +206,7 @@ router.post('/register', [
                 hint: 'Первый пользователь уже зарегистрирован. Для добавления новых пользователей используйте админ-панель.'
             });
         }
-        const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+        const existingUser = await pool_1.pool.query('SELECT id FROM users WHERE email = $1', [email]);
         if (existingUser.rows.length > 0) {
             return res.status(400).json({ message: 'Пользователь с таким email уже существует' });
         }
@@ -217,14 +214,14 @@ router.post('/register', [
         if (!telegramNormalized) {
             return res.status(400).json({ message: 'Некорректный Telegram username' });
         }
-        const existingEmployee = await pool.query('SELECT id FROM employees WHERE LOWER(REPLACE(telegram, \'@\', \'\')) = $1', [telegramNormalized]);
+        const existingEmployee = await pool_1.pool.query('SELECT id FROM employees WHERE LOWER(REPLACE(telegram, \'@\', \'\')) = $1', [telegramNormalized]);
         if (existingEmployee.rows.length > 0) {
             return res.status(400).json({ message: 'Сотрудник с таким Telegram username уже существует' });
         }
         const hashedPassword = await bcryptjs_1.default.hash(password, 12);
-        const userResult = await pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING id, email, role, created_at', [email, hashedPassword, 'ADMIN']);
+        const userResult = await pool_1.pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING id, email, role, created_at', [email, hashedPassword, 'ADMIN']);
         const user = userResult.rows[0];
-        const employeeResult = await pool.query(`INSERT INTO employees (first_name, last_name, position, department, email, phone, telegram, is_active)
+        const employeeResult = await pool_1.pool.query(`INSERT INTO employees (first_name, last_name, position, department, email, phone, telegram, is_active)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`, [
             firstName,
             lastName,
@@ -278,7 +275,7 @@ router.post('/login', [
             return res.status(400).json({ errors: errors.array() });
         }
         const { email, password } = req.body;
-        const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        const result = await pool_1.pool.query('SELECT * FROM users WHERE email = $1', [email]);
         if (result.rows.length === 0) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
@@ -349,7 +346,7 @@ router.post('/telegram', [
         const sqlQuery = `SELECT * FROM employees WHERE (${searchConditions.join(' OR ')})`;
         console.log('🔍 SQL запрос:', sqlQuery);
         console.log('🔍 Параметры поиска:', searchParams);
-        const employeeResult = await pool.query(sqlQuery, searchParams);
+        const employeeResult = await pool_1.pool.query(sqlQuery, searchParams);
         console.log('🔍 Найдено сотрудников:', employeeResult.rows.length);
         let employee;
         let userEmail;
@@ -357,7 +354,7 @@ router.post('/telegram', [
             console.log('📝 Пользователь не найден, создаем заявку на регистрацию...');
             const userEmail = telegramNormalized ? `${telegramNormalized}@telegram.local` : `telegram_${telegramId}@telegram.local`;
             try {
-                const newEmployeeResult = await pool.query(`INSERT INTO employees (
+                const newEmployeeResult = await pool_1.pool.query(`INSERT INTO employees (
             first_name, last_name, position, department, email, phone, 
             telegram, telegram_id, is_active, status
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`, [
@@ -436,12 +433,12 @@ router.post('/telegram', [
             telegram: employee.telegram,
             status: employee.status
         });
-        let userResult = await pool.query('SELECT * FROM users WHERE email = $1', [userEmail]);
+        let userResult = await pool_1.pool.query('SELECT * FROM users WHERE email = $1', [userEmail]);
         let user;
         if (userResult.rows.length === 0) {
             const randomPassword = Math.random().toString(36).slice(-12);
             const hashedPassword = await bcryptjs_1.default.hash(randomPassword, 10);
-            const insertResult = await pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING *', [userEmail, hashedPassword, 'USER']);
+            const insertResult = await pool_1.pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING *', [userEmail, hashedPassword, 'USER']);
             user = insertResult.rows[0];
         }
         else {
@@ -501,12 +498,12 @@ router.post('/telegram-oauth', [
         const sqlQuery = `SELECT * FROM employees WHERE (${whereClause}) AND is_active = true AND status = 'APPROVED'`;
         console.log('🔍 SQL запрос:', sqlQuery);
         console.log('🔍 Параметры:', searchParams);
-        const allEmployeesResult = await pool.query(`SELECT * FROM employees WHERE (${searchConditions.join(' OR ')})`, searchParams);
+        const allEmployeesResult = await pool_1.pool.query(`SELECT * FROM employees WHERE (${searchConditions.join(' OR ')})`, searchParams);
         if (allEmployeesResult.rows.length === 0) {
             console.log('📝 Пользователь не найден, создаем заявку на регистрацию...');
             const userEmail = normalizedUsername ? `${normalizedUsername}@telegram.local` : `telegram_${id}@telegram.local`;
             try {
-                const newEmployeeResult = await pool.query(`INSERT INTO employees (
+                const newEmployeeResult = await pool_1.pool.query(`INSERT INTO employees (
             first_name, last_name, position, department, email, phone, 
             telegram, telegram_id, is_active, status
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`, [
@@ -568,7 +565,7 @@ router.post('/telegram-oauth', [
                 status: 'REJECTED'
             });
         }
-        const employeeResult = await pool.query(sqlQuery, searchParams);
+        const employeeResult = await pool_1.pool.query(sqlQuery, searchParams);
         const employee = pickBestEmployeeMatch(employeeResult.rows, id, normalizedUsername);
         if (!employee) {
             return res.status(404).json({ message: 'Employee not found' });
@@ -599,12 +596,12 @@ router.post('/telegram-oauth', [
             telegramId: id,
             telegramUsername: normalizedUsername
         });
-        let userResult = await pool.query('SELECT * FROM users WHERE email = $1', [userEmail]);
+        let userResult = await pool_1.pool.query('SELECT * FROM users WHERE email = $1', [userEmail]);
         let user;
         if (userResult.rows.length === 0) {
             const randomPassword = Math.random().toString(36).slice(-12);
             const hashedPassword = await bcryptjs_1.default.hash(randomPassword, 10);
-            const insertResult = await pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING *', [userEmail, hashedPassword, 'USER']);
+            const insertResult = await pool_1.pool.query('INSERT INTO users (email, password, role) VALUES ($1, $2, $3) RETURNING *', [userEmail, hashedPassword, 'USER']);
             user = insertResult.rows[0];
         }
         else {
@@ -642,7 +639,7 @@ router.get('/me', async (req, res) => {
             return res.status(401).json({ message: 'Access token required' });
         }
         const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-change-this-in-production');
-        const result = await pool.query('SELECT id, email, role, created_at FROM users WHERE id = $1', [decoded.userId]);
+        const result = await pool_1.pool.query('SELECT id, email, role, created_at FROM users WHERE id = $1', [decoded.userId]);
         if (result.rows.length === 0) {
             return res.status(401).json({ message: 'Invalid token' });
         }

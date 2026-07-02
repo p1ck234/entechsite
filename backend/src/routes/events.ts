@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, validationResult, query } from 'express-validator';
-import { Pool } from 'pg';
+import { pool } from '../db/pool';
 import { authenticateToken } from '../middleware/auth';
 import { extractDriveResourceIdFromUrl, listMediaInDriveResource } from '../services/googleDrive';
 import {
@@ -11,9 +11,6 @@ import {
 import { invalidateDriveListCache } from '../utils/driveListCache';
 
 const router = express.Router();
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
-});
 
 const persistEventPhotos = async (eventId: string, photos: StoredEventPhoto[]): Promise<void> => {
   await pool.query(

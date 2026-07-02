@@ -1,12 +1,9 @@
 import express from 'express';
 import { body, validationResult, query } from 'express-validator';
-import { Pool } from 'pg';
+import { pool } from '../db/pool';
 import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
-});
 
 // Get calendar events for a date range
 router.get('/', authenticateToken, [

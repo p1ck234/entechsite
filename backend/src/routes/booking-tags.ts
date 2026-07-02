@@ -1,12 +1,9 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import { Pool } from 'pg';
+import { pool } from '../db/pool';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
 
 const router = express.Router();
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
-});
 
 const mapTag = (row: any) => ({
   id: String(row.id),

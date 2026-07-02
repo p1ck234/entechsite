@@ -1,7 +1,7 @@
 import express from 'express';
 import { body, query, validationResult } from 'express-validator';
 import { randomUUID } from 'crypto';
-import { Pool } from 'pg';
+import { pool } from '../db/pool';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import {
   combineDateAndTime,
@@ -15,9 +15,6 @@ import {
 import { assertCanManageBooking } from '../utils/booking-permissions';
 
 const router = express.Router();
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
-});
 
 const mapBooking = (row: any) => ({
   id: String(row.id),

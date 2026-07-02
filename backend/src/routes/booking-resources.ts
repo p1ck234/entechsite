@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import { Pool } from 'pg';
+import { pool } from '../db/pool';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
 import {
   RESOURCE_WITH_TAGS_SELECT,
@@ -10,9 +10,6 @@ import {
 } from '../utils/booking-tags';
 
 const router = express.Router();
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
-});
 
 const mapResource = (row: any) => ({
   id: String(row.id),
@@ -83,9 +80,11 @@ router.post(
     body('tagIds.*').optional().isInt({ min: 1 }),
   ],
   async (req: AuthRequest, res: any) => {
-    const client = await pool.connect();
+    let client;
 
     try {
+      client = await pool.connect();
+
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
@@ -114,11 +113,17 @@ router.post(
         resource,
       });
     } catch (error) {
-      await client.query('ROLLBACK');
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch {
+          // транзакция могла не начаться
+        }
+      }
       console.error('Create booking resource error:', error);
       res.status(500).json({ message: 'Internal server error' });
     } finally {
-      client.release();
+      client?.release();
     }
   }
 );
@@ -138,9 +143,11 @@ router.put(
     body('tagIds.*').optional().isInt({ min: 1 }),
   ],
   async (req: AuthRequest, res: any) => {
-    const client = await pool.connect();
+    let client;
 
     try {
+      client = await pool.connect();
+
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
@@ -193,11 +200,17 @@ router.put(
         resource,
       });
     } catch (error) {
-      await client.query('ROLLBACK');
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch {
+          // транзакция могла не начаться
+        }
+      }
       console.error('Update booking resource error:', error);
       res.status(500).json({ message: 'Internal server error' });
     } finally {
-      client.release();
+      client?.release();
     }
   }
 );
