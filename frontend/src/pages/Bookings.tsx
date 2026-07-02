@@ -2,11 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingResourcesAPI, bookingsAPI } from '../api/client';
 import type { Booking, BookingResource, BookingResourceType } from '../types';
-import { Clock, ExternalLink, Plus, Repeat, Settings, Video } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, ExternalLink, Plus, Repeat, Settings, Video } from 'lucide-react';
 import BookingModal from '../components/BookingModal';
 import BookingResourceModal from '../components/BookingResourceModal';
 import DatePicker from '../components/DatePicker';
-import { formatRuDate, toInputDate } from '../utils/date';
+import {
+  addDays,
+  extractIsoDate,
+  formatWeekRange,
+  formatWeekdayShort,
+  getWeekDays,
+  getWeekStart,
+  isPastDate,
+  isSameDate,
+  toInputDate,
+} from '../utils/date';
 
 const formatTimeRange = (booking: Booking): string => {
   const startsAt = new Date(booking.startsAt);
@@ -19,7 +29,7 @@ const formatTimeRange = (booking: Booking): string => {
 const Bookings: React.FC = () => {
   const { isAdmin, user } = useAuth();
   const [activeTab, setActiveTab] = useState<BookingResourceType>('room');
-  const [selectedDate, setSelectedDate] = useState(toInputDate(new Date()));
+  const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
   const [resources, setResources] = useState<BookingResource[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,21 +37,24 @@ const Bookings: React.FC = () => {
   const [bookingModal, setBookingModal] = useState<{
     resource: BookingResource;
     booking?: Booking | null;
+    date: string;
   } | null>(null);
+
+  const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
+  const weekEnd = weekDays[6];
+  const today = useMemo(() => toInputDate(new Date()), []);
 
   const filteredResources = useMemo(
     () => resources.filter((resource) => resource.type === activeTab),
     [resources, activeTab]
   );
 
-  const minBookingDate = useMemo(() => toInputDate(new Date()), []);
-
   const loadData = async () => {
     try {
       setLoading(true);
       const [resourcesResponse, bookingsResponse] = await Promise.all([
         bookingResourcesAPI.getResources(),
-        bookingsAPI.getBookings({ date: selectedDate, type: activeTab }),
+        bookingsAPI.getBookings({ fromDate: weekStart, toDate: weekEnd, type: activeTab }),
       ]);
       setResources(resourcesResponse.resources);
       setBookings(bookingsResponse.bookings);
@@ -54,11 +67,14 @@ const Bookings: React.FC = () => {
 
   useEffect(() => {
     void loadData();
-  }, [selectedDate, activeTab]);
+  }, [weekStart, activeTab]);
 
-  const getResourceBookings = (resourceId: string) =>
+  const getResourceBookingsForDay = (resourceId: string, day: string) =>
     bookings
-      .filter((booking) => booking.resourceId === resourceId)
+      .filter(
+        (booking) =>
+          booking.resourceId === resourceId && extractIsoDate(booking.startsAt) === extractIsoDate(day)
+      )
       .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
 
   const canManageBooking = (booking: Booking) =>
@@ -84,13 +100,37 @@ const Bookings: React.FC = () => {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
-          <DatePicker
-            value={selectedDate}
-            onChange={setSelectedDate}
-            min={minBookingDate}
-            allowClear={false}
-            className="w-full sm:w-[260px]"
-          />
+          <div className="flex items-center gap-2 rounded-xl border border-pastel-200 bg-white/70 px-2 py-1">
+            <button
+              type="button"
+              onClick={() => setWeekStart(addDays(weekStart, -7))}
+              className="p-2 rounded-lg text-pastel-700 hover:bg-pastel-50"
+              aria-label="Предыдущая неделя"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeekStart(getWeekStart(new Date()))}
+              className="px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-primary-50 rounded-lg whitespace-nowrap"
+            >
+              Сегодня
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeekStart(addDays(weekStart, 7))}
+              className="p-2 rounded-lg text-pastel-700 hover:bg-pastel-50"
+              aria-label="Следующая неделя"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            <DatePicker
+              value={weekStart}
+              onChange={(value) => setWeekStart(getWeekStart(value))}
+              allowClear={false}
+              className="w-[160px] border-0 bg-transparent shadow-none"
+            />
+          </div>
           {isAdmin && (
             <button
               type="button"
@@ -126,7 +166,7 @@ const Bookings: React.FC = () => {
       </div>
 
       <p className="text-sm text-pastel-600">
-        {formatRuDate(selectedDate)} · слоты проверяются на пересечение автоматически
+        {formatWeekRange(weekStart, weekEnd)} · слоты проверяются на пересечение автоматически
       </p>
 
       {loading ? (
@@ -142,133 +182,156 @@ const Bookings: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {filteredResources.map((resource) => {
-            const resourceBookings = getResourceBookings(resource.id);
-
-            return (
-              <div key={resource.id} className="card p-6">
-                <div className="flex items-start justify-between gap-4 mb-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      {resource.type === 'zoom' ? (
-                        <Video className="w-5 h-5 text-primary-600" />
-                      ) : (
-                        <Settings className="w-5 h-5 text-primary-600" />
-                      )}
-                      <h2 className="text-xl font-semibold text-pastel-800">{resource.name}</h2>
-                    </div>
-                    {resource.tags && resource.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {resource.tags.map((tag) => (
-                          <span
-                            key={tag.id}
-                            className="inline-flex items-center rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold tracking-wide text-primary-700"
-                          >
-                            {tag.name}
-                          </span>
-                        ))}
-                      </div>
+        <div className="space-y-6">
+          {filteredResources.map((resource) => (
+            <div key={resource.id} className="card p-6">
+              <div className="flex items-start justify-between gap-4 mb-5">
+                <div>
+                  <div className="flex items-center gap-2">
+                    {resource.type === 'zoom' ? (
+                      <Video className="w-5 h-5 text-primary-600" />
+                    ) : (
+                      <Settings className="w-5 h-5 text-primary-600" />
                     )}
-                    {resource.description && (
-                      <p className="text-sm text-pastel-600 mt-1">{resource.description}</p>
-                    )}
-                    {resource.zoomUrl && (
-                      <a
-                        href={resource.zoomUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-sm text-primary-600 mt-2 hover:underline"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                        Ссылка Zoom
-                      </a>
-                    )}
+                    <h2 className="text-xl font-semibold text-pastel-800">{resource.name}</h2>
                   </div>
-
-                  {isAdmin && (
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setResourceModal(resource)}
-                        className="text-sm text-pastel-600 hover:text-primary-600"
-                      >
-                        Изменить
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDeleteResource(resource)}
-                        className="text-sm text-red-600 hover:text-red-700"
-                      >
-                        Скрыть
-                      </button>
+                  {resource.tags && resource.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {resource.tags.map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="inline-flex items-center rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold tracking-wide text-primary-700"
+                        >
+                          {tag.name}
+                        </span>
+                      ))}
                     </div>
                   )}
-                </div>
-
-                <div className="space-y-3 mb-5">
-                  {resourceBookings.length === 0 ? (
-                    <p className="text-sm text-pastel-500 bg-pastel-50 rounded-xl px-4 py-3">
-                      На этот день свободно
-                    </p>
-                  ) : (
-                    resourceBookings.map((booking) => {
-                      const manageable = canManageBooking(booking);
-
-                      return (
-                      <button
-                        key={booking.id}
-                        type="button"
-                        onClick={() => {
-                          setBookingModal({ resource, booking });
-                        }}
-                        className={`w-full text-left rounded-xl border px-4 py-3 transition-colors ${
-                          manageable
-                            ? 'border-pastel-200 hover:border-primary-300 hover:bg-primary-50/40'
-                            : 'border-pastel-200 bg-pastel-50/60 hover:bg-pastel-50'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-pastel-800">{booking.title}</p>
-                              {booking.recurrenceGroupId && (
-                                <span
-                                  className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-xs text-primary-700"
-                                  title="Повторяющаяся встреча"
-                                >
-                                  <Repeat className="w-3 h-3" />
-                                  Серия
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-sm text-pastel-600 mt-1">
-                              {booking.employeeName || booking.userEmail}
-                              {!manageable && ' · только просмотр'}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1 text-sm text-pastel-700 whitespace-nowrap">
-                            <Clock className="w-4 h-4" />
-                            {formatTimeRange(booking)}
-                          </div>
-                        </div>
-                      </button>
-                      );
-                    })
+                  {resource.description && (
+                    <p className="text-sm text-pastel-600 mt-1">{resource.description}</p>
+                  )}
+                  {resource.zoomUrl && (
+                    <a
+                      href={resource.zoomUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm text-primary-600 mt-2 hover:underline"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Ссылка Zoom
+                    </a>
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setBookingModal({ resource })}
-                  className="btn-primary w-full flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Забронировать
-                </button>
+                {isAdmin && (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setResourceModal(resource)}
+                      className="text-sm text-pastel-600 hover:text-primary-600"
+                    >
+                      Изменить
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteResource(resource)}
+                      className="text-sm text-red-600 hover:text-red-700"
+                    >
+                      Скрыть
+                    </button>
+                  </div>
+                )}
               </div>
-            );
-          })}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+                {weekDays.map((day) => {
+                  const dayBookings = getResourceBookingsForDay(resource.id, day);
+                  const isToday = isSameDate(day, today);
+                  const pastDay = isPastDate(day);
+
+                  return (
+                    <div
+                      key={day}
+                      className={`rounded-xl border p-3 min-h-[180px] flex flex-col ${
+                        isToday
+                          ? 'border-primary-300 bg-primary-50/40'
+                          : 'border-pastel-100 bg-pastel-50/30'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <p
+                          className={`text-xs font-semibold uppercase tracking-wide ${
+                            isToday ? 'text-primary-700' : 'text-pastel-700'
+                          }`}
+                        >
+                          {formatWeekdayShort(day)}
+                        </p>
+                        {!pastDay && (
+                          <button
+                            type="button"
+                            onClick={() => setBookingModal({ resource, date: day })}
+                            className="p-1 rounded-md text-primary-600 hover:bg-primary-100"
+                            title="Забронировать"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 flex-1">
+                        {dayBookings.length === 0 ? (
+                          <p className="text-xs text-pastel-500">Свободно</p>
+                        ) : (
+                          dayBookings.map((booking) => {
+                            const manageable = canManageBooking(booking);
+
+                            return (
+                              <button
+                                key={booking.id}
+                                type="button"
+                                onClick={() => {
+                                  setBookingModal({
+                                    resource,
+                                    booking,
+                                    date: extractIsoDate(booking.startsAt),
+                                  });
+                                }}
+                                className={`w-full text-left rounded-lg border px-2 py-2 transition-colors ${
+                                  manageable
+                                    ? 'border-pastel-200 bg-white hover:border-primary-300'
+                                    : 'border-pastel-200 bg-white/80'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-1">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1">
+                                      <p className="text-xs font-medium text-pastel-800 truncate">
+                                        {booking.title}
+                                      </p>
+                                      {booking.recurrenceGroupId && (
+                                        <Repeat className="w-3 h-3 text-primary-600 shrink-0" />
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-pastel-600 truncate mt-0.5">
+                                      {booking.employeeName || booking.userEmail}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-0.5 text-[11px] text-pastel-700 whitespace-nowrap shrink-0">
+                                    <Clock className="w-3 h-3" />
+                                    {formatTimeRange(booking)}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -288,7 +351,7 @@ const Bookings: React.FC = () => {
           resource={bookingModal.resource}
           booking={bookingModal.booking}
           canManage={bookingModal.booking ? canManageBooking(bookingModal.booking) : true}
-          date={selectedDate}
+          date={bookingModal.date}
           onClose={() => {
             setBookingModal(null);
             void loadData();

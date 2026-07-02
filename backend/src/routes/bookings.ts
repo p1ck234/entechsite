@@ -86,6 +86,8 @@ router.get(
   authenticateToken,
   [
     query('date').optional().isISO8601({ strict: true }),
+    query('fromDate').optional().isISO8601({ strict: true }),
+    query('toDate').optional().isISO8601({ strict: true }),
     query('type').optional().isIn(['room', 'zoom']),
     query('resourceId').optional().isInt({ min: 1 }),
     query('mine').optional().isBoolean(),
@@ -100,7 +102,12 @@ router.get(
       const conditions: string[] = [`b.status = 'confirmed'`];
       const params: Array<string | number> = [];
 
-      if (req.query.date) {
+      if (req.query.fromDate && req.query.toDate) {
+        params.push(String(req.query.fromDate));
+        params.push(String(req.query.toDate));
+        conditions.push(`DATE(b.starts_at) >= $${params.length - 1}::date`);
+        conditions.push(`DATE(b.starts_at) <= $${params.length}::date`);
+      } else if (req.query.date) {
         params.push(String(req.query.date));
         conditions.push(`DATE(b.starts_at) = $${params.length}::date`);
       }

@@ -665,6 +665,8 @@ export const bookingResourcesAPI = {
 export const bookingsAPI = {
   getBookings: async (params?: {
     date?: string;
+    fromDate?: string;
+    toDate?: string;
     type?: 'room' | 'zoom';
     resourceId?: string;
     mine?: boolean;
