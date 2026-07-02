@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { bookingResourcesAPI, bookingsAPI } from '../api/client';
 import type { Booking, BookingResource, BookingResourceType } from '../types';
-import { Clock, ExternalLink, Plus, Settings, Video } from 'lucide-react';
+import { Clock, ExternalLink, Plus, Repeat, Settings, Video } from 'lucide-react';
 import BookingModal from '../components/BookingModal';
 import BookingResourceModal from '../components/BookingResourceModal';
 import DatePicker from '../components/DatePicker';
@@ -223,7 +223,18 @@ const Bookings: React.FC = () => {
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <p className="font-medium text-pastel-800">{booking.title}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-pastel-800">{booking.title}</p>
+                              {booking.recurrenceGroupId && (
+                                <span
+                                  className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-xs text-primary-700"
+                                  title="Повторяющаяся встреча"
+                                >
+                                  <Repeat className="w-3 h-3" />
+                                  Серия
+                                </span>
+                              )}
+                            </div>
                             <p className="text-sm text-pastel-600 mt-1">
                               {booking.employeeName || booking.userEmail}
                             </p>

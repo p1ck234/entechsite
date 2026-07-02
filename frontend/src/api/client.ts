@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AuthResponse, User, Employee, Course, Lesson, LessonMaterialsResponse, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, BookingResource, Booking, PaginationInfo } from '../types';
+import { AuthResponse, User, Employee, Course, Lesson, LessonMaterialsResponse, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, BookingResource, Booking, BookingRecurrenceInput, PaginationInfo } from '../types';
 
 import { API_BASE_URL } from '../config/api';
 import { clearEventPhotosCache, getCachedEventPhotos, rememberEventPhotos } from '../utils/eventPhotosCache';
@@ -666,7 +666,8 @@ export const bookingsAPI = {
     date: string;
     startTime: string;
     endTime: string;
-  }): Promise<{ message: string; booking: Booking }> => {
+    recurrence?: BookingRecurrenceInput;
+  }): Promise<{ message: string; booking: Booking; createdCount?: number }> => {
     const response = await api.post('/bookings', booking);
     return response.data;
   },
@@ -685,8 +686,10 @@ export const bookingsAPI = {
     return response.data;
   },
 
-  cancelBooking: async (id: string): Promise<{ message: string }> => {
-    const response = await api.delete(`/bookings/${id}`);
+  cancelBooking: async (id: string, scope: 'single' | 'series' = 'single'): Promise<{ message: string; cancelledCount?: number }> => {
+    const response = await api.delete(`/bookings/${id}`, {
+      params: scope === 'series' ? { scope } : undefined,
+    });
     return response.data;
   },
 };

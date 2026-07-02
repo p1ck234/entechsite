@@ -214,6 +214,13 @@ export interface TelegramBot {
 
 export type BookingResourceType = 'room' | 'zoom';
 
+export type BookingRecurrenceType = 'none' | 'daily' | 'weekly' | 'weekdays';
+
+export interface BookingRecurrenceInput {
+  type: BookingRecurrenceType;
+  untilDate?: string;
+}
+
 export interface BookingResource {
   id: string;
   name: string;
@@ -240,6 +247,7 @@ export interface Booking {
   startsAt: string;
   endsAt: string;
   status: 'confirmed' | 'cancelled';
+  recurrenceGroupId?: string;
   createdAt: string;
   updatedAt: string;
 }

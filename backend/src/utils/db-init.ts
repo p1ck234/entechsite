@@ -200,6 +200,7 @@ export async function initializeDatabase(pool: Pool) {
           starts_at TIMESTAMP NOT NULL,
           ends_at TIMESTAMP NOT NULL,
           status VARCHAR(20) NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed', 'cancelled')),
+          recurrence_group_id UUID,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           CHECK (ends_at > starts_at)
@@ -222,6 +223,11 @@ export async function initializeDatabase(pool: Pool) {
       await pool.query('CREATE INDEX IF NOT EXISTS idx_booking_resources_type_active ON booking_resources(type, is_active);');
       await pool.query('CREATE INDEX IF NOT EXISTS idx_bookings_resource_time ON bookings(resource_id, starts_at, ends_at) WHERE status = \'confirmed\';');
       await pool.query('CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id, starts_at DESC);');
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_bookings_recurrence_group
+          ON bookings(recurrence_group_id)
+          WHERE recurrence_group_id IS NOT NULL;
+      `);
 
       const zoomCount = await pool.query(
         `SELECT COUNT(*)::int AS count FROM booking_resources WHERE type = 'zoom'`
@@ -355,6 +361,16 @@ export async function initializeDatabase(pool: Pool) {
       `);
 
       await pool.query(`
+        ALTER TABLE bookings
+          ADD COLUMN IF NOT EXISTS recurrence_group_id UUID;
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_bookings_recurrence_group
+          ON bookings(recurrence_group_id)
+          WHERE recurrence_group_id IS NOT NULL;
+      `);
+
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS booking_resources (
           id SERIAL PRIMARY KEY,
           name VARCHAR(255) NOT NULL,
@@ -378,6 +394,7 @@ export async function initializeDatabase(pool: Pool) {
           starts_at TIMESTAMP NOT NULL,
           ends_at TIMESTAMP NOT NULL,
           status VARCHAR(20) NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed', 'cancelled')),
+          recurrence_group_id UUID,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           CHECK (ends_at > starts_at)

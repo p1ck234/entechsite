@@ -1,6 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { bookingsAPI } from '../api/client';
-import type { Booking, BookingResource } from '../types';
+import type { Booking, BookingRecurrenceType, BookingResource } from '../types';
+import DatePicker from './DatePicker';
+import {
+  RECURRENCE_OPTIONS,
+  expandRecurrenceDates,
+  getMaxBookingDate,
+} from '../utils/bookingRecurrence';
 
 interface BookingModalProps {
   resource: BookingResource;
@@ -14,8 +20,12 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
   const [description, setDescription] = useState(booking?.description || '');
   const [startTime, setStartTime] = useState('10:00');
   const [endTime, setEndTime] = useState('11:00');
+  const [recurrenceType, setRecurrenceType] = useState<BookingRecurrenceType>('none');
+  const [untilDate, setUntilDate] = useState(getMaxBookingDate());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const maxBookingDate = useMemo(() => getMaxBookingDate(), []);
 
   useEffect(() => {
     if (!booking) {
@@ -23,6 +33,8 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
       setDescription('');
       setStartTime('10:00');
       setEndTime('11:00');
+      setRecurrenceType('none');
+      setUntilDate(maxBookingDate);
       setError(null);
       return;
     }
@@ -37,8 +49,20 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
     setEndTime(
       `${String(endsAt.getHours()).padStart(2, '0')}:${String(endsAt.getMinutes()).padStart(2, '0')}`
     );
+    setRecurrenceType('none');
     setError(null);
-  }, [booking]);
+  }, [booking, maxBookingDate]);
+
+  const occurrenceDates = useMemo(() => {
+    if (booking || recurrenceType === 'none') {
+      return [date];
+    }
+
+    return expandRecurrenceDates(date, {
+      type: recurrenceType,
+      untilDate,
+    });
+  }, [booking, recurrenceType, untilDate, date]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -68,6 +92,13 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
           date,
           startTime,
           endTime,
+          recurrence:
+            recurrenceType === 'none'
+              ? undefined
+              : {
+                  type: recurrenceType,
+                  untilDate,
+                },
         });
       }
 
@@ -79,18 +110,23 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
     }
   };
 
-  const handleCancel = async () => {
+  const handleCancel = async (scope: 'single' | 'series') => {
     if (!booking) {
       return;
     }
 
-    if (!window.confirm('Отменить это бронирование?')) {
+    const message =
+      scope === 'series'
+        ? 'Отменить всю серию повторяющихся встреч?'
+        : 'Отменить только эту встречу?';
+
+    if (!window.confirm(message)) {
       return;
     }
 
     try {
       setSaving(true);
-      await bookingsAPI.cancelBooking(booking.id);
+      await bookingsAPI.cancelBooking(booking.id, scope);
       onClose();
     } catch (cancelError: any) {
       setError(cancelError.response?.data?.message || 'Не удалось отменить бронирование');
@@ -146,6 +182,47 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
             </div>
           </div>
 
+          {!booking && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-pastel-700 mb-2">Повторение</label>
+                <select
+                  value={recurrenceType}
+                  onChange={(e) => setRecurrenceType(e.target.value as BookingRecurrenceType)}
+                  className="input-field"
+                >
+                  {RECURRENCE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {recurrenceType !== 'none' && (
+                <div>
+                  <label className="block text-sm font-medium text-pastel-700 mb-2">Повторять до</label>
+                  <DatePicker
+                    value={untilDate}
+                    onChange={setUntilDate}
+                    min={date}
+                    max={maxBookingDate}
+                    allowClear={false}
+                  />
+                  <p className="text-xs text-pastel-500 mt-2">
+                    Будет создано встреч: {occurrenceDates.length}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
+          {booking?.recurrenceGroupId && (
+            <p className="text-xs text-primary-700 bg-primary-50 rounded-xl px-3 py-2">
+              Это повторяющаяся встреча. Редактирование меняет только выбранный слот.
+            </p>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-pastel-700 mb-2">Комментарий</label>
             <textarea
@@ -164,14 +241,35 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
 
           <div className="flex flex-col sm:flex-row sm:justify-between gap-3 pt-2">
             {booking ? (
-              <button
-                type="button"
-                onClick={handleCancel}
-                disabled={saving}
-                className="btn-secondary text-red-600 border-red-200 hover:bg-red-50"
-              >
-                Отменить бронь
-              </button>
+              booking.recurrenceGroupId ? (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleCancel('single')}
+                    disabled={saving}
+                    className="btn-secondary text-red-600 border-red-200 hover:bg-red-50"
+                  >
+                    Отменить эту
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleCancel('series')}
+                    disabled={saving}
+                    className="btn-secondary text-red-700 border-red-300 hover:bg-red-50"
+                  >
+                    Отменить серию
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void handleCancel('single')}
+                  disabled={saving}
+                  className="btn-secondary text-red-600 border-red-200 hover:bg-red-50"
+                >
+                  Отменить бронь
+                </button>
+              )
             ) : (
               <span />
             )}
@@ -180,7 +278,13 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
                 Закрыть
               </button>
               <button type="submit" disabled={saving} className="btn-primary disabled:opacity-50">
-                {saving ? 'Сохранение...' : booking ? 'Сохранить' : 'Забронировать'}
+                {saving
+                  ? 'Сохранение...'
+                  : booking
+                    ? 'Сохранить'
+                    : occurrenceDates.length > 1
+                      ? `Забронировать (${occurrenceDates.length})`
+                      : 'Забронировать'}
               </button>
             </div>
           </div>

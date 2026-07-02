@@ -3,6 +3,14 @@ export const BOOKING_WORK_START_HOUR = 9;
 export const BOOKING_WORK_END_HOUR = 19;
 export const BOOKING_MAX_DURATION_HOURS = 4;
 export const BOOKING_MAX_ADVANCE_DAYS = 30;
+export const BOOKING_MAX_RECURRENCE_OCCURRENCES = 30;
+
+export type BookingRecurrenceType = 'none' | 'daily' | 'weekly' | 'weekdays';
+
+export interface BookingRecurrenceInput {
+  type: BookingRecurrenceType;
+  untilDate?: string;
+}
 
 const pad = (value: number): string => String(value).padStart(2, '0');
 
@@ -66,4 +74,61 @@ export const formatTimeFromDate = (value: Date | string): string => {
 export const formatDateOnly = (value: Date | string): string => {
   const date = value instanceof Date ? value : new Date(value);
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+const parseInputDate = (value: string): Date => {
+  const date = new Date(`${value}T12:00:00`);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+export const getMaxBookingDate = (): Date => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const maxDate = new Date(today);
+  maxDate.setDate(maxDate.getDate() + BOOKING_MAX_ADVANCE_DAYS);
+  return maxDate;
+};
+
+export const expandRecurrenceDates = (
+  startDate: string,
+  recurrence: BookingRecurrenceInput
+): string[] => {
+  if (recurrence.type === 'none') {
+    return [startDate];
+  }
+
+  const start = parseInputDate(startDate);
+  const maxDate = getMaxBookingDate();
+  const until = recurrence.untilDate ? parseInputDate(recurrence.untilDate) : maxDate;
+  const endDate = until > maxDate ? maxDate : until;
+
+  if (endDate < start) {
+    return [startDate];
+  }
+
+  const dates: string[] = [startDate];
+  let current = new Date(start);
+
+  while (dates.length < BOOKING_MAX_RECURRENCE_OCCURRENCES) {
+    if (recurrence.type === 'daily') {
+      current.setDate(current.getDate() + 1);
+    } else if (recurrence.type === 'weekly') {
+      current.setDate(current.getDate() + 7);
+    } else if (recurrence.type === 'weekdays') {
+      do {
+        current.setDate(current.getDate() + 1);
+      } while (current.getDay() === 0 || current.getDay() === 6);
+    } else {
+      break;
+    }
+
+    if (current > endDate) {
+      break;
+    }
+
+    dates.push(formatDateOnly(current));
+  }
+
+  return dates;
 };

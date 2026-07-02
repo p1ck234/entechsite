@@ -1,8 +1,15 @@
 import express from 'express';
 import { body, query, validationResult } from 'express-validator';
+import { randomUUID } from 'crypto';
 import { Pool } from 'pg';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
-import { combineDateAndTime, validateBookingWindow } from '../utils/booking-rules';
+import {
+  combineDateAndTime,
+  expandRecurrenceDates,
+  formatDateOnly,
+  validateBookingWindow,
+  type BookingRecurrenceInput,
+} from '../utils/booking-rules';
 
 const router = express.Router();
 const pool = new Pool({
@@ -23,6 +30,7 @@ const mapBooking = (row: any) => ({
   startsAt: row.starts_at,
   endsAt: row.ends_at,
   status: row.status,
+  recurrenceGroupId: row.recurrence_group_id ? String(row.recurrence_group_id) : undefined,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -134,6 +142,8 @@ router.post(
     body('date').isISO8601({ strict: true }),
     body('startTime').matches(/^\d{2}:\d{2}$/),
     body('endTime').matches(/^\d{2}:\d{2}$/),
+    body('recurrence.type').optional().isIn(['none', 'daily', 'weekly', 'weekdays']),
+    body('recurrence.untilDate').optional().isISO8601({ strict: true }),
   ],
   async (req: AuthRequest, res: any) => {
     try {
@@ -143,12 +153,14 @@ router.post(
       }
 
       const { resourceId, title, description, date, startTime, endTime } = req.body;
-      const startsAt = combineDateAndTime(date, startTime);
-      const endsAt = combineDateAndTime(date, endTime);
+      const recurrence: BookingRecurrenceInput = {
+        type: req.body.recurrence?.type || 'none',
+        untilDate: req.body.recurrence?.untilDate,
+      };
+      const occurrenceDates = expandRecurrenceDates(date, recurrence);
 
-      const validationError = validateBookingWindow(startsAt, endsAt);
-      if (validationError) {
-        return res.status(400).json({ message: validationError });
+      if (occurrenceDates.length === 0) {
+        return res.status(400).json({ message: 'Не удалось построить серию повторений' });
       }
 
       const resource = await pool.query(
@@ -160,26 +172,83 @@ router.post(
         return res.status(404).json({ message: 'Ресурс не найден или недоступен' });
       }
 
-      const conflict = await hasBookingConflict(String(resourceId), startsAt, endsAt);
-      if (conflict) {
+      const plannedBookings: Array<{ startsAt: Date; endsAt: Date; date: string }> = [];
+      for (const occurrenceDate of occurrenceDates) {
+        const startsAt = combineDateAndTime(occurrenceDate, startTime);
+        const endsAt = combineDateAndTime(occurrenceDate, endTime);
+        const validationError = validateBookingWindow(startsAt, endsAt);
+
+        if (validationError) {
+          return res.status(400).json({
+            message: `${formatDateOnly(occurrenceDate)}: ${validationError}`,
+          });
+        }
+
+        plannedBookings.push({ startsAt, endsAt, date: occurrenceDate });
+      }
+
+      const conflictDates: string[] = [];
+      for (const planned of plannedBookings) {
+        const conflict = await hasBookingConflict(String(resourceId), planned.startsAt, planned.endsAt);
+        if (conflict) {
+          conflictDates.push(planned.date);
+        }
+      }
+
+      if (conflictDates.length > 0) {
         return res.status(409).json({
-          message: 'Этот слот уже занят. Выберите другое время или ресурс.',
+          message:
+            conflictDates.length === 1
+              ? `Слот занят: ${conflictDates[0]}`
+              : `Некоторые слоты уже заняты: ${conflictDates.join(', ')}`,
+          conflictDates,
         });
       }
 
-      const created = await pool.query(
-        `INSERT INTO bookings (resource_id, user_id, title, description, starts_at, ends_at, status)
-         VALUES ($1, $2, $3, $4, $5, $6, 'confirmed')
-         RETURNING id`,
-        [resourceId, req.user!.id, title, description || null, startsAt, endsAt]
-      );
+      const recurrenceGroupId = recurrence.type === 'none' ? null : randomUUID();
+      const client = await pool.connect();
 
-      const result = await pool.query(`${bookingSelect} WHERE b.id = $1`, [created.rows[0].id]);
+      try {
+        await client.query('BEGIN');
 
-      res.status(201).json({
-        message: 'Бронирование создано',
-        booking: mapBooking(result.rows[0]),
-      });
+        const createdIds: number[] = [];
+        for (const planned of plannedBookings) {
+          const created = await client.query(
+            `INSERT INTO bookings (resource_id, user_id, title, description, starts_at, ends_at, status, recurrence_group_id)
+             VALUES ($1, $2, $3, $4, $5, $6, 'confirmed', $7)
+             RETURNING id`,
+            [
+              resourceId,
+              req.user!.id,
+              title,
+              description || null,
+              planned.startsAt,
+              planned.endsAt,
+              recurrenceGroupId,
+            ]
+          );
+          createdIds.push(created.rows[0].id);
+        }
+
+        await client.query('COMMIT');
+
+        const result = await pool.query(`${bookingSelect} WHERE b.id = $1`, [createdIds[0]]);
+
+        res.status(201).json({
+          message:
+            createdIds.length > 1
+              ? `Создано повторяющихся бронирований: ${createdIds.length}`
+              : 'Бронирование создано',
+          booking: mapBooking(result.rows[0]),
+          createdCount: createdIds.length,
+          bookingIds: createdIds.map(String),
+        });
+      } catch (transactionError) {
+        await client.query('ROLLBACK');
+        throw transactionError;
+      } finally {
+        client.release();
+      }
     } catch (error) {
       console.error('Create booking error:', error);
       res.status(500).json({ message: 'Internal server error' });
@@ -272,9 +341,17 @@ router.put(
   }
 );
 
-router.delete('/:id', authenticateToken, async (req: AuthRequest, res: any) => {
+router.delete('/:id', authenticateToken, [
+  query('scope').optional().isIn(['single', 'series']),
+], async (req: AuthRequest, res: any) => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
     const { id } = req.params;
+    const scope = req.query.scope === 'series' ? 'series' : 'single';
     const existing = await pool.query('SELECT * FROM bookings WHERE id = $1', [id]);
 
     if (existing.rows.length === 0) {
@@ -287,6 +364,22 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: any) => {
 
     if (!isOwner && !isAdmin) {
       return res.status(403).json({ message: 'Можно отменять только свои бронирования' });
+    }
+
+    if (scope === 'series' && booking.recurrence_group_id) {
+      const cancelled = await pool.query(
+        `UPDATE bookings
+         SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+         WHERE recurrence_group_id = $1
+           AND status = 'confirmed'
+         RETURNING id`,
+        [booking.recurrence_group_id]
+      );
+
+      return res.json({
+        message: `Отменено бронирований: ${cancelled.rowCount || 0}`,
+        cancelledCount: cancelled.rowCount || 0,
+      });
     }
 
     await pool.query(
