@@ -27,11 +27,32 @@ import type sharp from 'sharp';
 
 dotenv.config();
 
+const PORT = parseInt(process.env.PORT || '3001', 10);
 const app = express();
+const isProduction = process.env.NODE_ENV === 'production';
+
+const healthPayload = () => ({
+  status: 'OK',
+  timestamp: new Date().toISOString(),
+  port: PORT,
+  environment: process.env.NODE_ENV || 'development',
+});
+
+// Railway health check — без middleware, чтобы отвечать сразу после listen()
+app.get('/', (_req, res) => {
+  res.json(healthPayload());
+});
+
+app.get('/health', (_req, res) => {
+  res.json(healthPayload());
+});
+
+app.get('/api/health', (_req, res) => {
+  res.json(healthPayload());
+});
 
 // Railway автоматически устанавливает PORT, но если его нет, используем 3001
 // В Railway PORT всегда должен быть установлен
-const PORT = parseInt(process.env.PORT || '3001', 10);
 console.log(`🔧 PORT from environment: ${process.env.PORT || 'NOT SET'}, using: ${PORT}`);
 console.log(`🔧 All environment variables:`, Object.keys(process.env).filter(k => k.includes('PORT') || k.includes('NODE') || k.includes('RAILWAY')));
 
@@ -77,15 +98,22 @@ const uniqueOrigins = Array.from(new Set(allowedOrigins.filter((origin): origin 
 
 console.log('🌐 Allowed CORS origins:', uniqueOrigins);
 
-// Явная обработка OPTIONS запросов ПЕРЕД всеми другими middleware
-// Логируем ВСЕ запросы для отладки (даже в production)
+// Логируем входящие запросы (в production пропускаем шумные static/health)
 app.use((req, res, next) => {
-  // Логируем все входящие запросы
-  console.log(`📥 ${req.method} ${req.path}`, {
-    origin: req.headers.origin,
-    'user-agent': req.headers['user-agent']?.substring(0, 50),
-    timestamp: new Date().toISOString()
-  });
+  const skipLogging =
+    isProduction &&
+    (req.path === '/' ||
+      req.path === '/health' ||
+      req.path === '/api/health' ||
+      req.path.startsWith('/api/uploads/'));
+
+  if (!skipLogging) {
+    console.log(`📥 ${req.method} ${req.path}`, {
+      origin: req.headers.origin,
+      'user-agent': req.headers['user-agent']?.substring(0, 50),
+      timestamp: new Date().toISOString(),
+    });
+  }
   next();
 });
 
@@ -446,26 +474,6 @@ app.use('/api/uploads', express.static(uploadsDir, {
   }
 }));
 
-// Health check - должен быть ДО всех других маршрутов для быстрого ответа
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    port: PORT,
-    environment: process.env.NODE_ENV || 'development'
-  });
-});
-
-// Root health check (для Railway)
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    port: PORT,
-    environment: process.env.NODE_ENV || 'development'
-  });
-});
-
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error(err.stack);
@@ -487,19 +495,6 @@ process.on('unhandledRejection', (reason) => {
 process.on('uncaughtException', (error) => {
   console.error('uncaughtException:', error);
   process.exit(1);
-});
-
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('Shutting down gracefully...');
-  await pool.end();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  console.log('Shutting down gracefully...');
-  await pool.end();
-  process.exit(0);
 });
 
 // Запускаем сервер СРАЗУ, чтобы он мог обрабатывать запросы (включая OPTIONS)
@@ -542,6 +537,21 @@ server.on('clientError', (err: any, socket: any) => {
 server.on('close', () => {
   console.log('⚠️ Server closed');
 });
+
+const shutdown = (signal: string) => {
+  console.log(`${signal} received, shutting down gracefully...`);
+  server.close(() => {
+    void pool.end().finally(() => process.exit(0));
+  });
+
+  setTimeout(() => {
+    console.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 15_000).unref();
+};
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 // Initialize database in background
 async function initializeDatabaseConnection() {
