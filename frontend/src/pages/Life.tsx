@@ -211,7 +211,7 @@ const Life: React.FC = () => {
                   <div className="relative h-48 bg-pastel-100 overflow-hidden flex items-center justify-center">
                     <div className="text-center text-pastel-500">
                       <Image className="w-10 h-10 mx-auto mb-2" />
-                      <span className="text-sm">Смотреть фото</span>
+                      <span className="text-sm">Смотреть медиа</span>
                     </div>
                   </div>
                 )}
@@ -242,7 +242,7 @@ const Life: React.FC = () => {
                   className="btn-primary w-full flex items-center justify-center space-x-2 mb-3"
                 >
                   <Image className="w-4 h-4" />
-                  <span>Смотреть фото</span>
+                  <span>Смотреть медиа</span>
                 </button>
 
                 <a

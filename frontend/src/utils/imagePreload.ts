@@ -1,4 +1,5 @@
-import { getImageUrlCandidates, NormalizeImageUrlOptions } from './imageUtils';
+import { getImageUrlCandidates, isDriveImageRef, NormalizeImageUrlOptions } from './imageUtils';
+import { fetchDriveImageBlobUrl } from './driveImageLoader';
 
 interface PreloadEntry {
   src: string;
@@ -153,6 +154,16 @@ export const preloadImageCandidates = async (src: string, options?: NormalizeIma
   }
 
   const task = (async () => {
+    if (isDriveImageRef(src)) {
+      try {
+        const blobUrl = await fetchDriveImageBlobUrl(src, options);
+        rememberImageCandidate(src, options, blobUrl);
+        return blobUrl;
+      } catch {
+        return null;
+      }
+    }
+
     const candidates = getImageUrlCandidates(src, options);
 
     for (const candidate of candidates) {

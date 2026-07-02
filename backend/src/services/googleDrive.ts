@@ -291,7 +291,62 @@ const isImageMimeType = (mimeType?: string): boolean => {
   return Boolean(mimeType?.startsWith('image/'));
 };
 
-export const listImagesInDriveResource = async (resourceIdOrUrl: string): Promise<DriveFileItem[]> => {
+const isVideoMimeType = (mimeType?: string): boolean => {
+  return Boolean(mimeType?.startsWith('video/'));
+};
+
+export type DriveMediaKind = 'image' | 'video';
+
+export const getDriveMediaKind = (mimeType?: string): DriveMediaKind | null => {
+  if (isImageMimeType(mimeType)) {
+    return 'image';
+  }
+
+  if (isVideoMimeType(mimeType)) {
+    return 'video';
+  }
+
+  return null;
+};
+
+const isGalleryMediaMimeType = (mimeType?: string): boolean => {
+  return getDriveMediaKind(mimeType) !== null;
+};
+
+const MAX_DRIVE_MEDIA_SEARCH_DEPTH = 3;
+
+const collectMediaFromFolder = async (
+  drive: drive_v3.Drive,
+  folderId: string,
+  maxDepth = MAX_DRIVE_MEDIA_SEARCH_DEPTH
+): Promise<DriveFileItem[]> => {
+  const mediaItems: DriveFileItem[] = [];
+  const queue: Array<{ folderId: string; depth: number }> = [{ folderId, depth: 0 }];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      continue;
+    }
+
+    const children = await listFolderChildren(drive, current.folderId);
+
+    for (const child of children) {
+      if (isGalleryMediaMimeType(child.mimeType)) {
+        mediaItems.push(child);
+        continue;
+      }
+
+      if (child.mimeType === FOLDER_MIME_TYPE && current.depth < maxDepth) {
+        queue.push({ folderId: child.id, depth: current.depth + 1 });
+      }
+    }
+  }
+
+  return sortDriveItemsByName(mediaItems);
+};
+
+export const listMediaInDriveResource = async (resourceIdOrUrl: string): Promise<DriveFileItem[]> => {
   const drive = getDriveClient();
   const resourceId = resourceIdOrUrl.includes('http')
     ? extractDriveResourceIdFromUrl(resourceIdOrUrl)
@@ -309,7 +364,7 @@ export const listImagesInDriveResource = async (resourceIdOrUrl: string): Promis
 
   const resource = mapDriveFile(resourceResponse.data);
 
-  if (isImageMimeType(resource.mimeType)) {
+  if (isGalleryMediaMimeType(resource.mimeType)) {
     return [resource];
   }
 
@@ -317,13 +372,105 @@ export const listImagesInDriveResource = async (resourceIdOrUrl: string): Promis
     return [];
   }
 
-  const children = await listFolderChildren(drive, resource.id);
-  return children.filter((child) => isImageMimeType(child.mimeType));
+  return collectMediaFromFolder(drive, resource.id);
 };
 
-export const streamDriveFileContent = async (
-  fileId: string
-): Promise<{ stream: NodeJS.ReadableStream; mimeType: string; name: string }> => {
+export const listImagesInDriveResource = async (resourceIdOrUrl: string): Promise<DriveFileItem[]> => {
+  const mediaItems = await listMediaInDriveResource(resourceIdOrUrl);
+  return mediaItems.filter((item) => isImageMimeType(item.mimeType));
+};
+
+export interface DriveMediaStreamResult {
+  stream: NodeJS.ReadableStream;
+  mimeType: string;
+  name: string;
+  totalSize?: number;
+  contentRange?: string;
+  statusCode: 200 | 206;
+}
+
+const parseByteRange = (
+  rangeHeader: string | undefined,
+  totalSize: number
+): { start: number; end: number } | null => {
+  if (!rangeHeader || !rangeHeader.startsWith('bytes=') || totalSize <= 0) {
+    return null;
+  }
+
+  const [startValue, endValue] = rangeHeader.replace(/^bytes=/, '').split('-');
+  const start = Number.parseInt(startValue, 10);
+  const end = endValue ? Number.parseInt(endValue, 10) : totalSize - 1;
+
+  if (!Number.isFinite(start) || start < 0 || start >= totalSize) {
+    return null;
+  }
+
+  const safeEnd = Number.isFinite(end) ? Math.min(end, totalSize - 1) : totalSize - 1;
+  if (safeEnd < start) {
+    return null;
+  }
+
+  return { start, end: safeEnd };
+};
+
+export const streamDriveMediaContent = async (
+  fileId: string,
+  rangeHeader?: string
+): Promise<DriveMediaStreamResult> => {
+  const drive = getDriveClient();
+
+  const metaResponse = await drive.files.get({
+    fileId,
+    supportsAllDrives: true,
+    fields: 'id, name, mimeType, size',
+  });
+
+  if (!metaResponse.data.id) {
+    throw new Error('Файл Google Drive не найден.');
+  }
+
+  const mimeType = metaResponse.data.mimeType || 'application/octet-stream';
+  if (!isGalleryMediaMimeType(mimeType)) {
+    throw new Error('Запрошенный файл не является изображением или видео.');
+  }
+
+  const totalSize = Number.parseInt(metaResponse.data.size || '0', 10);
+  const parsedRange = parseByteRange(rangeHeader, totalSize);
+  const requestHeaders: Record<string, string> = {};
+
+  if (parsedRange) {
+    requestHeaders.Range = `bytes=${parsedRange.start}-${parsedRange.end}`;
+  }
+
+  const contentResponse = await drive.files.get(
+    {
+      fileId,
+      supportsAllDrives: true,
+      alt: 'media',
+      acknowledgeAbuse: true,
+    },
+    {
+      responseType: 'stream',
+      headers: requestHeaders,
+    }
+  );
+
+  const statusCode = parsedRange ? 206 : 200;
+  const contentRange = parsedRange
+    ? `bytes ${parsedRange.start}-${parsedRange.end}/${totalSize}`
+    : undefined;
+
+  return {
+    stream: contentResponse.data as NodeJS.ReadableStream,
+    mimeType,
+    name: metaResponse.data.name || fileId,
+    totalSize: totalSize > 0 ? totalSize : undefined,
+    contentRange,
+    statusCode,
+  };
+};
+
+export const readDriveFileBuffer = async (fileId: string): Promise<{ buffer: Buffer; mimeType: string; name: string }> => {
   const drive = getDriveClient();
 
   const metaResponse = await drive.files.get({
@@ -345,13 +492,30 @@ export const streamDriveFileContent = async (
       fileId,
       supportsAllDrives: true,
       alt: 'media',
+      acknowledgeAbuse: true,
     },
-    { responseType: 'stream' }
+    { responseType: 'arraybuffer' }
   );
 
   return {
-    stream: contentResponse.data as NodeJS.ReadableStream,
+    buffer: Buffer.from(contentResponse.data as ArrayBuffer),
     mimeType: metaResponse.data.mimeType || 'application/octet-stream',
     name: metaResponse.data.name || fileId,
+  };
+};
+
+export const streamDriveFileContent = async (
+  fileId: string
+): Promise<{ stream: NodeJS.ReadableStream; mimeType: string; name: string }> => {
+  const media = await streamDriveMediaContent(fileId);
+
+  if (!isImageMimeType(media.mimeType)) {
+    throw new Error('Запрошенный файл не является изображением.');
+  }
+
+  return {
+    stream: media.stream,
+    mimeType: media.mimeType,
+    name: media.name,
   };
 };

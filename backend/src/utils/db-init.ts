@@ -174,6 +174,36 @@ export async function initializeDatabase(pool: Pool) {
         );
       `);
 
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS booking_resources (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          type VARCHAR(10) NOT NULL CHECK (type IN ('room', 'zoom')),
+          zoom_url VARCHAR(500),
+          description TEXT,
+          sort_order INTEGER DEFAULT 0,
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS bookings (
+          id SERIAL PRIMARY KEY,
+          resource_id INTEGER NOT NULL REFERENCES booking_resources(id) ON DELETE RESTRICT,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          title VARCHAR(255) NOT NULL,
+          description TEXT,
+          starts_at TIMESTAMP NOT NULL,
+          ends_at TIMESTAMP NOT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed', 'cancelled')),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          CHECK (ends_at > starts_at)
+        );
+      `);
+
       // Создание индексов
       await pool.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);');
       await pool.query('CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department);');
@@ -187,6 +217,19 @@ export async function initializeDatabase(pool: Pool) {
       await pool.query('CREATE INDEX IF NOT EXISTS idx_calendar_events_date ON calendar_events(event_date);');
       await pool.query('CREATE INDEX IF NOT EXISTS idx_bots_active ON bots(is_active);');
       await pool.query('CREATE INDEX IF NOT EXISTS idx_bots_username ON bots(username) WHERE username IS NOT NULL;');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_booking_resources_type_active ON booking_resources(type, is_active);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_bookings_resource_time ON bookings(resource_id, starts_at, ends_at) WHERE status = \'confirmed\';');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id, starts_at DESC);');
+
+      const zoomCount = await pool.query(
+        `SELECT COUNT(*)::int AS count FROM booking_resources WHERE type = 'zoom'`
+      );
+      if ((zoomCount.rows[0]?.count || 0) === 0) {
+        await pool.query(
+          `INSERT INTO booking_resources (name, type, zoom_url, description, sort_order)
+           VALUES ('Zoom 1', 'zoom', NULL, 'Основной корпоративный Zoom', 0)`
+        );
+      }
 
       console.log('✅ Таблицы созданы');
     } else {
@@ -302,6 +345,50 @@ export async function initializeDatabase(pool: Pool) {
       await pool.query(`
         CREATE UNIQUE INDEX IF NOT EXISTS idx_bots_username ON bots(username) WHERE username IS NOT NULL;
       `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS booking_resources (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          type VARCHAR(10) NOT NULL CHECK (type IN ('room', 'zoom')),
+          zoom_url VARCHAR(500),
+          description TEXT,
+          sort_order INTEGER DEFAULT 0,
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS bookings (
+          id SERIAL PRIMARY KEY,
+          resource_id INTEGER NOT NULL REFERENCES booking_resources(id) ON DELETE RESTRICT,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          title VARCHAR(255) NOT NULL,
+          description TEXT,
+          starts_at TIMESTAMP NOT NULL,
+          ends_at TIMESTAMP NOT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed', 'cancelled')),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          CHECK (ends_at > starts_at)
+        );
+      `);
+
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_booking_resources_type_active ON booking_resources(type, is_active);');
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_bookings_resource_time ON bookings(resource_id, starts_at, ends_at) WHERE status = 'confirmed';`);
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id, starts_at DESC);');
+
+      const zoomCount = await pool.query(
+        `SELECT COUNT(*)::int AS count FROM booking_resources WHERE type = 'zoom'`
+      );
+      if ((zoomCount.rows[0]?.count || 0) === 0) {
+        await pool.query(
+          `INSERT INTO booking_resources (name, type, zoom_url, description, sort_order)
+           VALUES ('Zoom 1', 'zoom', NULL, 'Основной корпоративный Zoom', 0)`
+        );
+      }
       
       console.log('✅ Проверка колонок завершена');
     }

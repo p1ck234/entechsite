@@ -156,6 +156,7 @@ export interface EventPhoto {
   name: string;
   mimeType?: string;
   ref: string;
+  mediaType?: 'image' | 'video';
 }
 
 export interface EventPhotosResponse {
@@ -191,6 +192,38 @@ export interface TelegramBot {
   url?: string; // только для SITE
   description?: string;
   isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type BookingResourceType = 'room' | 'zoom';
+
+export interface BookingResource {
+  id: string;
+  name: string;
+  type: BookingResourceType;
+  zoomUrl?: string;
+  description?: string;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Booking {
+  id: string;
+  resourceId: string;
+  resourceName: string;
+  resourceType: BookingResourceType;
+  zoomUrl?: string;
+  userId: string;
+  userEmail: string;
+  employeeName?: string;
+  title: string;
+  description?: string;
+  startsAt: string;
+  endsAt: string;
+  status: 'confirmed' | 'cancelled';
   createdAt: string;
   updatedAt: string;
 }

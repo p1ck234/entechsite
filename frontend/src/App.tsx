@@ -9,6 +9,7 @@ import Employees from './pages/Employees';
 import Courses from './pages/Courses';
 import Life from './pages/Life';
 import Calendar from './pages/Calendar';
+import Bookings from './pages/Bookings';
 import Bots from './pages/Bots';
 import LoadingSpinner from './components/LoadingSpinner';
 
@@ -51,6 +52,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/courses" element={<Courses />} />
         <Route path="/life" element={<Life />} />
         <Route path="/events" element={<Calendar />} />
+        <Route path="/bookings" element={<Bookings />} />
         <Route path="/bots" element={<Bots />} />
         <Route path="/dashboard" element={<Navigate to="/home" replace />} />
         <Route path="/profile" element={<Navigate to="/home" replace />} />

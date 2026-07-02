@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, PaginationInfo } from '../types';
+import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, BookingResource, Booking, PaginationInfo } from '../types';
 
 import { API_BASE_URL } from '../config/api';
 
@@ -583,6 +583,92 @@ export const calendarAPI = {
 
   deleteEvent: async (id: string): Promise<{ message: string }> => {
     const response = await api.delete(`/calendar/${id}`);
+    return response.data;
+  },
+};
+
+export const bookingResourcesAPI = {
+  getResources: async (): Promise<{ resources: BookingResource[] }> => {
+    const response = await api.get('/booking-resources');
+    return response.data;
+  },
+
+  getAllResources: async (): Promise<{ resources: BookingResource[] }> => {
+    const response = await api.get('/booking-resources/all');
+    return response.data;
+  },
+
+  createResource: async (resource: {
+    name: string;
+    type: 'room' | 'zoom';
+    zoomUrl?: string;
+    description?: string;
+    sortOrder?: number;
+  }): Promise<{ message: string; resource: BookingResource }> => {
+    const response = await api.post('/booking-resources', resource);
+    return response.data;
+  },
+
+  updateResource: async (
+    id: string,
+    resource: Partial<{
+      name: string;
+      type: 'room' | 'zoom';
+      zoomUrl: string | null;
+      description: string;
+      sortOrder: number;
+      isActive: boolean;
+    }>
+  ): Promise<{ message: string; resource: BookingResource }> => {
+    const response = await api.put(`/booking-resources/${id}`, resource);
+    return response.data;
+  },
+
+  deleteResource: async (id: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/booking-resources/${id}`);
+    return response.data;
+  },
+};
+
+export const bookingsAPI = {
+  getBookings: async (params?: {
+    date?: string;
+    type?: 'room' | 'zoom';
+    resourceId?: string;
+    mine?: boolean;
+  }): Promise<{ bookings: Booking[] }> => {
+    const response = await api.get('/bookings', { params });
+    return response.data;
+  },
+
+  createBooking: async (booking: {
+    resourceId: string;
+    title: string;
+    description?: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+  }): Promise<{ message: string; booking: Booking }> => {
+    const response = await api.post('/bookings', booking);
+    return response.data;
+  },
+
+  updateBooking: async (
+    id: string,
+    booking: Partial<{
+      title: string;
+      description: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+    }>
+  ): Promise<{ message: string; booking: Booking }> => {
+    const response = await api.put(`/bookings/${id}`, booking);
+    return response.data;
+  },
+
+  cancelBooking: async (id: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/bookings/${id}`);
     return response.data;
   },
 };

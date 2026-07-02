@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
-import { getImageUrlCandidates, NormalizeImageUrlOptions } from '../utils/imageUtils';
+import { getImageUrlCandidates, isDriveImageRef, NormalizeImageUrlOptions } from '../utils/imageUtils';
 import { getCachedImageCandidate, rememberImageCandidate } from '../utils/imagePreload';
+import { fetchDriveImageBlobUrl, revokeDriveImageBlobUrl } from '../utils/driveImageLoader';
 
 const IMAGE_LOAD_TIMEOUT_MS = 7000;
 
@@ -25,14 +26,17 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [candidateIndex, setCandidateIndex] = useState(0);
+  const [driveBlobUrl, setDriveBlobUrl] = useState<string | null>(null);
+
+  const isDriveRef = useMemo(() => Boolean(src && isDriveImageRef(src)), [src]);
 
   const srcCandidates = useMemo(() => {
-    if (!src) {
+    if (!src || isDriveRef) {
       return [];
     }
 
     return getImageUrlCandidates(src, imageOptions);
-  }, [src, imageOptions?.width, imageOptions?.height, imageOptions?.quality, imageOptions?.fit]);
+  }, [src, isDriveRef, imageOptions?.width, imageOptions?.height, imageOptions?.quality, imageOptions?.fit]);
 
   const currentSrc = srcCandidates[candidateIndex] || '';
   const hasNextCandidate = candidateIndex < srcCandidates.length - 1;
@@ -62,14 +66,20 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
   };
 
   const handleLoad = () => {
-    if (src && currentSrc) {
-      rememberImageCandidate(src, imageOptions, currentSrc);
+    const loadedUrl = isDriveRef ? driveBlobUrl : currentSrc;
+    if (src && loadedUrl) {
+      rememberImageCandidate(src, imageOptions, loadedUrl);
     }
     setLoading(false);
     setError(false);
   };
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    if (isDriveRef) {
+      finalizeLoadFailure(e);
+      return;
+    }
+
     if (tryMoveToNextCandidate()) {
       return;
     }
@@ -85,10 +95,56 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
     setCandidateIndex(initialIndex >= 0 ? initialIndex : 0);
     setLoading(true);
     setError(false);
+    setDriveBlobUrl(null);
   }, [src, srcCandidates, imageOptions?.width, imageOptions?.height, imageOptions?.quality, imageOptions?.fit]);
 
   useEffect(() => {
-    if (!loading || !currentSrc) {
+    if (!isDriveRef || !src) {
+      return;
+    }
+
+    let isActive = true;
+    let objectUrl: string | null = null;
+
+    setLoading(true);
+    setError(false);
+    setDriveBlobUrl(null);
+
+    fetchDriveImageBlobUrl(src, imageOptions)
+      .then((url) => {
+        if (!isActive) {
+          revokeDriveImageBlobUrl(url);
+          return;
+        }
+
+        objectUrl = url;
+        setDriveBlobUrl(url);
+        rememberImageCandidate(src, imageOptions, url);
+        setLoading(false);
+        setError(false);
+      })
+      .catch(() => {
+        if (!isActive) {
+          return;
+        }
+
+        setLoading(false);
+        setError(true);
+        if (onLoadError) {
+          onLoadError();
+        }
+      });
+
+    return () => {
+      isActive = false;
+      if (objectUrl) {
+        revokeDriveImageBlobUrl(objectUrl);
+      }
+    };
+  }, [src, isDriveRef, imageOptions?.width, imageOptions?.height, imageOptions?.quality, imageOptions?.fit, onLoadError]);
+
+  useEffect(() => {
+    if (isDriveRef || !loading || !currentSrc) {
       return;
     }
 
@@ -110,9 +166,11 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [loading, currentSrc, candidateIndex, srcCandidates.length, onLoadError]);
+  }, [loading, currentSrc, candidateIndex, srcCandidates.length, onLoadError, isDriveRef]);
 
-  if (!currentSrc || error) {
+  const resolvedSrc = isDriveRef ? driveBlobUrl : currentSrc;
+
+  if (!resolvedSrc || error) {
     return null; // Если ошибка или нет src, возвращаем null - родитель покажет fallback
   }
 
@@ -124,8 +182,8 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
         </div>
       )}
       <img
-        key={currentSrc}
-        src={currentSrc}
+        key={resolvedSrc}
+        src={resolvedSrc}
         alt={alt}
         className={`${className} ${loading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
         onLoad={handleLoad}

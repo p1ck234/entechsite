@@ -1,9 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, ExternalLink, ImageOff, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, ImageOff, Play, X } from 'lucide-react';
 import { eventsAPI } from '../api/client';
 import type { Event, EventPhoto } from '../types';
 import ImageWithLoader from './ImageWithLoader';
-import { getImageUrlCandidates } from '../utils/imageUtils';
+import {
+  fetchDriveImageBlobUrl,
+  getDriveMediaStreamUrl,
+  isEventVideo,
+  revokeDriveImageBlobUrl,
+} from '../utils/driveImageLoader';
+import { isDriveImageRef } from '../utils/imageUtils';
 
 interface EventGalleryModalProps {
   event: Event;
@@ -16,6 +22,125 @@ const GALLERY_IMAGE_OPTIONS = {
   quality: 82,
   fit: 'inside',
 } as const;
+
+const GALLERY_THUMB_OPTIONS = {
+  width: 480,
+  height: 480,
+  quality: 72,
+  fit: 'cover',
+} as const;
+
+const formatMediaCount = (items: EventPhoto[]): string => {
+  const imageCount = items.filter((item) => !isEventVideo(item)).length;
+  const videoCount = items.filter((item) => isEventVideo(item)).length;
+
+  if (imageCount > 0 && videoCount > 0) {
+    return `${imageCount} фото, ${videoCount} видео`;
+  }
+
+  if (videoCount > 0) {
+    return `${videoCount} видео`;
+  }
+
+  return `${imageCount} фото`;
+};
+
+const GalleryMediaTile: React.FC<{ item: EventPhoto }> = ({ item }) => {
+  if (isEventVideo(item)) {
+    return (
+      <div className="relative w-full h-full bg-pastel-900/90 flex flex-col items-center justify-center text-white p-3">
+        <Play className="w-10 h-10 mb-2" />
+        <span className="text-xs text-center line-clamp-2">{item.name}</span>
+      </div>
+    );
+  }
+
+  return (
+    <ImageWithLoader
+      src={item.ref}
+      alt={item.name}
+      className="w-full h-full object-cover"
+      imageOptions={GALLERY_THUMB_OPTIONS}
+    />
+  );
+};
+
+const LightboxMedia: React.FC<{ item: EventPhoto }> = ({ item }) => {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (isEventVideo(item)) {
+      setBlobUrl(null);
+      setError(false);
+      return;
+    }
+
+    if (!isDriveImageRef(item.ref)) {
+      setBlobUrl(item.ref);
+      return;
+    }
+
+    let active = true;
+    let objectUrl: string | null = null;
+
+    fetchDriveImageBlobUrl(item.ref, GALLERY_IMAGE_OPTIONS)
+      .then((url) => {
+        if (!active) {
+          revokeDriveImageBlobUrl(url);
+          return;
+        }
+        objectUrl = url;
+        setBlobUrl(url);
+      })
+      .catch(() => {
+        if (active) {
+          setError(true);
+        }
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) {
+        revokeDriveImageBlobUrl(objectUrl);
+      }
+    };
+  }, [item]);
+
+  if (isEventVideo(item)) {
+    const streamUrl = getDriveMediaStreamUrl(item.ref);
+
+    if (!streamUrl) {
+      return <ImageOff className="w-16 h-16 text-white/60" />;
+    }
+
+    return (
+      <video
+        key={streamUrl}
+        src={streamUrl}
+        controls
+        autoPlay
+        playsInline
+        preload="metadata"
+        className="max-w-full max-h-[80vh] rounded-lg bg-black"
+      >
+        Ваш браузер не поддерживает воспроизведение видео.
+      </video>
+    );
+  }
+
+  if (error || !blobUrl) {
+    return <ImageOff className="w-16 h-16 text-white/60" />;
+  }
+
+  return (
+    <img
+      src={blobUrl}
+      alt={item.name}
+      className="max-w-full max-h-[80vh] object-contain rounded-lg"
+    />
+  );
+};
 
 const EventGalleryModal: React.FC<EventGalleryModalProps> = ({ event, onClose }) => {
   const [photos, setPhotos] = useState<EventPhoto[]>([]);
@@ -39,7 +164,7 @@ const EventGalleryModal: React.FC<EventGalleryModalProps> = ({ event, onClose })
         if (!isMounted) {
           return;
         }
-        setError(loadError.response?.data?.message || loadError.message || 'Не удалось загрузить фотографии');
+        setError(loadError.response?.data?.message || loadError.message || 'Не удалось загрузить медиафайлы');
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -84,9 +209,6 @@ const EventGalleryModal: React.FC<EventGalleryModalProps> = ({ event, onClose })
   }, [activeIndex, onClose, photos.length]);
 
   const activePhoto = activeIndex !== null ? photos[activeIndex] : null;
-  const activePhotoUrl = activePhoto
-    ? getImageUrlCandidates(activePhoto.ref, GALLERY_IMAGE_OPTIONS)[0] || ''
-    : '';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -95,7 +217,7 @@ const EventGalleryModal: React.FC<EventGalleryModalProps> = ({ event, onClose })
           <div className="min-w-0">
             <h2 className="text-xl font-semibold text-pastel-800 truncate">{event.title}</h2>
             <p className="text-sm text-pastel-500 mt-1">
-              {loading ? 'Загрузка фотографий...' : `${photos.length} фото`}
+              {loading ? 'Загрузка...' : formatMediaCount(photos)}
             </p>
           </div>
           <button
@@ -121,7 +243,7 @@ const EventGalleryModal: React.FC<EventGalleryModalProps> = ({ event, onClose })
           ) : photos.length === 0 ? (
             <div className="text-center py-10">
               <ImageOff className="w-10 h-10 text-pastel-400 mx-auto mb-3" />
-              <p className="text-pastel-700">В этой папке пока нет фотографий</p>
+              <p className="text-pastel-700">В этой папке пока нет фото и видео</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -132,12 +254,7 @@ const EventGalleryModal: React.FC<EventGalleryModalProps> = ({ event, onClose })
                   onClick={() => setActiveIndex(index)}
                   className="relative aspect-square overflow-hidden rounded-xl bg-pastel-100 hover:ring-2 hover:ring-primary-400 transition-all"
                 >
-                  <ImageWithLoader
-                    src={photo.ref}
-                    alt={photo.name}
-                    className="w-full h-full object-cover"
-                    imageOptions={GALLERY_IMAGE_OPTIONS}
-                  />
+                  <GalleryMediaTile item={photo} />
                 </button>
               ))}
             </div>
@@ -188,7 +305,7 @@ const EventGalleryModal: React.FC<EventGalleryModalProps> = ({ event, onClose })
                   );
                 }}
                 className="absolute left-4 p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
-                aria-label="Предыдущее фото"
+                aria-label="Предыдущий файл"
               >
                 <ChevronLeft className="w-6 h-6" />
               </button>
@@ -201,7 +318,7 @@ const EventGalleryModal: React.FC<EventGalleryModalProps> = ({ event, onClose })
                   );
                 }}
                 className="absolute right-4 p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
-                aria-label="Следующее фото"
+                aria-label="Следующий файл"
               >
                 <ChevronRight className="w-6 h-6" />
               </button>
@@ -212,13 +329,10 @@ const EventGalleryModal: React.FC<EventGalleryModalProps> = ({ event, onClose })
             className="max-w-[90vw] max-h-[85vh] flex flex-col items-center"
             onClick={(clickEvent) => clickEvent.stopPropagation()}
           >
-            <img
-              src={activePhotoUrl}
-              alt={activePhoto.name}
-              className="max-w-full max-h-[80vh] object-contain rounded-lg"
-            />
-            <p className="mt-3 text-sm text-white/80">
+            <LightboxMedia item={activePhoto} />
+            <p className="mt-3 text-sm text-white/80 text-center">
               {activeIndex + 1} / {photos.length}
+              <span className="block text-white/60 mt-1">{activePhoto.name}</span>
             </p>
           </div>
         </div>

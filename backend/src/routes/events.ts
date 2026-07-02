@@ -2,7 +2,7 @@ import express from 'express';
 import { body, validationResult, query } from 'express-validator';
 import { Pool } from 'pg';
 import { authenticateToken } from '../middleware/auth';
-import { listImagesInDriveResource, toDriveImageRef } from '../services/googleDrive';
+import { getDriveMediaKind, listMediaInDriveResource, toDriveImageRef } from '../services/googleDrive';
 
 const router = express.Router();
 const pool = new Pool({
@@ -53,7 +53,7 @@ router.get('/', authenticateToken, [
   }
 });
 
-// Get event photos from Google Drive folder
+// Get event media from Google Drive folder
 router.get('/:id/photos', authenticateToken, async (req: any, res: any) => {
   try {
     const { id } = req.params;
@@ -68,22 +68,23 @@ router.get('/:id/photos', authenticateToken, async (req: any, res: any) => {
     }
 
     const event = result.rows[0];
-    const photos = await listImagesInDriveResource(event.google_drive_url);
+    const mediaItems = await listMediaInDriveResource(event.google_drive_url);
 
     res.json({
       eventId: String(event.id),
       title: event.title,
-      photos: photos.map((photo) => ({
-        id: photo.id,
-        name: photo.name,
-        mimeType: photo.mimeType,
-        ref: toDriveImageRef(photo.id),
+      photos: mediaItems.map((item) => ({
+        id: item.id,
+        name: item.name,
+        mimeType: item.mimeType,
+        ref: toDriveImageRef(item.id),
+        mediaType: getDriveMediaKind(item.mimeType) || 'image',
       })),
     });
   } catch (error: any) {
     console.error('Get event photos error:', error);
     res.status(500).json({
-      message: error?.message || 'Не удалось загрузить фотографии мероприятия',
+      message: error?.message || 'Не удалось загрузить медиафайлы мероприятия',
     });
   }
 });
