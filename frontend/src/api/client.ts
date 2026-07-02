@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AuthResponse, User, Employee, Course, Lesson, LessonMaterialsResponse, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, BookingResource, Booking, BookingRecurrenceInput, PaginationInfo } from '../types';
+import { AuthResponse, User, Employee, Course, Lesson, LessonMaterialsResponse, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, BookingResource, Booking, BookingRecurrenceInput, BookingTag, PaginationInfo } from '../types';
 
 import { API_BASE_URL } from '../config/api';
 import { clearEventPhotosCache, getCachedEventPhotos, rememberEventPhotos } from '../utils/eventPhotosCache';
@@ -605,6 +605,18 @@ export const calendarAPI = {
   },
 };
 
+export const bookingTagsAPI = {
+  getTags: async (): Promise<{ tags: BookingTag[] }> => {
+    const response = await api.get('/booking-tags');
+    return response.data;
+  },
+
+  createTag: async (name: string): Promise<{ message: string; tag: BookingTag }> => {
+    const response = await api.post('/booking-tags', { name });
+    return response.data;
+  },
+};
+
 export const bookingResourcesAPI = {
   getResources: async (): Promise<{ resources: BookingResource[] }> => {
     const response = await api.get('/booking-resources');
@@ -622,6 +634,7 @@ export const bookingResourcesAPI = {
     zoomUrl?: string;
     description?: string;
     sortOrder?: number;
+    tagIds?: string[];
   }): Promise<{ message: string; resource: BookingResource }> => {
     const response = await api.post('/booking-resources', resource);
     return response.data;
@@ -636,6 +649,7 @@ export const bookingResourcesAPI = {
       description: string;
       sortOrder: number;
       isActive: boolean;
+      tagIds: string[];
     }>
   ): Promise<{ message: string; resource: BookingResource }> => {
     const response = await api.put(`/booking-resources/${id}`, resource);

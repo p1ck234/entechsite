@@ -16,8 +16,6 @@ const formatTimeRange = (booking: Booking): string => {
   return `${start}–${end}`;
 };
 
-const BOOKING_MAX_ADVANCE_DAYS = 30;
-
 const Bookings: React.FC = () => {
   const { isAdmin, user } = useAuth();
   const [activeTab, setActiveTab] = useState<BookingResourceType>('room');
@@ -37,11 +35,6 @@ const Bookings: React.FC = () => {
   );
 
   const minBookingDate = useMemo(() => toInputDate(new Date()), []);
-  const maxBookingDate = useMemo(() => {
-    const maxDate = new Date();
-    maxDate.setDate(maxDate.getDate() + BOOKING_MAX_ADVANCE_DAYS);
-    return toInputDate(maxDate);
-  }, []);
 
   const loadData = async () => {
     try {
@@ -85,7 +78,9 @@ const Bookings: React.FC = () => {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-pastel-800">Расписание</h1>
-          <p className="text-pastel-600 mt-1">Переговорки и Zoom — бронирование без пересечений</p>
+          <p className="text-pastel-600 mt-1">
+            Переговорки и Zoom — бронировать может каждый, редактировать — автор или админ
+          </p>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
@@ -93,7 +88,6 @@ const Bookings: React.FC = () => {
             value={selectedDate}
             onChange={setSelectedDate}
             min={minBookingDate}
-            max={maxBookingDate}
             allowClear={false}
             className="w-full sm:w-[260px]"
           />
@@ -164,6 +158,18 @@ const Bookings: React.FC = () => {
                       )}
                       <h2 className="text-xl font-semibold text-pastel-800">{resource.name}</h2>
                     </div>
+                    {resource.tags && resource.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {resource.tags.map((tag) => (
+                          <span
+                            key={tag.id}
+                            className="inline-flex items-center rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold tracking-wide text-primary-700"
+                          >
+                            {tag.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {resource.description && (
                       <p className="text-sm text-pastel-600 mt-1">{resource.description}</p>
                     )}
@@ -206,19 +212,20 @@ const Bookings: React.FC = () => {
                       На этот день свободно
                     </p>
                   ) : (
-                    resourceBookings.map((booking) => (
+                    resourceBookings.map((booking) => {
+                      const manageable = canManageBooking(booking);
+
+                      return (
                       <button
                         key={booking.id}
                         type="button"
                         onClick={() => {
-                          if (canManageBooking(booking)) {
-                            setBookingModal({ resource, booking });
-                          }
+                          setBookingModal({ resource, booking });
                         }}
                         className={`w-full text-left rounded-xl border px-4 py-3 transition-colors ${
-                          canManageBooking(booking)
+                          manageable
                             ? 'border-pastel-200 hover:border-primary-300 hover:bg-primary-50/40'
-                            : 'border-pastel-200 bg-pastel-50/60 cursor-default'
+                            : 'border-pastel-200 bg-pastel-50/60 hover:bg-pastel-50'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-3">
@@ -237,6 +244,7 @@ const Bookings: React.FC = () => {
                             </div>
                             <p className="text-sm text-pastel-600 mt-1">
                               {booking.employeeName || booking.userEmail}
+                              {!manageable && ' · только просмотр'}
                             </p>
                           </div>
                           <div className="flex items-center gap-1 text-sm text-pastel-700 whitespace-nowrap">
@@ -245,7 +253,8 @@ const Bookings: React.FC = () => {
                           </div>
                         </div>
                       </button>
-                    ))
+                      );
+                    })
                   )}
                 </div>
 
@@ -263,7 +272,7 @@ const Bookings: React.FC = () => {
         </div>
       )}
 
-      {resourceModal !== undefined && (
+      {isAdmin && resourceModal !== undefined && (
         <BookingResourceModal
           type={activeTab}
           resource={resourceModal}
@@ -278,6 +287,7 @@ const Bookings: React.FC = () => {
         <BookingModal
           resource={bookingModal.resource}
           booking={bookingModal.booking}
+          canManage={bookingModal.booking ? canManageBooking(bookingModal.booking) : true}
           date={selectedDate}
           onClose={() => {
             setBookingModal(null);

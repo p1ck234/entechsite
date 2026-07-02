@@ -2,6 +2,12 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import { Pool } from 'pg';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
+import {
+  RESOURCE_WITH_TAGS_SELECT,
+  normalizeTagIds,
+  parseResourceTags,
+  syncResourceTags,
+} from '../utils/booking-tags';
 
 const router = express.Router();
 const pool = new Pool({
@@ -16,17 +22,29 @@ const mapResource = (row: any) => ({
   description: row.description || undefined,
   isActive: row.is_active,
   sortOrder: row.sort_order,
+  tags: parseResourceTags(row.tags),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
 
+const loadResourceById = async (id: string | number) => {
+  const result = await pool.query(
+    `${RESOURCE_WITH_TAGS_SELECT}
+     WHERE r.id = $1
+     GROUP BY r.id`,
+    [id]
+  );
+
+  return result.rows[0] ? mapResource(result.rows[0]) : null;
+};
+
 router.get('/', authenticateToken, async (_req: AuthRequest, res) => {
   try {
     const result = await pool.query(
-      `SELECT *
-       FROM booking_resources
-       WHERE is_active = true
-       ORDER BY type ASC, sort_order ASC, name ASC`
+      `${RESOURCE_WITH_TAGS_SELECT}
+       WHERE r.is_active = true
+       GROUP BY r.id
+       ORDER BY r.type ASC, r.sort_order ASC, r.name ASC`
     );
 
     res.json({ resources: result.rows.map(mapResource) });
@@ -39,9 +57,9 @@ router.get('/', authenticateToken, async (_req: AuthRequest, res) => {
 router.get('/all', authenticateToken, requireAdmin, async (_req: AuthRequest, res) => {
   try {
     const result = await pool.query(
-      `SELECT *
-       FROM booking_resources
-       ORDER BY type ASC, sort_order ASC, name ASC`
+      `${RESOURCE_WITH_TAGS_SELECT}
+       GROUP BY r.id
+       ORDER BY r.type ASC, r.sort_order ASC, r.name ASC`
     );
 
     res.json({ resources: result.rows.map(mapResource) });
@@ -61,8 +79,12 @@ router.post(
     body('zoomUrl').optional({ values: 'null' }).isURL(),
     body('description').optional().isString(),
     body('sortOrder').optional().isInt({ min: 0 }),
+    body('tagIds').optional().isArray(),
+    body('tagIds.*').optional().isInt({ min: 1 }),
   ],
   async (req: AuthRequest, res: any) => {
+    const client = await pool.connect();
+
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -70,21 +92,33 @@ router.post(
       }
 
       const { name, type, zoomUrl, description, sortOrder = 0 } = req.body;
+      const tagIds = normalizeTagIds(req.body.tagIds);
 
-      const result = await pool.query(
+      await client.query('BEGIN');
+
+      const result = await client.query(
         `INSERT INTO booking_resources (name, type, zoom_url, description, sort_order)
          VALUES ($1, $2, $3, $4, $5)
-         RETURNING *`,
+         RETURNING id`,
         [name, type, zoomUrl || null, description || null, sortOrder]
       );
 
+      const resourceId = result.rows[0].id;
+      await syncResourceTags(client, resourceId, tagIds);
+      await client.query('COMMIT');
+
+      const resource = await loadResourceById(resourceId);
+
       res.status(201).json({
         message: 'Ресурс создан',
-        resource: mapResource(result.rows[0]),
+        resource,
       });
     } catch (error) {
+      await client.query('ROLLBACK');
       console.error('Create booking resource error:', error);
       res.status(500).json({ message: 'Internal server error' });
+    } finally {
+      client.release();
     }
   }
 );
@@ -100,8 +134,12 @@ router.put(
     body('description').optional().isString(),
     body('sortOrder').optional().isInt({ min: 0 }),
     body('isActive').optional().isBoolean(),
+    body('tagIds').optional().isArray(),
+    body('tagIds.*').optional().isInt({ min: 1 }),
   ],
   async (req: AuthRequest, res: any) => {
+    const client = await pool.connect();
+
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -109,7 +147,7 @@ router.put(
       }
 
       const { id } = req.params;
-      const existing = await pool.query('SELECT * FROM booking_resources WHERE id = $1', [id]);
+      const existing = await client.query('SELECT * FROM booking_resources WHERE id = $1', [id]);
 
       if (existing.rows.length === 0) {
         return res.status(404).json({ message: 'Ресурс не найден' });
@@ -119,7 +157,9 @@ router.put(
       const nextType = req.body.type ?? current.type;
       const nextZoomUrl = req.body.zoomUrl === undefined ? current.zoom_url : req.body.zoomUrl;
 
-      const result = await pool.query(
+      await client.query('BEGIN');
+
+      await client.query(
         `UPDATE booking_resources
          SET name = COALESCE($1, name),
              type = COALESCE($2, type),
@@ -128,8 +168,7 @@ router.put(
              sort_order = COALESCE($5, sort_order),
              is_active = COALESCE($6, is_active),
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = $7
-         RETURNING *`,
+         WHERE id = $7`,
         [
           req.body.name ?? null,
           req.body.type ?? null,
@@ -141,13 +180,24 @@ router.put(
         ]
       );
 
+      if (req.body.tagIds !== undefined) {
+        await syncResourceTags(client, id, normalizeTagIds(req.body.tagIds));
+      }
+
+      await client.query('COMMIT');
+
+      const resource = await loadResourceById(id);
+
       res.json({
         message: 'Ресурс обновлён',
-        resource: mapResource(result.rows[0]),
+        resource,
       });
     } catch (error) {
+      await client.query('ROLLBACK');
       console.error('Update booking resource error:', error);
       res.status(500).json({ message: 'Internal server error' });
+    } finally {
+      client.release();
     }
   }
 );

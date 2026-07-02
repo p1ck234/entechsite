@@ -1,31 +1,39 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { bookingsAPI } from '../api/client';
-import type { Booking, BookingRecurrenceType, BookingResource } from '../types';
+import type { Booking, BookingResource } from '../types';
 import DatePicker from './DatePicker';
 import {
-  RECURRENCE_OPTIONS,
+  WEEKDAY_OPTIONS,
   expandRecurrenceDates,
-  getMaxBookingDate,
+  getDefaultRecurrenceUntilDate,
+  getWeekdayFromDate,
+  normalizeWeekdays,
 } from '../utils/bookingRecurrence';
 
 interface BookingModalProps {
   resource: BookingResource;
   date: string;
   booking?: Booking | null;
+  canManage?: boolean;
   onClose: () => void;
 }
 
-const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, onClose }) => {
+const BookingModal: React.FC<BookingModalProps> = ({
+  resource,
+  date,
+  booking,
+  canManage = true,
+  onClose,
+}) => {
   const [title, setTitle] = useState(booking?.title || '');
   const [description, setDescription] = useState(booking?.description || '');
   const [startTime, setStartTime] = useState('10:00');
   const [endTime, setEndTime] = useState('11:00');
-  const [recurrenceType, setRecurrenceType] = useState<BookingRecurrenceType>('none');
-  const [untilDate, setUntilDate] = useState(getMaxBookingDate());
+  const [repeatEnabled, setRepeatEnabled] = useState(false);
+  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([getWeekdayFromDate(date)]);
+  const [untilDate, setUntilDate] = useState(getDefaultRecurrenceUntilDate(date));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const maxBookingDate = useMemo(() => getMaxBookingDate(), []);
 
   useEffect(() => {
     if (!booking) {
@@ -33,8 +41,9 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
       setDescription('');
       setStartTime('10:00');
       setEndTime('11:00');
-      setRecurrenceType('none');
-      setUntilDate(maxBookingDate);
+      setRepeatEnabled(false);
+      setSelectedWeekdays([getWeekdayFromDate(date)]);
+      setUntilDate(getDefaultRecurrenceUntilDate(date));
       setError(null);
       return;
     }
@@ -49,26 +58,53 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
     setEndTime(
       `${String(endsAt.getHours()).padStart(2, '0')}:${String(endsAt.getMinutes()).padStart(2, '0')}`
     );
-    setRecurrenceType('none');
+    setRepeatEnabled(false);
     setError(null);
-  }, [booking, maxBookingDate]);
+  }, [booking, date]);
 
   const occurrenceDates = useMemo(() => {
-    if (booking || recurrenceType === 'none') {
+    if (booking || !repeatEnabled) {
       return [date];
     }
 
     return expandRecurrenceDates(date, {
-      type: recurrenceType,
+      type: 'weekly',
+      weekdays: selectedWeekdays,
       untilDate,
     });
-  }, [booking, recurrenceType, untilDate, date]);
+  }, [booking, repeatEnabled, selectedWeekdays, untilDate, date]);
+
+  const toggleWeekday = (weekday: number) => {
+    setSelectedWeekdays((current) => {
+      if (current.includes(weekday)) {
+        const next = current.filter((value) => value !== weekday);
+        return next.length > 0 ? normalizeWeekdays(next) : current;
+      }
+
+      return normalizeWeekdays([...current, weekday]);
+    });
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
+    if (booking && !canManage) {
+      setError('Редактировать может только автор бронирования или администратор');
+      return;
+    }
+
     if (!title.trim()) {
       setError('Укажите тему встречи');
+      return;
+    }
+
+    if (repeatEnabled && selectedWeekdays.length === 0) {
+      setError('Выберите хотя бы один день недели');
+      return;
+    }
+
+    if (repeatEnabled && !untilDate) {
+      setError('Укажите дату окончания повторения');
       return;
     }
 
@@ -92,13 +128,13 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
           date,
           startTime,
           endTime,
-          recurrence:
-            recurrenceType === 'none'
-              ? undefined
-              : {
-                  type: recurrenceType,
-                  untilDate,
-                },
+          recurrence: repeatEnabled
+            ? {
+                type: 'weekly',
+                weekdays: selectedWeekdays,
+                untilDate,
+              }
+            : undefined,
         });
       }
 
@@ -111,7 +147,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
   };
 
   const handleCancel = async (scope: 'single' | 'series') => {
-    if (!booking) {
+    if (!booking || !canManage) {
       return;
     }
 
@@ -156,6 +192,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
               onChange={(e) => setTitle(e.target.value)}
               className="input-field"
               placeholder="Созвон с командой"
+              disabled={Boolean(booking) && !canManage}
             />
           </div>
 
@@ -168,6 +205,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
                 onChange={(e) => setStartTime(e.target.value)}
                 className="input-field"
                 step={1800}
+                disabled={Boolean(booking) && !canManage}
               />
             </div>
             <div>
@@ -178,46 +216,73 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
                 onChange={(e) => setEndTime(e.target.value)}
                 className="input-field"
                 step={1800}
+                disabled={Boolean(booking) && !canManage}
               />
             </div>
           </div>
 
           {!booking && (
             <>
-              <div>
-                <label className="block text-sm font-medium text-pastel-700 mb-2">Повторение</label>
-                <select
-                  value={recurrenceType}
-                  onChange={(e) => setRecurrenceType(e.target.value as BookingRecurrenceType)}
-                  className="input-field"
-                >
-                  {RECURRENCE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={repeatEnabled}
+                  onChange={(e) => setRepeatEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-pastel-300 text-primary-500 focus:ring-primary-400"
+                />
+                <span className="text-sm font-medium text-pastel-700">Повторять по дням недели</span>
+              </label>
 
-              {recurrenceType !== 'none' && (
-                <div>
-                  <label className="block text-sm font-medium text-pastel-700 mb-2">Повторять до</label>
-                  <DatePicker
-                    value={untilDate}
-                    onChange={setUntilDate}
-                    min={date}
-                    max={maxBookingDate}
-                    allowClear={false}
-                  />
-                  <p className="text-xs text-pastel-500 mt-2">
-                    Будет создано встреч: {occurrenceDates.length}
-                  </p>
+              {repeatEnabled && (
+                <div className="space-y-4 rounded-xl border border-pastel-200 bg-pastel-50/60 p-4">
+                  <div>
+                    <label className="block text-sm font-medium text-pastel-700 mb-2">Дни недели</label>
+                    <div className="flex flex-wrap gap-2">
+                      {WEEKDAY_OPTIONS.map((option) => {
+                        const isSelected = selectedWeekdays.includes(option.value);
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => toggleWeekday(option.value)}
+                            className={`min-w-[44px] rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                              isSelected
+                                ? 'bg-primary-500 text-white'
+                                : 'bg-white text-pastel-700 border border-pastel-200 hover:border-primary-300'
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-pastel-700 mb-2">Повторять до</label>
+                    <DatePicker
+                      value={untilDate}
+                      onChange={setUntilDate}
+                      min={date}
+                      allowClear={false}
+                    />
+                    <p className="text-xs text-pastel-500 mt-2">
+                      Будет создано встреч: {occurrenceDates.length}
+                      {occurrenceDates.length >= 366 ? ' (лимит серии — 366)' : ''}
+                    </p>
+                  </div>
                 </div>
               )}
             </>
           )}
 
-          {booking?.recurrenceGroupId && (
+          {booking && !canManage && (
+            <p className="text-xs text-pastel-600 bg-pastel-50 rounded-xl px-3 py-2">
+              Это чужое бронирование — доступен только просмотр.
+            </p>
+          )}
+
+          {booking?.recurrenceGroupId && canManage && (
             <p className="text-xs text-primary-700 bg-primary-50 rounded-xl px-3 py-2">
               Это повторяющаяся встреча. Редактирование меняет только выбранный слот.
             </p>
@@ -230,6 +295,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
               onChange={(e) => setDescription(e.target.value)}
               className="input-field min-h-[80px]"
               placeholder="Необязательно"
+              disabled={Boolean(booking) && !canManage}
             />
           </div>
 
@@ -241,34 +307,38 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
 
           <div className="flex flex-col sm:flex-row sm:justify-between gap-3 pt-2">
             {booking ? (
-              booking.recurrenceGroupId ? (
-                <div className="flex flex-col sm:flex-row gap-2">
+              canManage ? (
+                booking.recurrenceGroupId ? (
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleCancel('single')}
+                      disabled={saving}
+                      className="btn-secondary text-red-600 border-red-200 hover:bg-red-50"
+                    >
+                      Отменить эту
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleCancel('series')}
+                      disabled={saving}
+                      className="btn-secondary text-red-700 border-red-300 hover:bg-red-50"
+                    >
+                      Отменить серию
+                    </button>
+                  </div>
+                ) : (
                   <button
                     type="button"
                     onClick={() => void handleCancel('single')}
                     disabled={saving}
                     className="btn-secondary text-red-600 border-red-200 hover:bg-red-50"
                   >
-                    Отменить эту
+                    Отменить бронь
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleCancel('series')}
-                    disabled={saving}
-                    className="btn-secondary text-red-700 border-red-300 hover:bg-red-50"
-                  >
-                    Отменить серию
-                  </button>
-                </div>
+                )
               ) : (
-                <button
-                  type="button"
-                  onClick={() => void handleCancel('single')}
-                  disabled={saving}
-                  className="btn-secondary text-red-600 border-red-200 hover:bg-red-50"
-                >
-                  Отменить бронь
-                </button>
+                <span />
               )
             ) : (
               <span />
@@ -277,11 +347,13 @@ const BookingModal: React.FC<BookingModalProps> = ({ resource, date, booking, on
               <button type="button" onClick={onClose} className="btn-secondary">
                 Закрыть
               </button>
-              <button type="submit" disabled={saving} className="btn-primary disabled:opacity-50">
+              <button type="submit" disabled={saving || (Boolean(booking) && !canManage)} className="btn-primary disabled:opacity-50">
                 {saving
                   ? 'Сохранение...'
                   : booking
-                    ? 'Сохранить'
+                    ? canManage
+                      ? 'Сохранить'
+                      : 'Только просмотр'
                     : occurrenceDates.length > 1
                       ? `Забронировать (${occurrenceDates.length})`
                       : 'Забронировать'}

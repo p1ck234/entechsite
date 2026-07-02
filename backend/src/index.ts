@@ -18,6 +18,7 @@ import botRoutes from './routes/bots';
 import uploadRoutes from './routes/upload';
 import driveRoutes from './routes/drive';
 import bookingResourcesRoutes from './routes/booking-resources';
+import bookingTagsRoutes from './routes/booking-tags';
 import bookingsRoutes from './routes/bookings';
 import { initializeDatabase } from './utils/db-init';
 import { ensureUploadsDir, logUploadsStorageStatus, resolveUploadedFilePath } from './utils/uploads';
@@ -291,6 +292,7 @@ app.use('/api/bots', botRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/drive', driveRoutes);
 app.use('/api/booking-resources', bookingResourcesRoutes);
+app.use('/api/booking-tags', bookingTagsRoutes);
 app.use('/api/bookings', bookingsRoutes);
 
 const uploadsDir = ensureUploadsDir();

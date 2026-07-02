@@ -1,29 +1,45 @@
-export const BOOKING_MAX_ADVANCE_DAYS = 30;
-export const BOOKING_MAX_RECURRENCE_OCCURRENCES = 30;
+export const BOOKING_MAX_RECURRENCE_OCCURRENCES = 366;
 
-export type BookingRecurrenceType = 'none' | 'daily' | 'weekly' | 'weekdays';
+export type BookingRecurrenceType = 'none' | 'weekly';
 
 export interface BookingRecurrenceInput {
   type: BookingRecurrenceType;
+  weekdays?: number[];
   untilDate?: string;
 }
+
+export const WEEKDAY_OPTIONS = [
+  { value: 1, label: 'Пн' },
+  { value: 2, label: 'Вт' },
+  { value: 3, label: 'Ср' },
+  { value: 4, label: 'Чт' },
+  { value: 5, label: 'Пт' },
+  { value: 6, label: 'Сб' },
+  { value: 0, label: 'Вс' },
+] as const;
 
 const pad = (value: number): string => String(value).padStart(2, '0');
 
 export const formatDateOnly = (value: Date): string =>
   `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
 
-export const getMaxBookingDate = (): string => {
-  const maxDate = new Date();
-  maxDate.setHours(0, 0, 0, 0);
-  maxDate.setDate(maxDate.getDate() + BOOKING_MAX_ADVANCE_DAYS);
-  return formatDateOnly(maxDate);
-};
-
 const parseInputDate = (value: string): Date => {
   const date = new Date(`${value}T12:00:00`);
   date.setHours(0, 0, 0, 0);
   return date;
+};
+
+export const getWeekdayFromDate = (date: string): number => parseInputDate(date).getDay();
+
+export const normalizeWeekdays = (weekdays: number[]): number[] =>
+  [...new Set(weekdays.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))].sort(
+    (left, right) => left - right
+  );
+
+export const getDefaultRecurrenceUntilDate = (startDate: string): string => {
+  const date = parseInputDate(startDate);
+  date.setMonth(date.getMonth() + 3);
+  return formatDateOnly(date);
 };
 
 export const expandRecurrenceDates = (
@@ -34,44 +50,27 @@ export const expandRecurrenceDates = (
     return [startDate];
   }
 
+  const weekdays = normalizeWeekdays(recurrence.weekdays || []);
+  if (weekdays.length === 0 || !recurrence.untilDate) {
+    return [startDate];
+  }
+
   const start = parseInputDate(startDate);
-  const maxDate = parseInputDate(getMaxBookingDate());
-  const until = recurrence.untilDate ? parseInputDate(recurrence.untilDate) : maxDate;
-  const endDate = until > maxDate ? maxDate : until;
+  const endDate = parseInputDate(recurrence.untilDate);
 
   if (endDate < start) {
     return [startDate];
   }
 
-  const dates: string[] = [startDate];
-  let current = new Date(start);
+  const dates: string[] = [];
+  const current = new Date(start);
 
-  while (dates.length < BOOKING_MAX_RECURRENCE_OCCURRENCES) {
-    if (recurrence.type === 'daily') {
-      current.setDate(current.getDate() + 1);
-    } else if (recurrence.type === 'weekly') {
-      current.setDate(current.getDate() + 7);
-    } else if (recurrence.type === 'weekdays') {
-      do {
-        current.setDate(current.getDate() + 1);
-      } while (current.getDay() === 0 || current.getDay() === 6);
-    } else {
-      break;
+  while (current <= endDate && dates.length < BOOKING_MAX_RECURRENCE_OCCURRENCES) {
+    if (weekdays.includes(current.getDay())) {
+      dates.push(formatDateOnly(current));
     }
-
-    if (current > endDate) {
-      break;
-    }
-
-    dates.push(formatDateOnly(current));
+    current.setDate(current.getDate() + 1);
   }
 
-  return dates;
+  return dates.length > 0 ? dates : [startDate];
 };
-
-export const RECURRENCE_OPTIONS: Array<{ value: BookingRecurrenceType; label: string }> = [
-  { value: 'none', label: 'Не повторяется' },
-  { value: 'daily', label: 'Каждый день' },
-  { value: 'weekly', label: 'Каждую неделю' },
-  { value: 'weekdays', label: 'По будням (Пн–Пт)' },
-];

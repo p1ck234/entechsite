@@ -2,13 +2,13 @@ export const BOOKING_SLOT_MINUTES = 30;
 export const BOOKING_WORK_START_HOUR = 9;
 export const BOOKING_WORK_END_HOUR = 19;
 export const BOOKING_MAX_DURATION_HOURS = 4;
-export const BOOKING_MAX_ADVANCE_DAYS = 30;
-export const BOOKING_MAX_RECURRENCE_OCCURRENCES = 30;
+export const BOOKING_MAX_RECURRENCE_OCCURRENCES = 366;
 
-export type BookingRecurrenceType = 'none' | 'daily' | 'weekly' | 'weekdays';
+export type BookingRecurrenceType = 'none' | 'weekly';
 
 export interface BookingRecurrenceInput {
   type: BookingRecurrenceType;
+  weekdays?: number[];
   untilDate?: string;
 }
 
@@ -53,12 +53,6 @@ export const validateBookingWindow = (startsAt: Date, endsAt: Date): string | nu
     return 'Нельзя бронировать прошедшие даты';
   }
 
-  const maxDate = new Date(today);
-  maxDate.setDate(maxDate.getDate() + BOOKING_MAX_ADVANCE_DAYS);
-  if (bookingDay > maxDate) {
-    return `Можно бронировать не более чем на ${BOOKING_MAX_ADVANCE_DAYS} дней вперёд`;
-  }
-
   if (startsAt.toDateString() !== endsAt.toDateString()) {
     return 'Бронирование должно начинаться и заканчиваться в один день';
   }
@@ -82,12 +76,49 @@ const parseInputDate = (value: string): Date => {
   return date;
 };
 
-export const getMaxBookingDate = (): Date => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const maxDate = new Date(today);
-  maxDate.setDate(maxDate.getDate() + BOOKING_MAX_ADVANCE_DAYS);
-  return maxDate;
+export const getWeekdayFromDate = (date: string): number => parseInputDate(date).getDay();
+
+export const normalizeWeekdays = (weekdays?: number[]): number[] => {
+  if (!Array.isArray(weekdays)) {
+    return [];
+  }
+
+  return [...new Set(weekdays.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))].sort(
+    (left, right) => left - right
+  );
+};
+
+export const getDefaultRecurrenceUntilDate = (startDate: string): string => {
+  const date = parseInputDate(startDate);
+  date.setMonth(date.getMonth() + 3);
+  return formatDateOnly(date);
+};
+
+export const validateRecurrenceInput = (
+  recurrence: BookingRecurrenceInput,
+  startDate: string
+): string | null => {
+  if (recurrence.type === 'none') {
+    return null;
+  }
+
+  const weekdays = normalizeWeekdays(recurrence.weekdays);
+  if (weekdays.length === 0) {
+    return 'Выберите хотя бы один день недели для повторения';
+  }
+
+  if (!recurrence.untilDate) {
+    return 'Укажите дату окончания повторения';
+  }
+
+  const start = parseInputDate(startDate);
+  const until = parseInputDate(recurrence.untilDate);
+
+  if (until < start) {
+    return 'Дата окончания повторения не может быть раньше начала';
+  }
+
+  return null;
 };
 
 export const expandRecurrenceDates = (
@@ -98,37 +129,27 @@ export const expandRecurrenceDates = (
     return [startDate];
   }
 
+  const weekdays = normalizeWeekdays(recurrence.weekdays);
+  if (weekdays.length === 0 || !recurrence.untilDate) {
+    return [startDate];
+  }
+
   const start = parseInputDate(startDate);
-  const maxDate = getMaxBookingDate();
-  const until = recurrence.untilDate ? parseInputDate(recurrence.untilDate) : maxDate;
-  const endDate = until > maxDate ? maxDate : until;
+  const endDate = parseInputDate(recurrence.untilDate);
 
   if (endDate < start) {
     return [startDate];
   }
 
-  const dates: string[] = [startDate];
-  let current = new Date(start);
+  const dates: string[] = [];
+  const current = new Date(start);
 
-  while (dates.length < BOOKING_MAX_RECURRENCE_OCCURRENCES) {
-    if (recurrence.type === 'daily') {
-      current.setDate(current.getDate() + 1);
-    } else if (recurrence.type === 'weekly') {
-      current.setDate(current.getDate() + 7);
-    } else if (recurrence.type === 'weekdays') {
-      do {
-        current.setDate(current.getDate() + 1);
-      } while (current.getDay() === 0 || current.getDay() === 6);
-    } else {
-      break;
+  while (current <= endDate && dates.length < BOOKING_MAX_RECURRENCE_OCCURRENCES) {
+    if (weekdays.includes(current.getDay())) {
+      dates.push(formatDateOnly(current));
     }
-
-    if (current > endDate) {
-      break;
-    }
-
-    dates.push(formatDateOnly(current));
+    current.setDate(current.getDate() + 1);
   }
 
-  return dates;
+  return dates.length > 0 ? dates : [startDate];
 };

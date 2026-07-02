@@ -173,6 +173,25 @@ async function initializeDatabase(pool) {
         );
       `);
             await pool.query(`
+        CREATE TABLE IF NOT EXISTS booking_tags (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(50) NOT NULL UNIQUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+            await pool.query(`
+        CREATE TABLE IF NOT EXISTS booking_resource_tags (
+          resource_id INTEGER NOT NULL REFERENCES booking_resources(id) ON DELETE CASCADE,
+          tag_id INTEGER NOT NULL REFERENCES booking_tags(id) ON DELETE CASCADE,
+          PRIMARY KEY (resource_id, tag_id)
+        );
+      `);
+            await pool.query(`
+        INSERT INTO booking_tags (name)
+        VALUES ('SCRUM')
+        ON CONFLICT (name) DO NOTHING;
+      `);
+            await pool.query(`
         CREATE TABLE IF NOT EXISTS bookings (
           id SERIAL PRIMARY KEY,
           resource_id INTEGER NOT NULL REFERENCES booking_resources(id) ON DELETE RESTRICT,
@@ -328,6 +347,25 @@ async function initializeDatabase(pool) {
         CREATE INDEX IF NOT EXISTS idx_bookings_recurrence_group
           ON bookings(recurrence_group_id)
           WHERE recurrence_group_id IS NOT NULL;
+      `);
+            await pool.query(`
+        CREATE TABLE IF NOT EXISTS booking_tags (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(50) NOT NULL UNIQUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+            await pool.query(`
+        CREATE TABLE IF NOT EXISTS booking_resource_tags (
+          resource_id INTEGER NOT NULL REFERENCES booking_resources(id) ON DELETE CASCADE,
+          tag_id INTEGER NOT NULL REFERENCES booking_tags(id) ON DELETE CASCADE,
+          PRIMARY KEY (resource_id, tag_id)
+        );
+      `);
+            await pool.query(`
+        INSERT INTO booking_tags (name)
+        VALUES ('SCRUM')
+        ON CONFLICT (name) DO NOTHING;
       `);
             await pool.query(`
         CREATE TABLE IF NOT EXISTS booking_resources (

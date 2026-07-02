@@ -7,9 +7,12 @@ import {
   combineDateAndTime,
   expandRecurrenceDates,
   formatDateOnly,
+  normalizeWeekdays,
   validateBookingWindow,
+  validateRecurrenceInput,
   type BookingRecurrenceInput,
 } from '../utils/booking-rules';
+import { assertCanManageBooking } from '../utils/booking-permissions';
 
 const router = express.Router();
 const pool = new Pool({
@@ -142,7 +145,9 @@ router.post(
     body('date').isISO8601({ strict: true }),
     body('startTime').matches(/^\d{2}:\d{2}$/),
     body('endTime').matches(/^\d{2}:\d{2}$/),
-    body('recurrence.type').optional().isIn(['none', 'daily', 'weekly', 'weekdays']),
+    body('recurrence.type').optional().isIn(['none', 'weekly']),
+    body('recurrence.weekdays').optional().isArray({ min: 1, max: 7 }),
+    body('recurrence.weekdays.*').optional().isInt({ min: 0, max: 6 }),
     body('recurrence.untilDate').optional().isISO8601({ strict: true }),
   ],
   async (req: AuthRequest, res: any) => {
@@ -155,8 +160,15 @@ router.post(
       const { resourceId, title, description, date, startTime, endTime } = req.body;
       const recurrence: BookingRecurrenceInput = {
         type: req.body.recurrence?.type || 'none',
+        weekdays: normalizeWeekdays(req.body.recurrence?.weekdays),
         untilDate: req.body.recurrence?.untilDate,
       };
+
+      const recurrenceError = validateRecurrenceInput(recurrence, date);
+      if (recurrenceError) {
+        return res.status(400).json({ message: recurrenceError });
+      }
+
       const occurrenceDates = expandRecurrenceDates(date, recurrence);
 
       if (occurrenceDates.length === 0) {
@@ -281,11 +293,10 @@ router.put(
       }
 
       const booking = existing.rows[0];
-      const isOwner = String(booking.user_id) === req.user!.id;
-      const isAdmin = req.user!.role === 'ADMIN';
+      const permissionError = assertCanManageBooking(req.user, booking.user_id);
 
-      if (!isOwner && !isAdmin) {
-        return res.status(403).json({ message: 'Можно редактировать только свои бронирования' });
+      if (permissionError) {
+        return res.status(403).json({ message: permissionError });
       }
 
       if (booking.status !== 'confirmed') {
@@ -359,21 +370,22 @@ router.delete('/:id', authenticateToken, [
     }
 
     const booking = existing.rows[0];
-    const isOwner = String(booking.user_id) === req.user!.id;
-    const isAdmin = req.user!.role === 'ADMIN';
+    const permissionError = assertCanManageBooking(req.user, booking.user_id);
 
-    if (!isOwner && !isAdmin) {
-      return res.status(403).json({ message: 'Можно отменять только свои бронирования' });
+    if (permissionError) {
+      return res.status(403).json({ message: permissionError });
     }
 
     if (scope === 'series' && booking.recurrence_group_id) {
+      const isAdmin = req.user!.role === 'ADMIN';
       const cancelled = await pool.query(
         `UPDATE bookings
          SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
          WHERE recurrence_group_id = $1
            AND status = 'confirmed'
+           ${isAdmin ? '' : 'AND user_id = $2'}
          RETURNING id`,
-        [booking.recurrence_group_id]
+        isAdmin ? [booking.recurrence_group_id] : [booking.recurrence_group_id, req.user!.id]
       );
 
       return res.json({
