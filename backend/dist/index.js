@@ -221,6 +221,7 @@ app.use('/api/bots', bots_1.default);
 app.use('/api/upload', upload_1.default);
 app.use('/api/drive', drive_1.default);
 const uploadsDir = (0, uploads_1.ensureUploadsDir)();
+(0, uploads_1.logUploadsStorageStatus)();
 const OPTIMIZABLE_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const MEDIA_PROXY_ALLOWED_HOSTS = new Set([
     'drive.google.com',

@@ -31,7 +31,8 @@ export default {
           800: '#262626',
           900: '#171717',
         },
-        border: '#e5e5e5'
+        border: '#e5e5e5',
+        brand: '#C10A0A',
       },
       backdropBlur: {
         xs: '2px',

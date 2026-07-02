@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { eventsAPI } from '../api/client';
 import { Event, EventsResponse } from '../types';
-import { ExternalLink, Plus, Edit, Trash2, Calendar, ImageOff, RefreshCw } from 'lucide-react';
+import { ExternalLink, Plus, Edit, Trash2, Calendar, ImageOff, RefreshCw, Image } from 'lucide-react';
 import EventModal from '../components/EventModal';
+import EventGalleryModal from '../components/EventGalleryModal';
 import ImageWithLoader from '../components/ImageWithLoader';
 import { preloadImages } from '../utils/imagePreload';
 
@@ -51,6 +52,7 @@ const Life: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  const [galleryEvent, setGalleryEvent] = useState<Event | null>(null);
   const [syncingLife, setSyncingLife] = useState(false);
 
   const fetchEvents = async () => {
@@ -187,20 +189,33 @@ const Life: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {events.map((event) => (
             <div key={event.id} className="card overflow-hidden hover:scale-105 transition-transform">
-              {event.previewImages && event.previewImages.length > 0 && (
-                <div className="relative h-48 bg-pastel-100 overflow-hidden">
-                  <div className="grid grid-cols-2 gap-1 h-full">
-                    {event.previewImages.slice(0, 4).map((image, index) => (
-                      <div key={index} className="relative overflow-hidden">
-                        <EventPreviewTile
-                          src={image}
-                          alt={`${event.title} ${index + 1}`}
-                        />
-                      </div>
-                    ))}
+              <button
+                type="button"
+                onClick={() => setGalleryEvent(event)}
+                className="w-full text-left"
+              >
+                {event.previewImages && event.previewImages.length > 0 ? (
+                  <div className="relative h-48 bg-pastel-100 overflow-hidden">
+                    <div className="grid grid-cols-2 gap-1 h-full">
+                      {event.previewImages.slice(0, 4).map((image, index) => (
+                        <div key={index} className="relative overflow-hidden">
+                          <EventPreviewTile
+                            src={image}
+                            alt={`${event.title} ${index + 1}`}
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="relative h-48 bg-pastel-100 overflow-hidden flex items-center justify-center">
+                    <div className="text-center text-pastel-500">
+                      <Image className="w-10 h-10 mx-auto mb-2" />
+                      <span className="text-sm">Смотреть фото</span>
+                    </div>
+                  </div>
+                )}
+              </button>
               
               {/* Event Info */}
               <div className="p-6">
@@ -221,12 +236,20 @@ const Life: React.FC = () => {
                   </p>
                 )}
 
-                {/* Google Drive Link */}
+                <button
+                  type="button"
+                  onClick={() => setGalleryEvent(event)}
+                  className="btn-primary w-full flex items-center justify-center space-x-2 mb-3"
+                >
+                  <Image className="w-4 h-4" />
+                  <span>Смотреть фото</span>
+                </button>
+
                 <a
                   href={event.googleDriveUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="btn-primary w-full flex items-center justify-center space-x-2 mb-3"
+                  className="btn-secondary w-full flex items-center justify-center space-x-2"
                 >
                   <ExternalLink className="w-4 h-4" />
                   <span>Открыть в Google Drive</span>
@@ -234,7 +257,10 @@ const Life: React.FC = () => {
 
                 {/* Admin Actions */}
                 {isAdmin && (
-                  <div className="flex justify-end space-x-2 pt-3 border-t border-pastel-200">
+                  <div
+                    className="flex justify-end space-x-2 pt-3 border-t border-pastel-200"
+                    onClick={(clickEvent) => clickEvent.stopPropagation()}
+                  >
                     <button
                       onClick={() => handleEdit(event)}
                       className="p-2 text-pastel-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
@@ -260,6 +286,13 @@ const Life: React.FC = () => {
         <EventModal
           event={editingEvent}
           onClose={handleModalClose}
+        />
+      )}
+
+      {galleryEvent && (
+        <EventGalleryModal
+          event={galleryEvent}
+          onClose={() => setGalleryEvent(null)}
         />
       )}
     </div>

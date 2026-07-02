@@ -7,6 +7,7 @@ const express_1 = __importDefault(require("express"));
 const express_validator_1 = require("express-validator");
 const pg_1 = require("pg");
 const auth_1 = require("../middleware/auth");
+const googleDrive_1 = require("../services/googleDrive");
 const router = express_1.default.Router();
 const pool = new pg_1.Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
@@ -45,6 +46,33 @@ router.get('/', auth_1.authenticateToken, [
     catch (error) {
         console.error('Get events error:', error);
         res.status(500).json({ message: 'Internal server error' });
+    }
+});
+router.get('/:id/photos', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query('SELECT id, title, google_drive_url FROM events WHERE id = $1 AND is_active = true', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Event not found' });
+        }
+        const event = result.rows[0];
+        const photos = await (0, googleDrive_1.listImagesInDriveResource)(event.google_drive_url);
+        res.json({
+            eventId: String(event.id),
+            title: event.title,
+            photos: photos.map((photo) => ({
+                id: photo.id,
+                name: photo.name,
+                mimeType: photo.mimeType,
+                ref: (0, googleDrive_1.toDriveImageRef)(photo.id),
+            })),
+        });
+    }
+    catch (error) {
+        console.error('Get event photos error:', error);
+        res.status(500).json({
+            message: error?.message || 'Не удалось загрузить фотографии мероприятия',
+        });
     }
 });
 router.get('/:id', auth_1.authenticateToken, async (req, res) => {

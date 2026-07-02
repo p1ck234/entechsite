@@ -14,13 +14,20 @@ export interface AuthRequest extends Request {
   };
 }
 
+const resolveRequestToken = (req: AuthRequest): string | undefined => {
+  const authHeader = req.headers['authorization'];
+  const headerToken = authHeader && authHeader.split(' ')[1];
+  const queryToken = typeof req.query.access_token === 'string' ? req.query.access_token : undefined;
+
+  return headerToken || queryToken;
+};
+
 export const authenticateToken = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = resolveRequestToken(req);
 
   if (!token) {
     return res.status(401).json({ message: 'Access token required' });

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLifeDriveItems = exports.getTrainingDriveTree = void 0;
+exports.streamDriveFileContent = exports.listImagesInDriveResource = exports.extractDriveResourceIdFromUrl = exports.parseDriveImageRef = exports.toDriveImageRef = exports.DRIVE_IMAGE_REF_PREFIX = exports.getLifeDriveItems = exports.getTrainingDriveTree = void 0;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const googleapis_1 = require("googleapis");
@@ -26,12 +26,49 @@ const parseServiceAccountJson = (value) => {
     }
     return JSON.parse(Buffer.from(trimmedValue, 'base64').toString('utf8'));
 };
+const IGNORED_JSON_FILENAMES = new Set([
+    'package.json',
+    'package-lock.json',
+    'tsconfig.json',
+    'tsconfig.app.json',
+    'tsconfig.node.json',
+    'railway.json',
+]);
+const isServiceAccountKeyFile = (filePath) => {
+    try {
+        const rawContent = fs_1.default.readFileSync(filePath, 'utf8');
+        const parsed = JSON.parse(rawContent);
+        return parsed.type === 'service_account' && Boolean(parsed.client_email);
+    }
+    catch {
+        return false;
+    }
+};
+const findServiceAccountKeyFiles = (directoryPath) => {
+    if (!fs_1.default.existsSync(directoryPath)) {
+        return [];
+    }
+    return fs_1.default
+        .readdirSync(directoryPath)
+        .filter((fileName) => fileName.endsWith('.json') && !IGNORED_JSON_FILENAMES.has(fileName))
+        .map((fileName) => path_1.default.join(directoryPath, fileName))
+        .filter(isServiceAccountKeyFile)
+        .sort();
+};
 const getCredentialsPathCandidates = () => {
+    const searchDirectories = [
+        process.cwd(),
+        path_1.default.resolve(process.cwd(), '..'),
+        path_1.default.resolve(__dirname, '../../..'),
+        path_1.default.resolve(__dirname, '../../../..'),
+    ];
+    const discoveredKeyFiles = searchDirectories.flatMap(findServiceAccountKeyFiles);
     const candidates = [
         process.env.GOOGLE_APPLICATION_CREDENTIALS,
         path_1.default.resolve(process.cwd(), 'credentials.json'),
         path_1.default.resolve(process.cwd(), '../credentials.json'),
         path_1.default.resolve(__dirname, '../../../credentials.json'),
+        ...discoveredKeyFiles,
     ].filter(Boolean);
     return Array.from(new Set(candidates));
 };
@@ -159,4 +196,84 @@ const getLifeDriveItems = async () => {
     return { root, items };
 };
 exports.getLifeDriveItems = getLifeDriveItems;
+exports.DRIVE_IMAGE_REF_PREFIX = 'drive:';
+const toDriveImageRef = (fileId) => `${exports.DRIVE_IMAGE_REF_PREFIX}${fileId}`;
+exports.toDriveImageRef = toDriveImageRef;
+const parseDriveImageRef = (value) => {
+    if (!value.startsWith(exports.DRIVE_IMAGE_REF_PREFIX)) {
+        return null;
+    }
+    const fileId = value.slice(exports.DRIVE_IMAGE_REF_PREFIX.length).trim();
+    return fileId || null;
+};
+exports.parseDriveImageRef = parseDriveImageRef;
+const extractDriveResourceIdFromUrl = (url) => {
+    const trimmedUrl = url.trim();
+    const folderMatch = trimmedUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    if (folderMatch?.[1]) {
+        return folderMatch[1];
+    }
+    const fileMatch = trimmedUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (fileMatch?.[1]) {
+        return fileMatch[1];
+    }
+    const openMatch = trimmedUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (openMatch?.[1]) {
+        return openMatch[1];
+    }
+    return null;
+};
+exports.extractDriveResourceIdFromUrl = extractDriveResourceIdFromUrl;
+const isImageMimeType = (mimeType) => {
+    return Boolean(mimeType?.startsWith('image/'));
+};
+const listImagesInDriveResource = async (resourceIdOrUrl) => {
+    const drive = getDriveClient();
+    const resourceId = resourceIdOrUrl.includes('http')
+        ? (0, exports.extractDriveResourceIdFromUrl)(resourceIdOrUrl)
+        : resourceIdOrUrl;
+    if (!resourceId) {
+        throw new Error('Не удалось определить ID папки или файла Google Drive.');
+    }
+    const resourceResponse = await drive.files.get({
+        fileId: resourceId,
+        supportsAllDrives: true,
+        fields: 'id, name, mimeType, webViewLink, modifiedTime',
+    });
+    const resource = mapDriveFile(resourceResponse.data);
+    if (isImageMimeType(resource.mimeType)) {
+        return [resource];
+    }
+    if (resource.mimeType !== FOLDER_MIME_TYPE) {
+        return [];
+    }
+    const children = await listFolderChildren(drive, resource.id);
+    return children.filter((child) => isImageMimeType(child.mimeType));
+};
+exports.listImagesInDriveResource = listImagesInDriveResource;
+const streamDriveFileContent = async (fileId) => {
+    const drive = getDriveClient();
+    const metaResponse = await drive.files.get({
+        fileId,
+        supportsAllDrives: true,
+        fields: 'id, name, mimeType',
+    });
+    if (!metaResponse.data.id) {
+        throw new Error('Файл Google Drive не найден.');
+    }
+    if (!isImageMimeType(metaResponse.data.mimeType || undefined)) {
+        throw new Error('Запрошенный файл не является изображением.');
+    }
+    const contentResponse = await drive.files.get({
+        fileId,
+        supportsAllDrives: true,
+        alt: 'media',
+    }, { responseType: 'stream' });
+    return {
+        stream: contentResponse.data,
+        mimeType: metaResponse.data.mimeType || 'application/octet-stream',
+        name: metaResponse.data.name || fileId,
+    };
+};
+exports.streamDriveFileContent = streamDriveFileContent;
 //# sourceMappingURL=googleDrive.js.map

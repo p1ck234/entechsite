@@ -120,13 +120,13 @@ const Home: React.FC = () => {
               <Logo size="lg" showText={true} />
             </div>
 
-            <h1 className="mt-6 sm:mt-8 text-center text-3xl sm:text-4xl font-bold tracking-wide text-[#7f2127]">
+            <h1 className="mt-6 sm:mt-8 text-center text-3xl sm:text-4xl font-bold tracking-wide text-brand">
               [ ДНК ]
             </h1>
 
             <div className="mt-8 sm:mt-12 grid grid-cols-1 lg:grid-cols-2 gap-x-16 gap-y-8 sm:gap-y-10">
               {ankItems.map((item) => (
-                <article key={item.title} className="text-[#7f2127] uppercase">
+                <article key={item.title} className="text-brand uppercase">
                   <h2 className="text-xl sm:text-2xl font-extrabold leading-tight">{item.title}</h2>
                   {item.description && (
                     <p className="mt-3 text-sm sm:text-base font-semibold leading-snug">

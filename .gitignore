@@ -16,6 +16,10 @@ backend/dist/uploads/
 credentials.json
 **/credentials.json
 
+# Google Cloud service account keys (NEVER commit)
+jovial-world-*.json
+*-????????????.json
+
 # IDE
 .vscode/
 .idea/

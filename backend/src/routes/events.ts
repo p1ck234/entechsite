@@ -2,6 +2,7 @@ import express from 'express';
 import { body, validationResult, query } from 'express-validator';
 import { Pool } from 'pg';
 import { authenticateToken } from '../middleware/auth';
+import { listImagesInDriveResource, toDriveImageRef } from '../services/googleDrive';
 
 const router = express.Router();
 const pool = new Pool({
@@ -49,6 +50,41 @@ router.get('/', authenticateToken, [
   } catch (error) {
     console.error('Get events error:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Get event photos from Google Drive folder
+router.get('/:id/photos', authenticateToken, async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'SELECT id, title, google_drive_url FROM events WHERE id = $1 AND is_active = true',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    const event = result.rows[0];
+    const photos = await listImagesInDriveResource(event.google_drive_url);
+
+    res.json({
+      eventId: String(event.id),
+      title: event.title,
+      photos: photos.map((photo) => ({
+        id: photo.id,
+        name: photo.name,
+        mimeType: photo.mimeType,
+        ref: toDriveImageRef(photo.id),
+      })),
+    });
+  } catch (error: any) {
+    console.error('Get event photos error:', error);
+    res.status(500).json({
+      message: error?.message || 'Не удалось загрузить фотографии мероприятия',
+    });
   }
 });
 

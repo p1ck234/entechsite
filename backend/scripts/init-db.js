@@ -137,7 +137,8 @@ async function initDatabase() {
     
     // Создание администратора с Telegram
     const adminEmail = 'admin@entech.com';
-    const adminPassword = '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/8.8.8.8'; // password: admin123
+    const bcrypt = require('bcryptjs');
+    const adminPassword = await bcrypt.hash('admin123', 12);
     const adminTelegram = '@pdmin1ck';
     
     // Проверяем и создаем/обновляем пользователя-администратора

@@ -9,9 +9,14 @@ const pg_1 = require("pg");
 const pool = new pg_1.Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
-const authenticateToken = async (req, res, next) => {
+const resolveRequestToken = (req) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    const headerToken = authHeader && authHeader.split(' ')[1];
+    const queryToken = typeof req.query.access_token === 'string' ? req.query.access_token : undefined;
+    return headerToken || queryToken;
+};
+const authenticateToken = async (req, res, next) => {
+    const token = resolveRequestToken(req);
     if (!token) {
         return res.status(401).json({ message: 'Access token required' });
     }

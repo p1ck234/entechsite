@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, CalendarEvent, TelegramBot, PaginationInfo } from '../types';
+import { AuthResponse, User, Employee, Course, Lesson, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, PaginationInfo } from '../types';
 
 import { API_BASE_URL } from '../config/api';
 
@@ -477,6 +477,11 @@ export const eventsAPI = {
       createdAt: event.created_at,
       updatedAt: event.updated_at
     };
+  },
+
+  getEventPhotos: async (id: string): Promise<EventPhotosResponse> => {
+    const response = await api.get(`/events/${id}/photos`);
+    return response.data;
   },
 
   createEvent: async (event: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>): Promise<{ message: string; event: Event }> => {

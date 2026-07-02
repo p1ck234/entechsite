@@ -151,6 +151,19 @@ export interface Event {
   updatedAt: string;
 }
 
+export interface EventPhoto {
+  id: string;
+  name: string;
+  mimeType?: string;
+  ref: string;
+}
+
+export interface EventPhotosResponse {
+  eventId: string;
+  title: string;
+  photos: EventPhoto[];
+}
+
 export interface EventsResponse {
   events: Event[];
   pagination: PaginationInfo;

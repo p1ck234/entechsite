@@ -1,7 +1,7 @@
 import express from 'express';
 import { Pool } from 'pg';
 import { authenticateToken } from '../middleware/auth';
-import { DriveCourseFolder, DriveFileItem, getLifeDriveItems, getTrainingDriveTree } from '../services/googleDrive';
+import { DriveCourseFolder, DriveFileItem, getLifeDriveItems, getTrainingDriveTree, listImagesInDriveResource, streamDriveFileContent, toDriveImageRef } from '../services/googleDrive';
 
 const router = express.Router();
 const pool = new Pool({
@@ -93,6 +93,27 @@ const parseDriveLifeTitle = (name: string): { title: string; eventDate: string |
   }
 
   return { title: name.trim(), eventDate: null };
+};
+
+const buildLifePreviewImages = async (item: DriveFileItem): Promise<string[]> => {
+  try {
+    const images = await listImagesInDriveResource(item.id);
+    return images.slice(0, 4).map((image) => toDriveImageRef(image.id));
+  } catch (error) {
+    console.warn(`Не удалось получить превью для "${item.name}":`, error);
+    return [];
+  }
+};
+
+const arePreviewImagesEqual = (left: string[] | null | undefined, right: string[] | null | undefined): boolean => {
+  const normalizedLeft = (left || []).map((value) => value.trim()).filter(Boolean);
+  const normalizedRight = (right || []).map((value) => value.trim()).filter(Boolean);
+
+  if (normalizedLeft.length !== normalizedRight.length) {
+    return false;
+  }
+
+  return normalizedLeft.every((value, index) => value === normalizedRight[index]);
 };
 
 const upsertCourse = async (client: any, courseFolder: DriveCourseFolder, stats: SyncStats): Promise<number> => {
@@ -268,8 +289,9 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
       }
 
       activeEventUrls.push(eventUrl);
+      const previewImages = await buildLifePreviewImages(item);
       const existingEvent = await client.query(
-        `SELECT id, title, description, google_drive_url, event_date, is_active
+        `SELECT id, title, description, google_drive_url, event_date, preview_images, is_active
          FROM events
          WHERE google_drive_url = ANY($1::text[])
          LIMIT 1`,
@@ -284,6 +306,7 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
           (existing.description || null) === DRIVE_LIFE_DESCRIPTION &&
           existing.google_drive_url === eventUrl &&
           existingDate === eventDate &&
+          arePreviewImagesEqual(existing.preview_images, previewImages) &&
           existing.is_active === true;
 
         if (unchanged) {
@@ -301,7 +324,7 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
                is_active = true,
                updated_at = CURRENT_TIMESTAMP
            WHERE id = $6`,
-          [title, DRIVE_LIFE_DESCRIPTION, eventUrl, [], eventDate, existing.id]
+          [title, DRIVE_LIFE_DESCRIPTION, eventUrl, previewImages, eventDate, existing.id]
         );
         stats.eventsUpdated += 1;
         continue;
@@ -310,7 +333,7 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
       await client.query(
         `INSERT INTO events (title, description, google_drive_url, preview_images, event_date, is_active)
          VALUES ($1, $2, $3, $4, $5, true)`,
-        [title, DRIVE_LIFE_DESCRIPTION, eventUrl, [], eventDate]
+        [title, DRIVE_LIFE_DESCRIPTION, eventUrl, previewImages, eventDate]
       );
       stats.eventsCreated += 1;
     }
@@ -340,6 +363,32 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
     });
   } finally {
     client.release();
+  }
+});
+
+router.get('/files/:fileId/content', authenticateToken, async (req: any, res: any) => {
+  try {
+    const { fileId } = req.params;
+    const { stream, mimeType, name } = await streamDriveFileContent(fileId);
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(name)}"`);
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+    stream.on('error', (error) => {
+      console.error('Drive file stream error:', error);
+      if (!res.headersSent) {
+        res.status(502).json({ message: 'Ошибка чтения файла из Google Drive' });
+      }
+    });
+
+    stream.pipe(res);
+  } catch (error: any) {
+    console.error('Drive file content error:', error);
+    res.status(error?.message?.includes('не является изображением') ? 415 : 404).json({
+      message: error?.message || 'Не удалось получить файл из Google Drive',
+    });
   }
 });
 

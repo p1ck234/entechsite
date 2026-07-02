@@ -305,6 +305,60 @@ const buildUploadCandidates = (sourceUrl: string, options?: NormalizeImageUrlOpt
   return candidates;
 };
 
+const DRIVE_IMAGE_REF_PREFIX = 'drive:';
+
+const getStoredAuthToken = (): string | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  return localStorage.getItem('token');
+};
+
+const buildDriveContentPath = (fileId: string): string => {
+  const token = getStoredAuthToken();
+  const path = `/api/drive/files/${encodeURIComponent(fileId)}/content`;
+
+  if (!token) {
+    return path;
+  }
+
+  return `${path}?access_token=${encodeURIComponent(token)}`;
+};
+
+const buildDriveContentUrl = (origin: string, fileId: string): string | null => {
+  if (!origin) {
+    return null;
+  }
+
+  try {
+    return new URL(buildDriveContentPath(fileId), origin).toString();
+  } catch {
+    return null;
+  }
+};
+
+const buildDriveCandidates = (ref: string): string[] => {
+  const fileId = ref.slice(DRIVE_IMAGE_REF_PREFIX.length).trim();
+  if (!fileId) {
+    return [];
+  }
+
+  const candidates: string[] = [];
+  const apiOriginUrl = buildDriveContentUrl(API_ORIGIN, fileId);
+  const currentOriginUrl = buildDriveContentUrl(getCurrentOrigin(), fileId);
+
+  if (isTelegramMiniApp()) {
+    pushUniqueUrl(candidates, currentOriginUrl);
+    pushUniqueUrl(candidates, apiOriginUrl);
+    return candidates;
+  }
+
+  pushUniqueUrl(candidates, apiOriginUrl);
+  pushUniqueUrl(candidates, currentOriginUrl);
+  return candidates;
+};
+
 const resolveGoogleTargetSize = (options?: NormalizeImageUrlOptions): number => {
   const width = isPositiveNumber(options?.width) ? Math.round(options.width) : 0;
   const height = isPositiveNumber(options?.height) ? Math.round(options.height) : 0;
@@ -376,6 +430,10 @@ export function getImageUrlCandidates(url: string, options?: NormalizeImageUrlOp
     return [trimmedUrl];
   }
 
+  if (trimmedUrl.startsWith(DRIVE_IMAGE_REF_PREFIX)) {
+    return buildDriveCandidates(trimmedUrl);
+  }
+
   const uploadAbsoluteUrl = toAbsoluteUploadUrl(trimmedUrl);
   if (isUploadUrl(uploadAbsoluteUrl)) {
     return buildUploadCandidates(trimmedUrl, options);
@@ -401,4 +459,15 @@ export function normalizeImageUrl(url: string, options?: NormalizeImageUrlOption
   const candidates = getImageUrlCandidates(url, options);
   return candidates[0] ?? url;
 }
+
+export const isDriveImageRef = (value: string): boolean => value.startsWith(DRIVE_IMAGE_REF_PREFIX);
+
+export const parseDriveImageRef = (value: string): string | null => {
+  if (!isDriveImageRef(value)) {
+    return null;
+  }
+
+  const fileId = value.slice(DRIVE_IMAGE_REF_PREFIX.length).trim();
+  return fileId || null;
+};
 
