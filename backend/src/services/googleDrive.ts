@@ -297,6 +297,46 @@ const isVideoMimeType = (mimeType?: string): boolean => {
 
 export type DriveMediaKind = 'image' | 'video';
 
+export type DriveContentKind = 'image' | 'video' | 'pdf' | 'audio';
+
+const IGNORED_DRIVE_FILE_NAMES = new Set(['.ds_store', 'desktop.ini', 'thumbs.db']);
+
+const isIgnoredDriveFileName = (name?: string): boolean => {
+  if (!name) {
+    return true;
+  }
+
+  return IGNORED_DRIVE_FILE_NAMES.has(name.trim().toLowerCase());
+};
+
+const isPdfMimeType = (mimeType?: string): boolean => mimeType === 'application/pdf';
+
+const isAudioMimeType = (mimeType?: string): boolean => Boolean(mimeType?.startsWith('audio/'));
+
+export const getDriveContentKind = (mimeType?: string): DriveContentKind | null => {
+  if (isImageMimeType(mimeType)) {
+    return 'image';
+  }
+
+  if (isVideoMimeType(mimeType)) {
+    return 'video';
+  }
+
+  if (isPdfMimeType(mimeType)) {
+    return 'pdf';
+  }
+
+  if (isAudioMimeType(mimeType)) {
+    return 'audio';
+  }
+
+  return null;
+};
+
+const isStreamableDriveMimeType = (mimeType?: string): boolean => {
+  return getDriveContentKind(mimeType) !== null;
+};
+
 export const getDriveMediaKind = (mimeType?: string): DriveMediaKind | null => {
   if (isImageMimeType(mimeType)) {
     return 'image';
@@ -375,6 +415,102 @@ export const listMediaInDriveResource = async (resourceIdOrUrl: string): Promise
   return collectMediaFromFolder(drive, resource.id);
 };
 
+const MAX_DRIVE_LESSON_SEARCH_DEPTH = 5;
+
+const sortLessonMaterials = (items: DriveFileItem[]): DriveFileItem[] => {
+  const kindPriority: Record<DriveContentKind, number> = {
+    video: 0,
+    pdf: 1,
+    audio: 2,
+    image: 3,
+  };
+
+  return [...items].sort((left, right) => {
+    const leftKind = getDriveContentKind(left.mimeType) || 'image';
+    const rightKind = getDriveContentKind(right.mimeType) || 'image';
+    const priorityDiff = kindPriority[leftKind] - kindPriority[rightKind];
+
+    if (priorityDiff !== 0) {
+      return priorityDiff;
+    }
+
+    return left.name.localeCompare(right.name, 'ru', {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  });
+};
+
+const collectLessonMaterialsFromFolder = async (
+  drive: drive_v3.Drive,
+  folderId: string,
+  maxDepth = MAX_DRIVE_LESSON_SEARCH_DEPTH
+): Promise<DriveFileItem[]> => {
+  const materials: DriveFileItem[] = [];
+  const queue: Array<{ folderId: string; depth: number }> = [{ folderId, depth: 0 }];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      continue;
+    }
+
+    const children = await listFolderChildren(drive, current.folderId);
+
+    for (const child of children) {
+      if (isIgnoredDriveFileName(child.name)) {
+        continue;
+      }
+
+      const contentKind = getDriveContentKind(child.mimeType);
+      if (contentKind) {
+        materials.push(child);
+        continue;
+      }
+
+      if (child.mimeType === FOLDER_MIME_TYPE && current.depth < maxDepth) {
+        queue.push({ folderId: child.id, depth: current.depth + 1 });
+      }
+    }
+  }
+
+  return sortLessonMaterials(materials);
+};
+
+export const listLessonMaterialsInDriveResource = async (resourceIdOrUrl: string): Promise<DriveFileItem[]> => {
+  const drive = getDriveClient();
+  const resourceId = resourceIdOrUrl.includes('http')
+    ? extractDriveResourceIdFromUrl(resourceIdOrUrl)
+    : resourceIdOrUrl;
+
+  if (!resourceId) {
+    throw new Error('Не удалось определить ID папки или файла Google Drive.');
+  }
+
+  const resourceResponse = await drive.files.get({
+    fileId: resourceId,
+    supportsAllDrives: true,
+    fields: 'id, name, mimeType, webViewLink, modifiedTime',
+  });
+
+  const resource = mapDriveFile(resourceResponse.data);
+
+  if (isIgnoredDriveFileName(resource.name)) {
+    return [];
+  }
+
+  const contentKind = getDriveContentKind(resource.mimeType);
+  if (contentKind) {
+    return [resource];
+  }
+
+  if (resource.mimeType !== FOLDER_MIME_TYPE) {
+    return [];
+  }
+
+  return collectLessonMaterialsFromFolder(drive, resource.id);
+};
+
 export const listImagesInDriveResource = async (resourceIdOrUrl: string): Promise<DriveFileItem[]> => {
   const mediaItems = await listMediaInDriveResource(resourceIdOrUrl);
   return mediaItems.filter((item) => isImageMimeType(item.mimeType));
@@ -430,8 +566,8 @@ export const streamDriveMediaContent = async (
   }
 
   const mimeType = metaResponse.data.mimeType || 'application/octet-stream';
-  if (!isGalleryMediaMimeType(mimeType)) {
-    throw new Error('Запрошенный файл не является изображением или видео.');
+  if (!isStreamableDriveMimeType(mimeType)) {
+    throw new Error('Запрошенный тип файла не поддерживается для просмотра в портале.');
   }
 
   const totalSize = Number.parseInt(metaResponse.data.size || '0', 10);

@@ -12,6 +12,94 @@ const pool = new pg_1.Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
 });
 const DRIVE_LIFE_DESCRIPTION = 'Синхронизировано из Google Drive';
+const TRANSCODE_MIME_TYPES = new Set([
+    'image/heic',
+    'image/heif',
+    'image/heic-sequence',
+    'image/heif-sequence',
+]);
+let cachedSharpModule = null;
+let sharpInitAttempted = false;
+const getSharpModule = () => {
+    if (sharpInitAttempted) {
+        return cachedSharpModule;
+    }
+    sharpInitAttempted = true;
+    try {
+        cachedSharpModule = require('sharp');
+        return cachedSharpModule;
+    }
+    catch {
+        cachedSharpModule = null;
+        return null;
+    }
+};
+const parsePositiveInt = (value, max) => {
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        return undefined;
+    }
+    return Math.min(parsed, max);
+};
+const isResizeFit = (value) => {
+    return typeof value === 'string' && ['cover', 'contain', 'fill', 'inside', 'outside'].includes(value);
+};
+const streamToBuffer = async (stream) => {
+    const chunks = [];
+    return new Promise((resolve, reject) => {
+        stream.on('data', (chunk) => {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+        stream.on('end', () => resolve(Buffer.concat(chunks)));
+        stream.on('error', reject);
+    });
+};
+const optimizeDriveImageBuffer = async (buffer, mimeType, req) => {
+    const width = parsePositiveInt(req.query.w, 2048);
+    const height = parsePositiveInt(req.query.h, 2048);
+    const quality = parsePositiveInt(req.query.q, 100);
+    const fit = isResizeFit(req.query.fit) ? req.query.fit : 'cover';
+    const shouldTranscode = TRANSCODE_MIME_TYPES.has(mimeType.toLowerCase());
+    const shouldResize = width !== undefined || height !== undefined || quality !== undefined || req.query.fit !== undefined;
+    if (!shouldTranscode && !shouldResize) {
+        return { buffer, contentType: mimeType };
+    }
+    const sharpModule = getSharpModule();
+    if (!sharpModule) {
+        return { buffer, contentType: mimeType };
+    }
+    const acceptHeader = typeof req.headers.accept === 'string' ? req.headers.accept : '';
+    const prefersWebp = acceptHeader.includes('image/webp');
+    const normalizedQuality = quality ?? 76;
+    let transformer = sharpModule(buffer, { failOn: 'none' }).rotate();
+    if (width !== undefined || height !== undefined) {
+        transformer = transformer.resize({
+            width,
+            height,
+            fit,
+            withoutEnlargement: true,
+        });
+    }
+    if (prefersWebp) {
+        return {
+            buffer: await transformer.webp({ quality: normalizedQuality }).toBuffer(),
+            contentType: 'image/webp',
+        };
+    }
+    if (shouldTranscode || mimeType === 'image/png') {
+        return {
+            buffer: await transformer.jpeg({ quality: normalizedQuality, mozjpeg: true }).toBuffer(),
+            contentType: 'image/jpeg',
+        };
+    }
+    return {
+        buffer: await transformer.toBuffer(),
+        contentType: mimeType,
+    };
+};
 const getUniqueUrls = (...urls) => {
     return Array.from(new Set(urls.filter(Boolean)));
 };
@@ -270,11 +358,47 @@ router.post('/sync-life', auth_1.authenticateToken, async (req, res) => {
 router.get('/files/:fileId/content', auth_1.authenticateToken, async (req, res) => {
     try {
         const { fileId } = req.params;
-        const { stream, mimeType, name } = await (0, googleDrive_1.streamDriveFileContent)(fileId);
+        const rangeHeader = typeof req.headers.range === 'string' ? req.headers.range : undefined;
+        const width = parsePositiveInt(req.query.w, 2048);
+        const height = parsePositiveInt(req.query.h, 2048);
+        const quality = parsePositiveInt(req.query.q, 100);
+        const shouldOptimize = !rangeHeader &&
+            (width !== undefined ||
+                height !== undefined ||
+                quality !== undefined ||
+                req.query.fit !== undefined);
+        if (shouldOptimize) {
+            const { buffer, mimeType, name } = await (0, googleDrive_1.readDriveFileBuffer)(fileId);
+            const optimized = await optimizeDriveImageBuffer(buffer, mimeType, req);
+            res.setHeader('Content-Type', optimized.contentType);
+            res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(name)}"`);
+            res.setHeader('Cache-Control', 'private, max-age=86400');
+            res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+            return res.send(optimized.buffer);
+        }
+        const { stream, mimeType, name, statusCode, contentRange, totalSize } = await (0, googleDrive_1.streamDriveMediaContent)(fileId, rangeHeader);
+        const isVideo = (0, googleDrive_1.getDriveMediaKind)(mimeType) === 'video';
+        if (!isVideo && TRANSCODE_MIME_TYPES.has(mimeType.toLowerCase())) {
+            const sourceBuffer = await streamToBuffer(stream);
+            const optimized = await optimizeDriveImageBuffer(sourceBuffer, mimeType, req);
+            res.setHeader('Content-Type', optimized.contentType);
+            res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(name)}"`);
+            res.setHeader('Cache-Control', 'private, max-age=86400');
+            res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+            return res.send(optimized.buffer);
+        }
+        res.status(statusCode);
         res.setHeader('Content-Type', mimeType);
         res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(name)}"`);
         res.setHeader('Cache-Control', 'private, max-age=86400');
         res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        res.setHeader('Accept-Ranges', 'bytes');
+        if (contentRange) {
+            res.setHeader('Content-Range', contentRange);
+        }
+        if (totalSize && statusCode === 200) {
+            res.setHeader('Content-Length', String(totalSize));
+        }
         stream.on('error', (error) => {
             console.error('Drive file stream error:', error);
             if (!res.headersSent) {
@@ -285,7 +409,9 @@ router.get('/files/:fileId/content', auth_1.authenticateToken, async (req, res) 
     }
     catch (error) {
         console.error('Drive file content error:', error);
-        res.status(error?.message?.includes('не является изображением') ? 415 : 404).json({
+        const isUnsupportedMedia = error?.message?.includes('не поддерживается для просмотра')
+            || error?.message?.includes('не является изображением');
+        res.status(isUnsupportedMedia ? 415 : 404).json({
             message: error?.message || 'Не удалось получить файл из Google Drive',
         });
     }

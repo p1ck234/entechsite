@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.streamDriveFileContent = exports.listImagesInDriveResource = exports.extractDriveResourceIdFromUrl = exports.parseDriveImageRef = exports.toDriveImageRef = exports.DRIVE_IMAGE_REF_PREFIX = exports.getLifeDriveItems = exports.getTrainingDriveTree = void 0;
+exports.streamDriveFileContent = exports.readDriveFileBuffer = exports.streamDriveMediaContent = exports.listImagesInDriveResource = exports.listLessonMaterialsInDriveResource = exports.listMediaInDriveResource = exports.getDriveMediaKind = exports.getDriveContentKind = exports.extractDriveResourceIdFromUrl = exports.parseDriveImageRef = exports.toDriveImageRef = exports.DRIVE_IMAGE_REF_PREFIX = exports.getLifeDriveItems = exports.getTrainingDriveTree = void 0;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const googleapis_1 = require("googleapis");
@@ -227,7 +227,73 @@ exports.extractDriveResourceIdFromUrl = extractDriveResourceIdFromUrl;
 const isImageMimeType = (mimeType) => {
     return Boolean(mimeType?.startsWith('image/'));
 };
-const listImagesInDriveResource = async (resourceIdOrUrl) => {
+const isVideoMimeType = (mimeType) => {
+    return Boolean(mimeType?.startsWith('video/'));
+};
+const IGNORED_DRIVE_FILE_NAMES = new Set(['.ds_store', 'desktop.ini', 'thumbs.db']);
+const isIgnoredDriveFileName = (name) => {
+    if (!name) {
+        return true;
+    }
+    return IGNORED_DRIVE_FILE_NAMES.has(name.trim().toLowerCase());
+};
+const isPdfMimeType = (mimeType) => mimeType === 'application/pdf';
+const isAudioMimeType = (mimeType) => Boolean(mimeType?.startsWith('audio/'));
+const getDriveContentKind = (mimeType) => {
+    if (isImageMimeType(mimeType)) {
+        return 'image';
+    }
+    if (isVideoMimeType(mimeType)) {
+        return 'video';
+    }
+    if (isPdfMimeType(mimeType)) {
+        return 'pdf';
+    }
+    if (isAudioMimeType(mimeType)) {
+        return 'audio';
+    }
+    return null;
+};
+exports.getDriveContentKind = getDriveContentKind;
+const isStreamableDriveMimeType = (mimeType) => {
+    return (0, exports.getDriveContentKind)(mimeType) !== null;
+};
+const getDriveMediaKind = (mimeType) => {
+    if (isImageMimeType(mimeType)) {
+        return 'image';
+    }
+    if (isVideoMimeType(mimeType)) {
+        return 'video';
+    }
+    return null;
+};
+exports.getDriveMediaKind = getDriveMediaKind;
+const isGalleryMediaMimeType = (mimeType) => {
+    return (0, exports.getDriveMediaKind)(mimeType) !== null;
+};
+const MAX_DRIVE_MEDIA_SEARCH_DEPTH = 3;
+const collectMediaFromFolder = async (drive, folderId, maxDepth = MAX_DRIVE_MEDIA_SEARCH_DEPTH) => {
+    const mediaItems = [];
+    const queue = [{ folderId, depth: 0 }];
+    while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current) {
+            continue;
+        }
+        const children = await listFolderChildren(drive, current.folderId);
+        for (const child of children) {
+            if (isGalleryMediaMimeType(child.mimeType)) {
+                mediaItems.push(child);
+                continue;
+            }
+            if (child.mimeType === FOLDER_MIME_TYPE && current.depth < maxDepth) {
+                queue.push({ folderId: child.id, depth: current.depth + 1 });
+            }
+        }
+    }
+    return sortDriveItemsByName(mediaItems);
+};
+const listMediaInDriveResource = async (resourceIdOrUrl) => {
     const drive = getDriveClient();
     const resourceId = resourceIdOrUrl.includes('http')
         ? (0, exports.extractDriveResourceIdFromUrl)(resourceIdOrUrl)
@@ -241,17 +307,153 @@ const listImagesInDriveResource = async (resourceIdOrUrl) => {
         fields: 'id, name, mimeType, webViewLink, modifiedTime',
     });
     const resource = mapDriveFile(resourceResponse.data);
-    if (isImageMimeType(resource.mimeType)) {
+    if (isGalleryMediaMimeType(resource.mimeType)) {
         return [resource];
     }
     if (resource.mimeType !== FOLDER_MIME_TYPE) {
         return [];
     }
-    const children = await listFolderChildren(drive, resource.id);
-    return children.filter((child) => isImageMimeType(child.mimeType));
+    return collectMediaFromFolder(drive, resource.id);
+};
+exports.listMediaInDriveResource = listMediaInDriveResource;
+const MAX_DRIVE_LESSON_SEARCH_DEPTH = 5;
+const sortLessonMaterials = (items) => {
+    const kindPriority = {
+        video: 0,
+        pdf: 1,
+        audio: 2,
+        image: 3,
+    };
+    return [...items].sort((left, right) => {
+        const leftKind = (0, exports.getDriveContentKind)(left.mimeType) || 'image';
+        const rightKind = (0, exports.getDriveContentKind)(right.mimeType) || 'image';
+        const priorityDiff = kindPriority[leftKind] - kindPriority[rightKind];
+        if (priorityDiff !== 0) {
+            return priorityDiff;
+        }
+        return left.name.localeCompare(right.name, 'ru', {
+            numeric: true,
+            sensitivity: 'base',
+        });
+    });
+};
+const collectLessonMaterialsFromFolder = async (drive, folderId, maxDepth = MAX_DRIVE_LESSON_SEARCH_DEPTH) => {
+    const materials = [];
+    const queue = [{ folderId, depth: 0 }];
+    while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current) {
+            continue;
+        }
+        const children = await listFolderChildren(drive, current.folderId);
+        for (const child of children) {
+            if (isIgnoredDriveFileName(child.name)) {
+                continue;
+            }
+            const contentKind = (0, exports.getDriveContentKind)(child.mimeType);
+            if (contentKind) {
+                materials.push(child);
+                continue;
+            }
+            if (child.mimeType === FOLDER_MIME_TYPE && current.depth < maxDepth) {
+                queue.push({ folderId: child.id, depth: current.depth + 1 });
+            }
+        }
+    }
+    return sortLessonMaterials(materials);
+};
+const listLessonMaterialsInDriveResource = async (resourceIdOrUrl) => {
+    const drive = getDriveClient();
+    const resourceId = resourceIdOrUrl.includes('http')
+        ? (0, exports.extractDriveResourceIdFromUrl)(resourceIdOrUrl)
+        : resourceIdOrUrl;
+    if (!resourceId) {
+        throw new Error('Не удалось определить ID папки или файла Google Drive.');
+    }
+    const resourceResponse = await drive.files.get({
+        fileId: resourceId,
+        supportsAllDrives: true,
+        fields: 'id, name, mimeType, webViewLink, modifiedTime',
+    });
+    const resource = mapDriveFile(resourceResponse.data);
+    if (isIgnoredDriveFileName(resource.name)) {
+        return [];
+    }
+    const contentKind = (0, exports.getDriveContentKind)(resource.mimeType);
+    if (contentKind) {
+        return [resource];
+    }
+    if (resource.mimeType !== FOLDER_MIME_TYPE) {
+        return [];
+    }
+    return collectLessonMaterialsFromFolder(drive, resource.id);
+};
+exports.listLessonMaterialsInDriveResource = listLessonMaterialsInDriveResource;
+const listImagesInDriveResource = async (resourceIdOrUrl) => {
+    const mediaItems = await (0, exports.listMediaInDriveResource)(resourceIdOrUrl);
+    return mediaItems.filter((item) => isImageMimeType(item.mimeType));
 };
 exports.listImagesInDriveResource = listImagesInDriveResource;
-const streamDriveFileContent = async (fileId) => {
+const parseByteRange = (rangeHeader, totalSize) => {
+    if (!rangeHeader || !rangeHeader.startsWith('bytes=') || totalSize <= 0) {
+        return null;
+    }
+    const [startValue, endValue] = rangeHeader.replace(/^bytes=/, '').split('-');
+    const start = Number.parseInt(startValue, 10);
+    const end = endValue ? Number.parseInt(endValue, 10) : totalSize - 1;
+    if (!Number.isFinite(start) || start < 0 || start >= totalSize) {
+        return null;
+    }
+    const safeEnd = Number.isFinite(end) ? Math.min(end, totalSize - 1) : totalSize - 1;
+    if (safeEnd < start) {
+        return null;
+    }
+    return { start, end: safeEnd };
+};
+const streamDriveMediaContent = async (fileId, rangeHeader) => {
+    const drive = getDriveClient();
+    const metaResponse = await drive.files.get({
+        fileId,
+        supportsAllDrives: true,
+        fields: 'id, name, mimeType, size',
+    });
+    if (!metaResponse.data.id) {
+        throw new Error('Файл Google Drive не найден.');
+    }
+    const mimeType = metaResponse.data.mimeType || 'application/octet-stream';
+    if (!isStreamableDriveMimeType(mimeType)) {
+        throw new Error('Запрошенный тип файла не поддерживается для просмотра в портале.');
+    }
+    const totalSize = Number.parseInt(metaResponse.data.size || '0', 10);
+    const parsedRange = parseByteRange(rangeHeader, totalSize);
+    const requestHeaders = {};
+    if (parsedRange) {
+        requestHeaders.Range = `bytes=${parsedRange.start}-${parsedRange.end}`;
+    }
+    const contentResponse = await drive.files.get({
+        fileId,
+        supportsAllDrives: true,
+        alt: 'media',
+        acknowledgeAbuse: true,
+    }, {
+        responseType: 'stream',
+        headers: requestHeaders,
+    });
+    const statusCode = parsedRange ? 206 : 200;
+    const contentRange = parsedRange
+        ? `bytes ${parsedRange.start}-${parsedRange.end}/${totalSize}`
+        : undefined;
+    return {
+        stream: contentResponse.data,
+        mimeType,
+        name: metaResponse.data.name || fileId,
+        totalSize: totalSize > 0 ? totalSize : undefined,
+        contentRange,
+        statusCode,
+    };
+};
+exports.streamDriveMediaContent = streamDriveMediaContent;
+const readDriveFileBuffer = async (fileId) => {
     const drive = getDriveClient();
     const metaResponse = await drive.files.get({
         fileId,
@@ -268,11 +470,24 @@ const streamDriveFileContent = async (fileId) => {
         fileId,
         supportsAllDrives: true,
         alt: 'media',
-    }, { responseType: 'stream' });
+        acknowledgeAbuse: true,
+    }, { responseType: 'arraybuffer' });
     return {
-        stream: contentResponse.data,
+        buffer: Buffer.from(contentResponse.data),
         mimeType: metaResponse.data.mimeType || 'application/octet-stream',
         name: metaResponse.data.name || fileId,
+    };
+};
+exports.readDriveFileBuffer = readDriveFileBuffer;
+const streamDriveFileContent = async (fileId) => {
+    const media = await (0, exports.streamDriveMediaContent)(fileId);
+    if (!isImageMimeType(media.mimeType)) {
+        throw new Error('Запрошенный файл не является изображением.');
+    }
+    return {
+        stream: media.stream,
+        mimeType: media.mimeType,
+        name: media.name,
     };
 };
 exports.streamDriveFileContent = streamDriveFileContent;

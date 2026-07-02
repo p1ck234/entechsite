@@ -547,7 +547,7 @@ router.get('/files/:fileId/content', authenticateToken, async (req: any, res: an
     stream.pipe(res);
   } catch (error: any) {
     console.error('Drive file content error:', error);
-    const isUnsupportedMedia = error?.message?.includes('не является изображением или видео')
+    const isUnsupportedMedia = error?.message?.includes('не поддерживается для просмотра')
       || error?.message?.includes('не является изображением');
     res.status(isUnsupportedMedia ? 415 : 404).json({
       message: error?.message || 'Не удалось получить файл из Google Drive',

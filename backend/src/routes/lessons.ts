@@ -2,6 +2,7 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import { Pool } from 'pg';
 import { authenticateToken } from '../middleware/auth';
+import { getDriveContentKind, listLessonMaterialsInDriveResource, toDriveImageRef } from '../services/googleDrive';
 
 const router = express.Router();
 const pool = new Pool({
@@ -37,6 +38,51 @@ router.get('/course/:courseId', authenticateToken, async (req: any, res: any) =>
   } catch (error) {
     console.error('Get lessons error:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Get lesson materials from Google Drive folder
+router.get('/:id/materials', authenticateToken, async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+
+    const lessonResult = await pool.query(
+      'SELECT id, title, google_drive_url FROM lessons WHERE id = $1 AND is_active = true',
+      [id]
+    );
+
+    if (lessonResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Lesson not found' });
+    }
+
+    const lesson = lessonResult.rows[0];
+
+    if (!lesson.google_drive_url) {
+      return res.json({
+        lessonId: String(lesson.id),
+        title: lesson.title,
+        materials: [],
+      });
+    }
+
+    const materials = await listLessonMaterialsInDriveResource(lesson.google_drive_url);
+
+    res.json({
+      lessonId: String(lesson.id),
+      title: lesson.title,
+      materials: materials.map((item) => ({
+        id: item.id,
+        name: item.name,
+        mimeType: item.mimeType,
+        ref: toDriveImageRef(item.id),
+        mediaType: getDriveContentKind(item.mimeType) || 'image',
+      })),
+    });
+  } catch (error: any) {
+    console.error('Get lesson materials error:', error);
+    res.status(500).json({
+      message: error?.message || 'Не удалось загрузить материалы урока',
+    });
   }
 });
 

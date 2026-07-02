@@ -99,6 +99,26 @@ export const isVideoMimeType = (mimeType?: string): boolean => {
   return Boolean(mimeType?.startsWith('video/'));
 };
 
+export const fetchDriveFileBlobUrl = async (ref: string): Promise<string> => {
+  return fetchDriveImageBlobUrl(ref);
+};
+
+export const isPdfMimeType = (mimeType?: string): boolean => mimeType === 'application/pdf';
+
+export const isAudioMimeType = (mimeType?: string): boolean => Boolean(mimeType?.startsWith('audio/'));
+
+export const isLessonVideo = (item: { mediaType?: string; mimeType?: string }): boolean => {
+  return item.mediaType === 'video' || isVideoMimeType(item.mimeType);
+};
+
+export const isLessonPdf = (item: { mediaType?: string; mimeType?: string }): boolean => {
+  return item.mediaType === 'pdf' || isPdfMimeType(item.mimeType);
+};
+
+export const isLessonAudio = (item: { mediaType?: string; mimeType?: string }): boolean => {
+  return item.mediaType === 'audio' || isAudioMimeType(item.mimeType);
+};
+
 export const isEventVideo = (item: { mediaType?: string; mimeType?: string }): boolean => {
   if (item.mediaType === 'video') {
     return true;

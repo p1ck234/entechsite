@@ -7,6 +7,7 @@ const express_1 = __importDefault(require("express"));
 const express_validator_1 = require("express-validator");
 const pg_1 = require("pg");
 const auth_1 = require("../middleware/auth");
+const googleDrive_1 = require("../services/googleDrive");
 const router = express_1.default.Router();
 const pool = new pg_1.Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://p1ck23@localhost:5432/entechsite',
@@ -34,6 +35,41 @@ router.get('/course/:courseId', auth_1.authenticateToken, async (req, res) => {
     catch (error) {
         console.error('Get lessons error:', error);
         res.status(500).json({ message: 'Internal server error' });
+    }
+});
+router.get('/:id/materials', auth_1.authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const lessonResult = await pool.query('SELECT id, title, google_drive_url FROM lessons WHERE id = $1 AND is_active = true', [id]);
+        if (lessonResult.rows.length === 0) {
+            return res.status(404).json({ message: 'Lesson not found' });
+        }
+        const lesson = lessonResult.rows[0];
+        if (!lesson.google_drive_url) {
+            return res.json({
+                lessonId: String(lesson.id),
+                title: lesson.title,
+                materials: [],
+            });
+        }
+        const materials = await (0, googleDrive_1.listLessonMaterialsInDriveResource)(lesson.google_drive_url);
+        res.json({
+            lessonId: String(lesson.id),
+            title: lesson.title,
+            materials: materials.map((item) => ({
+                id: item.id,
+                name: item.name,
+                mimeType: item.mimeType,
+                ref: (0, googleDrive_1.toDriveImageRef)(item.id),
+                mediaType: (0, googleDrive_1.getDriveContentKind)(item.mimeType) || 'image',
+            })),
+        });
+    }
+    catch (error) {
+        console.error('Get lesson materials error:', error);
+        res.status(500).json({
+            message: error?.message || 'Не удалось загрузить материалы урока',
+        });
     }
 });
 router.get('/:id', auth_1.authenticateToken, async (req, res) => {

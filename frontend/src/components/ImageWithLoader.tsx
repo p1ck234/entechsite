@@ -120,7 +120,6 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
         objectUrl = url;
         setDriveBlobUrl(url);
         rememberImageCandidate(src, imageOptions, url);
-        setLoading(false);
         setError(false);
       })
       .catch(() => {
@@ -169,16 +168,32 @@ const ImageWithLoader: React.FC<ImageWithLoaderProps> = ({
   }, [loading, currentSrc, candidateIndex, srcCandidates.length, onLoadError, isDriveRef]);
 
   const resolvedSrc = isDriveRef ? driveBlobUrl : currentSrc;
+  const isWaitingForSource = !resolvedSrc && !error && (loading || Boolean(src));
 
-  if (!resolvedSrc || error) {
-    return null; // Если ошибка или нет src, возвращаем null - родитель покажет fallback
+  if (error) {
+    return null;
+  }
+
+  if (isWaitingForSource) {
+    return (
+      <div className="relative w-full h-full min-h-[3rem]">
+        <div className="absolute inset-0 flex items-center justify-center bg-pastel-100 animate-pulse">
+          <Loader2 className="w-6 h-6 text-primary-500 animate-spin" aria-hidden="true" />
+          <span className="sr-only">Загрузка изображения</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!resolvedSrc) {
+    return null;
   }
 
   return (
     <div className="relative w-full h-full">
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-pastel-100">
-          <Loader2 className="w-6 h-6 text-primary-500 animate-spin" />
+        <div className="absolute inset-0 flex items-center justify-center bg-pastel-100/90 backdrop-blur-[1px]">
+          <Loader2 className="w-6 h-6 text-primary-500 animate-spin" aria-hidden="true" />
         </div>
       )}
       <img

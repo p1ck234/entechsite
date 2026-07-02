@@ -56,22 +56,23 @@ router.get('/:id/photos', auth_1.authenticateToken, async (req, res) => {
             return res.status(404).json({ message: 'Event not found' });
         }
         const event = result.rows[0];
-        const photos = await (0, googleDrive_1.listImagesInDriveResource)(event.google_drive_url);
+        const mediaItems = await (0, googleDrive_1.listMediaInDriveResource)(event.google_drive_url);
         res.json({
             eventId: String(event.id),
             title: event.title,
-            photos: photos.map((photo) => ({
-                id: photo.id,
-                name: photo.name,
-                mimeType: photo.mimeType,
-                ref: (0, googleDrive_1.toDriveImageRef)(photo.id),
+            photos: mediaItems.map((item) => ({
+                id: item.id,
+                name: item.name,
+                mimeType: item.mimeType,
+                ref: (0, googleDrive_1.toDriveImageRef)(item.id),
+                mediaType: (0, googleDrive_1.getDriveMediaKind)(item.mimeType) || 'image',
             })),
         });
     }
     catch (error) {
         console.error('Get event photos error:', error);
         res.status(500).json({
-            message: error?.message || 'Не удалось загрузить фотографии мероприятия',
+            message: error?.message || 'Не удалось загрузить медиафайлы мероприятия',
         });
     }
 });

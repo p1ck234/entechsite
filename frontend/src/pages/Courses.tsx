@@ -5,6 +5,7 @@ import { Course, CoursesResponse, Lesson } from '../types';
 import { Search, Plus, Edit, Trash2, ExternalLink, Play, CheckCircle, Clock, BookOpen, RefreshCw } from 'lucide-react';
 import CourseModal from '../components/CourseModal';
 import LessonModal from '../components/LessonModal';
+import LessonViewerModal from '../components/LessonViewerModal';
 import { useLocation } from 'react-router-dom';
 
 const Courses: React.FC = () => {
@@ -21,6 +22,7 @@ const Courses: React.FC = () => {
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [viewingLesson, setViewingLesson] = useState<Lesson | null>(null);
   const [syncingTraining, setSyncingTraining] = useState(false);
 
   // Reset selected course when navigating to courses page
@@ -135,6 +137,15 @@ const Courses: React.FC = () => {
         console.error('Error deleting lesson:', error);
       }
     }
+  };
+
+  const handleStartLesson = (lesson: Lesson) => {
+    if (lesson.googleDriveUrl) {
+      setViewingLesson(lesson);
+      return;
+    }
+
+    window.alert('Ссылка на материалы урока не добавлена');
   };
 
   const handleLessonProgress = async (lessonId: string, completed: boolean) => {
@@ -341,16 +352,15 @@ const Courses: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex space-x-2">
                     {lesson.googleDriveUrl ? (
-                      <a
-                        href={lesson.googleDriveUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => handleStartLesson(lesson)}
                         className="btn-primary flex items-center space-x-2 text-sm"
-                        title={`Открыть урок: ${lesson.googleDriveUrl}`}
+                        title="Смотреть материалы урока"
                       >
                         <Play className="w-4 h-4" />
                         <span>Начать урок</span>
-                      </a>
+                      </button>
                     ) : (
                       <button
                         className="btn-primary flex items-center space-x-2 text-sm opacity-50 cursor-not-allowed"
@@ -536,6 +546,13 @@ const Courses: React.FC = () => {
           lesson={editingLesson}
           courseId={selectedCourse.id}
           onClose={handleLessonModalClose}
+        />
+      )}
+
+      {viewingLesson && (
+        <LessonViewerModal
+          lesson={viewingLesson}
+          onClose={() => setViewingLesson(null)}
         />
       )}
     </div>

@@ -58,6 +58,22 @@ export interface Lesson {
   };
 }
 
+export type LessonMaterialType = 'image' | 'video' | 'pdf' | 'audio';
+
+export interface LessonMaterial {
+  id: string;
+  name: string;
+  mimeType?: string;
+  ref: string;
+  mediaType: LessonMaterialType;
+}
+
+export interface LessonMaterialsResponse {
+  lessonId: string;
+  title: string;
+  materials: LessonMaterial[];
+}
+
 export interface CourseProgress {
   id: string;
   userId: string;
