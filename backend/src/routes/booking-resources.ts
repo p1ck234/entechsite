@@ -11,6 +11,16 @@ import {
 
 const router = express.Router();
 
+const releaseClient = async (client: any) => {
+  if (client) {
+    try {
+      client.release();
+    } catch {
+      // пул уже мог закрыть соединение
+    }
+  }
+};
+
 const mapResource = (row: any) => ({
   id: String(row.id),
   name: row.name,
@@ -25,17 +35,23 @@ const mapResource = (row: any) => ({
 });
 
 const loadResourceById = async (id: string | number) => {
-  const result = await pool.query(
-    `${RESOURCE_WITH_TAGS_SELECT}
-     WHERE r.id = $1
-     GROUP BY r.id`,
-    [id]
-  );
+  try {
+    const result = await pool.query(
+      `${RESOURCE_WITH_TAGS_SELECT}
+       WHERE r.id = $1
+       GROUP BY r.id`,
+      [id]
+    );
 
-  return result.rows[0] ? mapResource(result.rows[0]) : null;
+    return result.rows[0] ? mapResource(result.rows[0]) : null;
+  } catch (error) {
+    console.error('Load resource with tags error, fallback:', error);
+    const result = await pool.query('SELECT * FROM booking_resources WHERE id = $1', [id]);
+    return result.rows[0] ? mapResource({ ...result.rows[0], tags: [] }) : null;
+  }
 };
 
-router.get('/', authenticateToken, async (_req: AuthRequest, res) => {
+const loadActiveResources = async () => {
   try {
     const result = await pool.query(
       `${RESOURCE_WITH_TAGS_SELECT}
@@ -44,7 +60,23 @@ router.get('/', authenticateToken, async (_req: AuthRequest, res) => {
        ORDER BY r.type ASC, r.sort_order ASC, r.name ASC`
     );
 
-    res.json({ resources: result.rows.map(mapResource) });
+    return result.rows.map(mapResource);
+  } catch (error) {
+    console.error('Get booking resources with tags error, fallback to plain select:', error);
+    const result = await pool.query(
+      `SELECT *
+       FROM booking_resources
+       WHERE is_active = true
+       ORDER BY type ASC, sort_order ASC, name ASC`
+    );
+
+    return result.rows.map((row) => mapResource({ ...row, tags: [] }));
+  }
+};
+
+router.get('/', authenticateToken, async (_req: AuthRequest, res) => {
+  try {
+    res.json({ resources: await loadActiveResources() });
   } catch (error) {
     console.error('Get booking resources error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -73,22 +105,25 @@ router.post(
   [
     body('name').trim().notEmpty(),
     body('type').isIn(['room', 'zoom']),
-    body('zoomUrl').optional({ values: 'null' }).isURL(),
+    body('zoomUrl').optional({ values: 'falsy' }).isURL({ require_protocol: true }),
     body('description').optional().isString(),
     body('sortOrder').optional().isInt({ min: 0 }),
     body('tagIds').optional().isArray(),
     body('tagIds.*').optional().isInt({ min: 1 }),
   ],
   async (req: AuthRequest, res: any) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        message: errors.array()[0]?.msg || 'Ошибка валидации',
+        errors: errors.array(),
+      });
+    }
+
     let client;
 
     try {
       client = await pool.connect();
-
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
 
       const { name, type, zoomUrl, description, sortOrder = 0 } = req.body;
       const tagIds = normalizeTagIds(req.body.tagIds);
@@ -103,7 +138,11 @@ router.post(
       );
 
       const resourceId = result.rows[0].id;
-      await syncResourceTags(client, resourceId, tagIds);
+      try {
+        await syncResourceTags(client, resourceId, tagIds);
+      } catch (tagError) {
+        console.error('Sync resource tags error (ignored):', tagError);
+      }
       await client.query('COMMIT');
 
       const resource = await loadResourceById(resourceId);
@@ -123,7 +162,7 @@ router.post(
       console.error('Create booking resource error:', error);
       res.status(500).json({ message: 'Internal server error' });
     } finally {
-      client?.release();
+      await releaseClient(client);
     }
   }
 );
@@ -135,7 +174,7 @@ router.put(
   [
     body('name').optional().trim().notEmpty(),
     body('type').optional().isIn(['room', 'zoom']),
-    body('zoomUrl').optional({ values: 'null' }),
+    body('zoomUrl').optional({ values: 'falsy' }).isURL({ require_protocol: true }),
     body('description').optional().isString(),
     body('sortOrder').optional().isInt({ min: 0 }),
     body('isActive').optional().isBoolean(),
@@ -143,15 +182,18 @@ router.put(
     body('tagIds.*').optional().isInt({ min: 1 }),
   ],
   async (req: AuthRequest, res: any) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        message: errors.array()[0]?.msg || 'Ошибка валидации',
+        errors: errors.array(),
+      });
+    }
+
     let client;
 
     try {
       client = await pool.connect();
-
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
 
       const { id } = req.params;
       const existing = await client.query('SELECT * FROM booking_resources WHERE id = $1', [id]);
@@ -188,7 +230,11 @@ router.put(
       );
 
       if (req.body.tagIds !== undefined) {
-        await syncResourceTags(client, id, normalizeTagIds(req.body.tagIds));
+        try {
+          await syncResourceTags(client, id, normalizeTagIds(req.body.tagIds));
+        } catch (tagError) {
+          console.error('Sync resource tags error (ignored):', tagError);
+        }
       }
 
       await client.query('COMMIT');
@@ -210,7 +256,7 @@ router.put(
       console.error('Update booking resource error:', error);
       res.status(500).json({ message: 'Internal server error' });
     } finally {
-      client?.release();
+      await releaseClient(client);
     }
   }
 );

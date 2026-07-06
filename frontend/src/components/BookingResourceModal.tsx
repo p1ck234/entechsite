@@ -8,6 +8,19 @@ interface BookingResourceModalProps {
   onClose: () => void;
 }
 
+const normalizeZoomUrl = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
+};
+
 const BookingResourceModal: React.FC<BookingResourceModalProps> = ({ type, resource, onClose }) => {
   const [name, setName] = useState(resource?.name || '');
   const [zoomUrl, setZoomUrl] = useState(resource?.zoomUrl || '');
@@ -34,10 +47,11 @@ const BookingResourceModal: React.FC<BookingResourceModalProps> = ({ type, resou
       setSaving(true);
       setError(null);
 
+      const normalizedZoomUrl = type === 'zoom' ? normalizeZoomUrl(zoomUrl) : '';
       const payload = {
         name: name.trim(),
         type,
-        zoomUrl: type === 'zoom' ? zoomUrl.trim() || null : null,
+        zoomUrl: type === 'zoom' ? normalizedZoomUrl || null : null,
         description: description.trim() || undefined,
       };
 
@@ -47,14 +61,19 @@ const BookingResourceModal: React.FC<BookingResourceModalProps> = ({ type, resou
         await bookingResourcesAPI.createResource({
           name: payload.name,
           type: payload.type,
-          zoomUrl: type === 'zoom' ? zoomUrl.trim() || undefined : undefined,
+          zoomUrl: type === 'zoom' ? normalizedZoomUrl || undefined : undefined,
           description: payload.description,
         });
       }
 
       onClose();
     } catch (submitError: any) {
-      setError(submitError.response?.data?.message || 'Не удалось сохранить ресурс');
+      const validationMessage = submitError.response?.data?.errors?.[0]?.msg;
+      setError(
+        submitError.response?.data?.message ||
+          validationMessage ||
+          'Не удалось сохранить ресурс'
+      );
     } finally {
       setSaving(false);
     }
@@ -85,11 +104,12 @@ const BookingResourceModal: React.FC<BookingResourceModalProps> = ({ type, resou
             <div>
               <label className="block text-sm font-medium text-pastel-700 mb-2">Ссылка Zoom</label>
               <input
-                type="url"
+                type="text"
+                inputMode="url"
                 value={zoomUrl}
                 onChange={(e) => setZoomUrl(e.target.value)}
                 className="input-field"
-                placeholder="https://zoom.us/j/..."
+                placeholder="https://zoom.us/j/... или zoom.us/j/..."
               />
             </div>
           )}

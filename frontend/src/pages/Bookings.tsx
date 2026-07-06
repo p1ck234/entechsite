@@ -34,6 +34,7 @@ const Bookings: React.FC = () => {
   const [resources, setResources] = useState<BookingResource[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [resourceModal, setResourceModal] = useState<BookingResource | null | undefined>(undefined);
   const [bookingModal, setBookingModal] = useState<{
     resource: BookingResource;
@@ -61,14 +62,30 @@ const Bookings: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
+
+      let resourcesError: string | null = null;
+      let bookingsError: string | null = null;
+
       const [resourcesResponse, bookingsResponse] = await Promise.all([
-        bookingResourcesAPI.getResources(),
-        bookingsAPI.getBookings({ fromDate: weekStart, toDate: weekEnd, type: activeTab }),
+        bookingResourcesAPI.getResources().catch((error: any) => {
+          resourcesError = error.response?.data?.message || 'Не удалось загрузить ресурсы';
+          return { resources: [] as BookingResource[] };
+        }),
+        bookingsAPI
+          .getBookings({ fromDate: weekStart, toDate: weekEnd, type: activeTab })
+          .catch((error: any) => {
+            bookingsError = error.response?.data?.message || 'Не удалось загрузить брони';
+            return { bookings: [] as Booking[] };
+          }),
       ]);
+
       setResources(resourcesResponse.resources);
       setBookings(bookingsResponse.bookings);
-    } catch (error) {
-      console.error('Error loading bookings:', error);
+      setLoadError(resourcesError || bookingsError);
+    } catch (error: any) {
+      console.error('Error loading bookings page:', error);
+      setLoadError(error.response?.data?.message || 'Не удалось загрузить расписание');
     } finally {
       setLoading(false);
     }
@@ -178,6 +195,12 @@ const Bookings: React.FC = () => {
       <p className="text-sm text-pastel-600">
         {formatWeekRange(weekStart, weekEnd)} · слоты проверяются на пересечение автоматически
       </p>
+
+      {loadError && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {loadError}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-48">
