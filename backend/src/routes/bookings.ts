@@ -3,6 +3,7 @@ import { body, query, validationResult } from 'express-validator';
 import { randomUUID } from 'crypto';
 import { pool } from '../db/pool';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { ensureBookingsModuleSchema } from '../utils/ensure-schema';
 import {
   combineDateAndTime,
   expandRecurrenceDates,
@@ -22,6 +23,16 @@ import {
 } from '../utils/booking-tags';
 
 const router = express.Router();
+
+router.use(async (_req, _res, next) => {
+  try {
+    await ensureBookingsModuleSchema(pool);
+    next();
+  } catch (error) {
+    console.error('Bookings schema ensure error:', error);
+    next(error);
+  }
+});
 
 const mapBooking = (row: any) => ({
   id: String(row.id),
@@ -46,20 +57,49 @@ const mapBooking = (row: any) => ({
   updatedAt: row.updated_at,
 });
 
-const bookingSelect = `
+const bookingSelectBase = `
   SELECT
     b.*,
     r.name AS resource_name,
     r.type AS resource_type,
     r.zoom_url,
     u.email AS user_email,
-    NULLIF(TRIM(CONCAT(e.last_name, ' ', e.first_name)), '') AS employee_name,
-    ${BOOKING_TAGS_SUBQUERY}
+    NULLIF(TRIM(CONCAT(e.last_name, ' ', e.first_name)), '') AS employee_name
   FROM bookings b
   JOIN booking_resources r ON r.id = b.resource_id
   JOIN users u ON u.id = b.user_id
   LEFT JOIN employees e ON e.email = u.email
 `;
+
+const bookingSelect = `
+  ${bookingSelectBase},
+  ${BOOKING_TAGS_SUBQUERY}
+`;
+
+const loadBookings = async (conditions: string[], params: Array<string | number>) => {
+  const whereClause = conditions.join(' AND ');
+
+  try {
+    const result = await pool.query(
+      `${bookingSelect}
+       WHERE ${whereClause}
+       ORDER BY b.starts_at ASC`,
+      params
+    );
+
+    return result.rows.map(mapBooking);
+  } catch (error) {
+    console.error('Get bookings with tags error, fallback to plain select:', error);
+    const result = await pool.query(
+      `${bookingSelectBase}
+       WHERE ${whereClause}
+       ORDER BY b.starts_at ASC`,
+      params
+    );
+
+    return result.rows.map((row) => mapBooking({ ...row, tags: [] }));
+  }
+};
 
 const hasBookingConflict = async (
   resourceId: string,
@@ -136,14 +176,7 @@ router.get(
         conditions.push(`b.user_id = $${params.length}`);
       }
 
-      const result = await pool.query(
-        `${bookingSelect}
-         WHERE ${conditions.join(' AND ')}
-         ORDER BY b.starts_at ASC`,
-        params
-      );
-
-      res.json({ bookings: result.rows.map(mapBooking) });
+      res.json({ bookings: await loadBookings(conditions, params) });
     } catch (error) {
       console.error('Get bookings error:', error);
       res.status(500).json({ message: 'Internal server error' });

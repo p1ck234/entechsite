@@ -2,7 +2,7 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import { pool } from '../db/pool';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
-import { ensureBookingResourcesSchema } from '../utils/ensure-schema';
+import { ensureBookingsModuleSchema } from '../utils/ensure-schema';
 import {
   RESOURCE_WITH_TAGS_SELECT,
   normalizeTagIds,
@@ -14,7 +14,7 @@ const router = express.Router();
 
 router.use(async (_req, _res, next) => {
   try {
-    await ensureBookingResourcesSchema(pool);
+    await ensureBookingsModuleSchema(pool);
     next();
   } catch (error) {
     console.error('Booking resources schema ensure error:', error);
