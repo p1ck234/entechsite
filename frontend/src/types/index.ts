@@ -47,7 +47,7 @@ export interface OrgDepartmentGroup {
   employeeCount: number;
 }
 
-export type OrgViewMode = 'departments' | 'hierarchy';
+export type OrgViewMode = 'company' | 'departments';
 
 export interface OrgStructureResponse {
   companyName: string;

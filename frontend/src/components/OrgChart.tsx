@@ -50,6 +50,8 @@ interface OrgEmployeeCardProps {
   isDragging: boolean;
   isDropTarget: boolean;
   isDropInvalid: boolean;
+  directReportsCount?: number;
+  isDepartmentHead?: boolean;
   onSelect: (employee: OrgEmployee) => void;
   onDragStart: (employeeId: string) => void;
   onDragEnd: () => void;
@@ -66,6 +68,8 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
   isDragging,
   isDropTarget,
   isDropInvalid,
+  directReportsCount = 0,
+  isDepartmentHead = false,
   onSelect,
   onDragStart,
   onDragEnd,
@@ -125,7 +129,12 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
         `}
       >
         <div className="flex flex-col items-center gap-2">
-          <div className="h-14 w-14 overflow-hidden rounded-full bg-primary-500 flex items-center justify-center">
+          {isDepartmentHead && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+              Руководитель отдела
+            </span>
+          )}
+          <div className="relative h-14 w-14 overflow-hidden rounded-full bg-primary-500 flex items-center justify-center">
             {employee.photo ? (
               <ImageWithLoader
                 src={employee.photo}
@@ -143,6 +152,11 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
             </div>
             <div className="truncate text-xs text-pastel-600">{employee.position}</div>
             <div className="truncate text-[11px] text-pastel-500">{employee.department}</div>
+            {directReportsCount > 0 && (
+              <div className="mt-1 text-[11px] font-medium text-primary-600">
+                {directReportsCount} в подчинении
+              </div>
+            )}
           </div>
         </div>
       </button>
@@ -158,6 +172,8 @@ interface OrgChartNodeProps {
   draggingId: string | null;
   dropTargetId: string | null;
   dropInvalid: boolean;
+  departmentHeadId?: string | null;
+  getDirectReportsCount?: (employeeId: string) => number;
   onSelect: (employee: OrgEmployee) => void;
   onDragStart: (employeeId: string) => void;
   onDragEnd: () => void;
@@ -174,6 +190,8 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
   draggingId,
   dropTargetId,
   dropInvalid,
+  departmentHeadId,
+  getDirectReportsCount,
   onSelect,
   onDragStart,
   onDragEnd,
@@ -200,6 +218,8 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
         isDragging={draggingId === node.employee.id}
         isDropTarget={dropTargetId === node.employee.id}
         isDropInvalid={dropInvalid}
+        directReportsCount={getDirectReportsCount?.(node.employee.id) ?? node.children.length}
+        isDepartmentHead={departmentHeadId === node.employee.id}
         onSelect={onSelect}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
@@ -229,6 +249,8 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
                   draggingId={draggingId}
                   dropTargetId={dropTargetId}
                   dropInvalid={dropInvalid}
+                  departmentHeadId={departmentHeadId}
+                  getDirectReportsCount={getDirectReportsCount}
                   onSelect={onSelect}
                   onDragStart={onDragStart}
                   onDragEnd={onDragEnd}

@@ -115,3 +115,53 @@ export const buildDepartmentGroups = (employees: OrgEmployee[]): OrgDepartmentGr
 
 export const countManagerLinks = (employees: OrgEmployee[]): number =>
   employees.filter((employee) => employee.managerId).length;
+
+export const countDepartmentInternalLinks = (employees: OrgEmployee[]): number => {
+  const deptIds = new Set(employees.map((employee) => employee.id));
+  return employees.filter((employee) => employee.managerId && deptIds.has(employee.managerId)).length;
+};
+
+export const departmentHasHierarchy = (group: OrgDepartmentGroup): boolean =>
+  countDepartmentInternalLinks(group.employees) > 0;
+
+const leadershipScore = (position: string): number => {
+  const normalized = position.toLowerCase();
+  if (normalized.includes('генеральн')) return 0;
+  if (normalized.includes('коммерческ') && normalized.includes('директор')) return 1;
+  if (normalized.includes('директор')) return 2;
+  if (normalized.includes('руководитель') || normalized.includes('начальник')) return 3;
+  if (normalized.includes('старш')) return 4;
+  if (normalized.includes('менеджер')) return 5;
+  return 6;
+};
+
+export const sortEmployeesBySeniority = (employees: OrgEmployee[]): OrgEmployee[] =>
+  [...employees].sort((left, right) => {
+    const scoreDiff = leadershipScore(left.position) - leadershipScore(right.position);
+    if (scoreDiff !== 0) {
+      return scoreDiff;
+    }
+    return getEmployeeFullName(left).localeCompare(getEmployeeFullName(right), 'ru');
+  });
+
+export const guessDepartmentHead = (employees: OrgEmployee[]): OrgEmployee | null => {
+  if (employees.length === 0) {
+    return null;
+  }
+
+  const withInternalReports = employees
+    .map((employee) => ({
+      employee,
+      reports: employees.filter((item) => item.managerId === employee.id).length,
+    }))
+    .sort((left, right) => right.reports - left.reports);
+
+  if (withInternalReports[0]?.reports > 0) {
+    return withInternalReports[0].employee;
+  }
+
+  return sortEmployeesBySeniority(employees)[0] || null;
+};
+
+export const getDirectReports = (employees: OrgEmployee[], managerId: string): OrgEmployee[] =>
+  employees.filter((employee) => employee.managerId === managerId);

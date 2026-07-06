@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, Network, Users, Loader2, Building2, GitBranch } from 'lucide-react';
+import { Search, Network, Loader2, Building2, GitBranch } from 'lucide-react';
 import { orgStructureAPI } from '../api/client';
 import { OrgEmployee, OrgStructureResponse, OrgViewMode } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import OrgMobileTree from '../components/OrgMobileTree';
 import OrgDepartmentChart from '../components/OrgDepartmentChart';
+import CompanyOrgChart from '../components/CompanyOrgChart';
 import {
-  OrgChartNode,
   employeeMatchesSearch,
   getOrgEmployeeName,
 } from '../components/OrgChart';
@@ -16,6 +16,7 @@ import {
   buildOrgTree,
   canAssignManager,
   countManagerLinks,
+  getDirectReports,
 } from '../utils/orgStructure';
 
 const OrgStructure: React.FC = () => {
@@ -24,7 +25,7 @@ const OrgStructure: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<OrgViewMode>('departments');
+  const [viewMode, setViewMode] = useState<OrgViewMode>('company');
   const [selectedEmployee, setSelectedEmployee] = useState<OrgEmployee | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -210,6 +211,46 @@ const OrgStructure: React.FC = () => {
     await handleAssignManager(selectedEmployee.id, null);
   };
 
+  const handleAssignDepartmentHead = async (department: string, headId: string) => {
+    if (!data || assigning || !headId) {
+      return;
+    }
+
+    const deptEmployees = data.employees.filter(
+      (employee) => (employee.department || 'Без отдела') === department && employee.id !== headId
+    );
+
+    setAssigning(true);
+    setActionMessage(null);
+
+    try {
+      for (const employee of deptEmployees) {
+        const needsAssignment =
+          !employee.managerId ||
+          !deptEmployees.some((item) => item.id === employee.managerId);
+
+        if (needsAssignment) {
+          await orgStructureAPI.updateManager(employee.id, headId);
+        }
+      }
+
+      await loadTree();
+      setActionMessage({ type: 'success', text: `Отдел «${department}» подчинён выбранному руководителю` });
+    } catch (err: any) {
+      setActionMessage({
+        type: 'error',
+        text: err.response?.data?.message || 'Не удалось настроить отдел',
+      });
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const getDirectReportsCount = useCallback(
+    (employeeId: string) => (data ? getDirectReports(data.employees, employeeId).length : 0),
+    [data]
+  );
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -275,6 +316,18 @@ const OrgStructure: React.FC = () => {
       <div className="mb-4 flex flex-wrap gap-2">
         <button
           type="button"
+          onClick={() => setViewMode('company')}
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition-colors ${
+            viewMode === 'company'
+              ? 'bg-primary-500 text-white'
+              : 'bg-white/70 text-pastel-700 border border-pastel-200'
+          }`}
+        >
+          <GitBranch className="h-4 w-4" />
+          Общая структура
+        </button>
+        <button
+          type="button"
           onClick={() => setViewMode('departments')}
           className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition-colors ${
             viewMode === 'departments'
@@ -284,18 +337,6 @@ const OrgStructure: React.FC = () => {
         >
           <Building2 className="h-4 w-4" />
           По отделам
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewMode('hierarchy')}
-          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition-colors ${
-            viewMode === 'hierarchy'
-              ? 'bg-primary-500 text-white'
-              : 'bg-white/70 text-pastel-700 border border-pastel-200'
-          }`}
-        >
-          <GitBranch className="h-4 w-4" />
-          По подчинению
         </button>
       </div>
 
@@ -311,30 +352,31 @@ const OrgStructure: React.FC = () => {
         </div>
       )}
 
-      {viewMode === 'hierarchy' && managerLinksCount === 0 && (
+      {viewMode === 'company' && managerLinksCount === 0 && (
         <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Связи подчинения ещё не настроены. Назначьте руководителей или переключитесь на вид «По отделам».
+          Общая иерархия ещё не настроена. Перейдите в «По отделам», назначьте руководителей отделов кнопкой «Подчинить отдел».
         </div>
       )}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
           <div className="hidden rounded-3xl border border-pastel-200 bg-white/80 p-6 md:block">
-            {viewMode === 'departments' ? (
-              <OrgDepartmentChart groups={departmentGroups} {...chartProps} />
-            ) : hierarchyRoots.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center text-pastel-600">
-                <Users className="mb-3 h-10 w-10 text-pastel-400" />
-                <p className="font-medium">Пока нет иерархии</p>
-              </div>
+            {viewMode === 'company' ? (
+              <CompanyOrgChart
+                companyName={data.companyName}
+                roots={hierarchyRoots}
+                totalEmployees={data.total}
+                managerLinksCount={managerLinksCount}
+                getDirectReportsCount={getDirectReportsCount}
+                {...chartProps}
+              />
             ) : (
-              <div className="overflow-x-auto">
-                <div className="flex min-w-max flex-wrap justify-center gap-10 pl-4">
-                  {hierarchyRoots.map((root) => (
-                    <OrgChartNode key={root.employee.id} node={root} {...chartProps} />
-                  ))}
-                </div>
-              </div>
+              <OrgDepartmentChart
+                groups={departmentGroups}
+                assigning={assigning}
+                onAssignDepartmentHead={handleAssignDepartmentHead}
+                {...chartProps}
+              />
             )}
           </div>
 
