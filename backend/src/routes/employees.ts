@@ -3,7 +3,7 @@ import { body, validationResult, query } from 'express-validator';
 import { pool } from '../db/pool';
 import bcrypt from 'bcryptjs';
 import { authenticateToken } from '../middleware/auth';
-import { wouldCreateManagerCycle } from '../utils/org-structure';
+import { wouldCreateManagerCycle, buildOrgTree, mapOrgEmployee } from '../utils/org-structure';
 
 const router = express.Router();
 
@@ -19,7 +19,7 @@ const normalizeTelegramUsername = (username?: string | null): string | null => {
 // Get all employees
 router.get('/', authenticateToken, [
   query('page').optional().isInt({ min: 1 }),
-  query('limit').optional().isInt({ min: 1, max: 100 }),
+  query('limit').optional().isInt({ min: 1, max: 500 }),
   query('search').optional().isString(),
   query('department').optional().isString(),
   query('showInactive').optional().isBoolean(),
@@ -150,6 +150,31 @@ router.get('/me', authenticateToken, async (req: any, res: any) => {
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Get current employee error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Org tree (дублирует /api/org-structure/tree для совместимости)
+router.get('/org-tree', authenticateToken, async (_req: any, res: any) => {
+  try {
+    const result = await pool.query(
+      `SELECT e.id, e.first_name, e.last_name, e.middle_name, e.position, e.department, e.photo, e.manager_id
+       FROM employees e
+       WHERE e.is_active = true AND e.status = 'APPROVED'
+       ORDER BY e.last_name ASC, e.first_name ASC`
+    );
+
+    const employees = result.rows.map(mapOrgEmployee);
+    const roots = buildOrgTree(employees);
+
+    res.json({
+      companyName: 'EnTech',
+      total: employees.length,
+      roots,
+      employees,
+    });
+  } catch (error) {
+    console.error('Get employees org-tree error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

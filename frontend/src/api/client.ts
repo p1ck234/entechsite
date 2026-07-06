@@ -1,8 +1,9 @@
 import axios from 'axios';
-import { AuthResponse, User, Employee, Course, Lesson, LessonMaterialsResponse, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, BookingResource, Booking, BookingRecurrenceInput, BookingTag, PaginationInfo, OrgStructureResponse } from '../types';
+import { AuthResponse, User, Employee, Course, Lesson, LessonMaterialsResponse, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, BookingResource, Booking, BookingRecurrenceInput, BookingTag, PaginationInfo, OrgStructureResponse, OrgEmployee } from '../types';
 
 import { API_BASE_URL } from '../config/api';
 import { clearEventPhotosCache, getCachedEventPhotos, rememberEventPhotos } from '../utils/eventPhotosCache';
+import { buildOrgTree } from '../utils/orgStructure';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -244,20 +245,88 @@ export const employeesAPI = {
   },
 };
 
+const mapEmployeeToOrg = (employee: Employee): OrgEmployee => ({
+  id: employee.id,
+  firstName: employee.firstName,
+  lastName: employee.lastName,
+  middleName: employee.middleName,
+  position: employee.position,
+  department: employee.department,
+  photo: employee.photo,
+  managerId: employee.managerId || null,
+});
+
+const fetchAllApprovedEmployees = async (): Promise<Employee[]> => {
+  const employees: Employee[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const response = await employeesAPI.getEmployees({
+      page,
+      limit: 100,
+      status: 'APPROVED',
+    });
+    employees.push(...response.employees.filter((employee) => employee.isActive));
+    totalPages = response.pagination.pages;
+    page += 1;
+  } while (page <= totalPages);
+
+  return employees;
+};
+
+const buildTreeFromEmployees = async (): Promise<OrgStructureResponse> => {
+  const employees = await fetchAllApprovedEmployees();
+  const orgEmployees = employees.map(mapEmployeeToOrg);
+
+  return {
+    companyName: 'EnTech',
+    total: orgEmployees.length,
+    roots: buildOrgTree(orgEmployees),
+    employees: orgEmployees,
+  };
+};
+
 export const orgStructureAPI = {
   getTree: async (): Promise<OrgStructureResponse> => {
-    const response = await api.get('/org-structure/tree');
-    return response.data;
+    try {
+      const response = await api.get('/org-structure/tree');
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status !== 404) {
+        throw error;
+      }
+    }
+
+    try {
+      const response = await api.get('/employees/org-tree');
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status !== 404) {
+        throw error;
+      }
+    }
+
+    return buildTreeFromEmployees();
   },
 
   updateManager: async (
     employeeId: string,
     managerId: string | null
   ): Promise<{ message: string }> => {
-    const response = await api.patch(`/org-structure/employees/${employeeId}/manager`, {
-      managerId: managerId ? Number(managerId) : null,
-    });
-    return response.data;
+    try {
+      const response = await api.patch(`/org-structure/employees/${employeeId}/manager`, {
+        managerId: managerId ? Number(managerId) : null,
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status !== 404) {
+        throw error;
+      }
+    }
+
+    const response = await employeesAPI.updateEmployee(employeeId, { managerId });
+    return { message: response.message };
   },
 };
 

@@ -1,4 +1,40 @@
-import { OrgTreeNode } from '../types';
+import { OrgEmployee, OrgTreeNode } from '../types';
+
+export const getEmployeeFullName = (employee: OrgEmployee): string =>
+  [employee.lastName, employee.firstName, employee.middleName].filter(Boolean).join(' ');
+
+export const buildOrgTree = (employees: OrgEmployee[]): OrgTreeNode[] => {
+  const byId = new Map(employees.map((employee) => [employee.id, employee]));
+  const childrenByManager = new Map<string, OrgEmployee[]>();
+
+  for (const employee of employees) {
+    const managerId = employee.managerId;
+    if (!managerId || !byId.has(managerId) || managerId === employee.id) {
+      continue;
+    }
+
+    const siblings = childrenByManager.get(managerId) || [];
+    siblings.push(employee);
+    childrenByManager.set(managerId, siblings);
+  }
+
+  const buildNode = (employee: OrgEmployee): OrgTreeNode => ({
+    employee,
+    children: (childrenByManager.get(employee.id) || [])
+      .sort((left, right) => getEmployeeFullName(left).localeCompare(getEmployeeFullName(right), 'ru'))
+      .map(buildNode),
+  });
+
+  return employees
+    .filter((employee) => {
+      if (!employee.managerId) {
+        return true;
+      }
+      return !byId.has(employee.managerId) || employee.managerId === employee.id;
+    })
+    .sort((left, right) => getEmployeeFullName(left).localeCompare(getEmployeeFullName(right), 'ru'))
+    .map(buildNode);
+};
 
 export const findNodeById = (nodes: OrgTreeNode[], employeeId: string): OrgTreeNode | null => {
   for (const node of nodes) {
