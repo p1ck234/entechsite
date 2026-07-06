@@ -5,7 +5,9 @@ export interface BookingTagRow {
   name: string;
 }
 
-export const parseResourceTags = (value: unknown): BookingTagRow[] => {
+export const parseResourceTags = (value: unknown): BookingTagRow[] => parseBookingTags(value);
+
+export const parseBookingTags = (value: unknown): BookingTagRow[] => {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -66,6 +68,44 @@ export const syncResourceTags = async (
     );
   }
 };
+
+export const syncBookingTags = async (
+  client: Pool | PoolClient,
+  bookingId: string | number,
+  tagIds: string[] | undefined
+): Promise<void> => {
+  await client.query('DELETE FROM booking_item_tags WHERE booking_id = $1', [bookingId]);
+
+  if (!tagIds?.length) {
+    return;
+  }
+
+  const uniqueTagIds = [...new Set(tagIds.map((id) => String(id).trim()).filter(Boolean))];
+
+  for (const tagId of uniqueTagIds) {
+    await client.query(
+      `INSERT INTO booking_item_tags (booking_id, tag_id)
+       VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [bookingId, tagId]
+    );
+  }
+};
+
+export const BOOKING_TAGS_SUBQUERY = `
+  COALESCE(
+    (
+      SELECT json_agg(
+        json_build_object('id', t.id, 'name', t.name)
+        ORDER BY t.name
+      )
+      FROM booking_item_tags bt
+      JOIN booking_tags t ON t.id = bt.tag_id
+      WHERE bt.booking_id = b.id
+    ),
+    '[]'::json
+  ) AS tags
+`;
 
 export const normalizeTagIds = (value: unknown): string[] => {
   if (!Array.isArray(value)) {

@@ -14,6 +14,12 @@ import {
   type BookingRecurrenceInput,
 } from '../utils/booking-rules';
 import { assertCanManageBooking } from '../utils/booking-permissions';
+import {
+  BOOKING_TAGS_SUBQUERY,
+  normalizeTagIds,
+  parseBookingTags,
+  syncBookingTags,
+} from '../utils/booking-tags';
 
 const router = express.Router();
 
@@ -35,6 +41,7 @@ const mapBooking = (row: any) => ({
   endsAt: row.ends_at,
   status: row.status,
   recurrenceGroupId: row.recurrence_group_id ? String(row.recurrence_group_id) : undefined,
+  tags: parseBookingTags(row.tags),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -46,7 +53,8 @@ const bookingSelect = `
     r.type AS resource_type,
     r.zoom_url,
     u.email AS user_email,
-    NULLIF(TRIM(CONCAT(e.last_name, ' ', e.first_name)), '') AS employee_name
+    NULLIF(TRIM(CONCAT(e.last_name, ' ', e.first_name)), '') AS employee_name,
+    ${BOOKING_TAGS_SUBQUERY}
   FROM bookings b
   JOIN booking_resources r ON r.id = b.resource_id
   JOIN users u ON u.id = b.user_id
@@ -157,6 +165,8 @@ router.post(
     body('recurrence.weekdays').optional().isArray({ min: 1, max: 7 }),
     body('recurrence.weekdays.*').optional().isInt({ min: 0, max: 6 }),
     body('recurrence.untilDate').optional().isISO8601({ strict: true }),
+    body('tagIds').optional().isArray(),
+    body('tagIds.*').optional().isInt({ min: 1 }),
   ],
   async (req: AuthRequest, res: any) => {
     try {
@@ -166,6 +176,7 @@ router.post(
       }
 
       const { resourceId, title, description, date, startTime, endTime } = req.body;
+      const tagIds = normalizeTagIds(req.body.tagIds);
       const recurrence: BookingRecurrenceInput = {
         type: req.body.recurrence?.type || 'none',
         weekdays: normalizeWeekdays(req.body.recurrence?.weekdays),
@@ -250,6 +261,10 @@ router.post(
           createdIds.push(created.rows[0].id);
         }
 
+        for (const bookingId of createdIds) {
+          await syncBookingTags(client, bookingId, tagIds);
+        }
+
         await client.query('COMMIT');
 
         const result = await pool.query(`${bookingSelect} WHERE b.id = $1`, [createdIds[0]]);
@@ -285,6 +300,8 @@ router.put(
     body('date').optional().isISO8601({ strict: true }),
     body('startTime').optional().matches(/^\d{2}:\d{2}$/),
     body('endTime').optional().matches(/^\d{2}:\d{2}$/),
+    body('tagIds').optional().isArray(),
+    body('tagIds.*').optional().isInt({ min: 1 }),
   ],
   async (req: AuthRequest, res: any) => {
     try {
@@ -341,6 +358,10 @@ router.put(
          WHERE id = $5`,
         [req.body.title ?? null, req.body.description ?? null, startsAt, endsAt, id]
       );
+
+      if (req.body.tagIds !== undefined) {
+        await syncBookingTags(pool, id, normalizeTagIds(req.body.tagIds));
+      }
 
       const result = await pool.query(`${bookingSelect} WHERE b.id = $1`, [id]);
 

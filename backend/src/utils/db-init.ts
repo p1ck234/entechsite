@@ -207,6 +207,14 @@ export async function initializeDatabase(pool: Pool) {
       `);
 
       await pool.query(`
+        CREATE TABLE IF NOT EXISTS booking_item_tags (
+          booking_id INTEGER NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+          tag_id INTEGER NOT NULL REFERENCES booking_tags(id) ON DELETE CASCADE,
+          PRIMARY KEY (booking_id, tag_id)
+        );
+      `);
+
+      await pool.query(`
         INSERT INTO booking_tags (name)
         VALUES ('SCRUM')
         ON CONFLICT (name) DO NOTHING;
@@ -405,6 +413,14 @@ export async function initializeDatabase(pool: Pool) {
           resource_id INTEGER NOT NULL REFERENCES booking_resources(id) ON DELETE CASCADE,
           tag_id INTEGER NOT NULL REFERENCES booking_tags(id) ON DELETE CASCADE,
           PRIMARY KEY (resource_id, tag_id)
+        );
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS booking_item_tags (
+          booking_id INTEGER NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+          tag_id INTEGER NOT NULL REFERENCES booking_tags(id) ON DELETE CASCADE,
+          PRIMARY KEY (booking_id, tag_id)
         );
       `);
 

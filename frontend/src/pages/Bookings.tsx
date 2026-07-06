@@ -205,18 +205,6 @@ const Bookings: React.FC = () => {
                     )}
                     <h2 className="text-xl font-semibold text-pastel-800">{resource.name}</h2>
                   </div>
-                  {resource.tags && resource.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {resource.tags.map((tag) => (
-                        <span
-                          key={tag.id}
-                          className="inline-flex items-center rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold tracking-wide text-primary-700"
-                        >
-                          {tag.name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                   {resource.description && (
                     <p className="text-sm text-pastel-600 mt-1">{resource.description}</p>
                   )}
@@ -325,6 +313,18 @@ const Bookings: React.FC = () => {
                                     <p className="text-[11px] text-pastel-600 truncate mt-0.5">
                                       {booking.employeeName || booking.userEmail}
                                     </p>
+                                    {booking.tags && booking.tags.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {booking.tags.map((tag) => (
+                                          <span
+                                            key={tag.id}
+                                            className="inline-flex rounded-full bg-primary-50 px-1.5 py-0.5 text-[10px] font-semibold text-primary-700"
+                                          >
+                                            {tag.name}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-0.5 text-[11px] text-pastel-700 whitespace-nowrap shrink-0">
                                     <Clock className="w-3 h-3" />
@@ -363,7 +363,6 @@ const Bookings: React.FC = () => {
           canManage={bookingModal.booking ? canManageBooking(bookingModal.booking) : true}
           isAdmin={isAdmin}
           date={bookingModal.date}
-          onResourceUpdated={() => void loadData()}
           onClose={() => {
             setBookingModal(null);
             void loadData();

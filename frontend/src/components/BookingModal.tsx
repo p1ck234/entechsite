@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { bookingResourcesAPI, bookingTagsAPI, bookingsAPI } from '../api/client';
+import { bookingTagsAPI, bookingsAPI } from '../api/client';
 import type { Booking, BookingResource, BookingTag } from '../types';
 import DatePicker from './DatePicker';
 import { Plus } from 'lucide-react';
@@ -19,7 +19,6 @@ interface BookingModalProps {
   canManage?: boolean;
   isAdmin?: boolean;
   onClose: () => void;
-  onResourceUpdated?: () => void;
 }
 
 const BookingModal: React.FC<BookingModalProps> = ({
@@ -29,17 +28,15 @@ const BookingModal: React.FC<BookingModalProps> = ({
   canManage = true,
   isAdmin = false,
   onClose,
-  onResourceUpdated,
 }) => {
   const [title, setTitle] = useState(booking?.title || '');
   const [description, setDescription] = useState(booking?.description || '');
   const [startTime, setStartTime] = useState('10:00');
   const [endTime, setEndTime] = useState('11:00');
-  const [availableTags, setAvailableTags] = useState<BookingTag[]>(resource.tags || []);
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(resource.tags?.map((tag) => tag.id) || []);
+  const [availableTags, setAvailableTags] = useState<BookingTag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [newTagName, setNewTagName] = useState('');
   const [creatingTag, setCreatingTag] = useState(false);
-  const [savingTags, setSavingTags] = useState(false);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([getWeekdayFromDate(date)]);
   const [untilDate, setUntilDate] = useState(getDefaultRecurrenceUntilDate(date));
@@ -47,10 +44,6 @@ const BookingModal: React.FC<BookingModalProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isAdmin) {
-      return;
-    }
-
     const loadTags = async () => {
       try {
         const response = await bookingTagsAPI.getTags();
@@ -61,11 +54,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
     };
 
     void loadTags();
-  }, [isAdmin]);
-
-  useEffect(() => {
-    setSelectedTagIds(resource.tags?.map((tag) => tag.id) || []);
-  }, [resource]);
+  }, []);
 
   useEffect(() => {
     if (!booking) {
@@ -73,6 +62,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
       setDescription('');
       setStartTime('10:00');
       setEndTime('11:00');
+      setSelectedTagIds([]);
       setRepeatEnabled(false);
       setSelectedWeekdays([getWeekdayFromDate(date)]);
       setUntilDate(getDefaultRecurrenceUntilDate(date));
@@ -86,6 +76,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
     setDescription(booking.description || '');
     setStartTime(startsAt);
     setEndTime(endsAt);
+    setSelectedTagIds(booking.tags?.map((tag) => tag.id) || []);
     setRepeatEnabled(false);
     setError(null);
   }, [booking, date]);
@@ -114,6 +105,10 @@ const BookingModal: React.FC<BookingModalProps> = ({
   };
 
   const toggleTag = (tagId: string) => {
+    if (!canManage) {
+      return;
+    }
+
     setSelectedTagIds((current) =>
       current.includes(tagId) ? current.filter((id) => id !== tagId) : [...current, tagId]
     );
@@ -143,25 +138,6 @@ const BookingModal: React.FC<BookingModalProps> = ({
       setError(createError.response?.data?.message || 'Не удалось создать тег');
     } finally {
       setCreatingTag(false);
-    }
-  };
-
-  const handleSaveTags = async () => {
-    if (!isAdmin) {
-      return;
-    }
-
-    try {
-      setSavingTags(true);
-      setError(null);
-      await bookingResourcesAPI.updateResource(resource.id, {
-        tagIds: selectedTagIds,
-      });
-      onResourceUpdated?.();
-    } catch (saveTagsError: any) {
-      setError(saveTagsError.response?.data?.message || 'Не удалось сохранить теги');
-    } finally {
-      setSavingTags(false);
     }
   };
 
@@ -199,6 +175,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
           date,
           startTime,
           endTime,
+          tagIds: selectedTagIds,
         });
       } else {
         await bookingsAPI.createBooking({
@@ -208,6 +185,7 @@ const BookingModal: React.FC<BookingModalProps> = ({
           date,
           startTime,
           endTime,
+          tagIds: selectedTagIds,
           recurrence: repeatEnabled
             ? {
                 type: 'weekly',
@@ -261,9 +239,9 @@ const BookingModal: React.FC<BookingModalProps> = ({
           <p className="text-sm text-pastel-500 mt-1">
             {resource.name} · {booking?.date || date}
           </p>
-          {resource.tags && resource.tags.length > 0 && (
+          {booking?.tags && booking.tags.length > 0 && !canManage && (
             <div className="flex flex-wrap gap-2 mt-2">
-              {resource.tags.map((tag) => (
+              {booking.tags.map((tag) => (
                 <span
                   key={tag.id}
                   className="inline-flex items-center rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold tracking-wide text-primary-700"
@@ -313,10 +291,10 @@ const BookingModal: React.FC<BookingModalProps> = ({
             </div>
           </div>
 
-          {isAdmin && (
+          {(canManage || (booking?.tags && booking.tags.length > 0)) && (
             <div className="rounded-xl border border-pastel-200 bg-pastel-50/60 p-4 space-y-3">
               <div>
-                <label className="block text-sm font-medium text-pastel-700 mb-2">Теги ресурса</label>
+                <label className="block text-sm font-medium text-pastel-700 mb-2">Теги встречи</label>
                 {availableTags.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {availableTags.map((tag) => {
@@ -326,11 +304,12 @@ const BookingModal: React.FC<BookingModalProps> = ({
                           key={tag.id}
                           type="button"
                           onClick={() => toggleTag(tag.id)}
+                          disabled={!canManage}
                           className={`rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide transition-colors ${
                             isSelected
                               ? 'bg-primary-500 text-white'
                               : 'bg-white text-pastel-700 border border-pastel-200 hover:border-primary-300'
-                          }`}
+                          } ${!canManage ? 'cursor-default opacity-90' : ''}`}
                         >
                           {tag.name}
                         </button>
@@ -338,40 +317,35 @@ const BookingModal: React.FC<BookingModalProps> = ({
                     })}
                   </div>
                 ) : (
-                  <p className="text-sm text-pastel-500">Пока нет тегов. Создайте первый ниже.</p>
+                  <p className="text-sm text-pastel-500">
+                    {isAdmin ? 'Пока нет тегов. Создайте первый ниже.' : 'Теги пока не созданы.'}
+                  </p>
                 )}
               </div>
 
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newTagName}
-                  onChange={(e) => setNewTagName(e.target.value)}
-                  className="input-field"
-                  placeholder="Новый тег, например SCRUM"
-                  maxLength={50}
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleCreateTag()}
-                  disabled={creatingTag || !newTagName.trim()}
-                  className="btn-secondary whitespace-nowrap disabled:opacity-50"
-                >
-                  <span className="inline-flex items-center gap-1">
-                    <Plus className="w-4 h-4" />
-                    {creatingTag ? '...' : 'Тег'}
-                  </span>
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => void handleSaveTags()}
-                disabled={savingTags}
-                className="btn-secondary disabled:opacity-50"
-              >
-                {savingTags ? 'Сохранение тегов...' : 'Сохранить теги ресурса'}
-              </button>
+              {isAdmin && canManage && (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newTagName}
+                    onChange={(e) => setNewTagName(e.target.value)}
+                    className="input-field"
+                    placeholder="Новый тег, например SCRUM"
+                    maxLength={50}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateTag()}
+                    disabled={creatingTag || !newTagName.trim()}
+                    className="btn-secondary whitespace-nowrap disabled:opacity-50"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      <Plus className="w-4 h-4" />
+                      {creatingTag ? '...' : 'Тег'}
+                    </span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

@@ -682,6 +682,7 @@ export const bookingsAPI = {
     date: string;
     startTime: string;
     endTime: string;
+    tagIds?: string[];
     recurrence?: BookingRecurrenceInput;
   }): Promise<{ message: string; booking: Booking; createdCount?: number }> => {
     const response = await api.post('/bookings', booking);
@@ -696,6 +697,7 @@ export const bookingsAPI = {
       date: string;
       startTime: string;
       endTime: string;
+      tagIds: string[];
     }>
   ): Promise<{ message: string; booking: Booking }> => {
     const response = await api.put(`/bookings/${id}`, booking);

@@ -259,6 +259,7 @@ export interface Booking {
   endsAt: string;
   status: 'confirmed' | 'cancelled';
   recurrenceGroupId?: string;
+  tags?: BookingTag[];
   createdAt: string;
   updatedAt: string;
 }
