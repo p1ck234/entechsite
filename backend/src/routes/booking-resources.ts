@@ -2,6 +2,7 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import { pool } from '../db/pool';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
+import { ensureBookingResourcesSchema } from '../utils/ensure-schema';
 import {
   RESOURCE_WITH_TAGS_SELECT,
   normalizeTagIds,
@@ -10,6 +11,16 @@ import {
 } from '../utils/booking-tags';
 
 const router = express.Router();
+
+router.use(async (_req, _res, next) => {
+  try {
+    await ensureBookingResourcesSchema(pool);
+    next();
+  } catch (error) {
+    console.error('Booking resources schema ensure error:', error);
+    next(error);
+  }
+});
 
 const releaseClient = async (client: any) => {
   if (client) {
@@ -278,9 +289,12 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req: AuthRequest, 
     );
 
     res.json({ message: 'Ресурс скрыт' });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Delete booking resource error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    const detail = error?.message ? String(error.message) : 'Internal server error';
+    res.status(500).json({
+      message: process.env.NODE_ENV === 'development' ? detail : 'Не удалось скрыть ресурс',
+    });
   }
 });
 

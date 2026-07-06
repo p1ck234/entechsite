@@ -112,8 +112,14 @@ const Bookings: React.FC = () => {
       return;
     }
 
-    await bookingResourcesAPI.deleteResource(resource.id);
-    await loadData();
+    try {
+      setLoadError(null);
+      await bookingResourcesAPI.deleteResource(resource.id);
+      await loadData();
+    } catch (error: any) {
+      console.error('Hide booking resource error:', error);
+      setLoadError(error.response?.data?.message || 'Не удалось скрыть ресурс');
+    }
   };
 
   return (
