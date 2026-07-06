@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AuthResponse, User, Employee, Course, Lesson, LessonMaterialsResponse, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, BookingResource, Booking, BookingRecurrenceInput, BookingTag, PaginationInfo } from '../types';
+import { AuthResponse, User, Employee, Course, Lesson, LessonMaterialsResponse, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, BookingResource, Booking, BookingRecurrenceInput, BookingTag, PaginationInfo, OrgStructureResponse } from '../types';
 
 import { API_BASE_URL } from '../config/api';
 import { clearEventPhotosCache, getCachedEventPhotos, rememberEventPhotos } from '../utils/eventPhotosCache';
@@ -162,7 +162,8 @@ export const employeesAPI = {
       createdAt: emp.created_at,
       updatedAt: emp.updated_at,
       userRole: emp.user_role,
-      status: emp.status // Добавляем статус
+      status: emp.status, // Добавляем статус
+      managerId: emp.manager_id ? String(emp.manager_id) : null,
     }));
 
     return {
@@ -191,7 +192,8 @@ export const employeesAPI = {
         isActive: emp.is_active,
         createdAt: emp.created_at,
         updatedAt: emp.updated_at,
-        userRole: emp.user_role
+        userRole: emp.user_role,
+        managerId: emp.manager_id ? String(emp.manager_id) : null,
       };
     } catch (error: any) {
       // If employee not found (404), return null instead of throwing
@@ -221,7 +223,8 @@ export const employeesAPI = {
       isActive: emp.is_active,
       createdAt: emp.created_at,
       updatedAt: emp.updated_at,
-      userRole: emp.user_role
+      userRole: emp.user_role,
+      managerId: emp.manager_id ? String(emp.manager_id) : null,
     };
   },
 
@@ -237,6 +240,23 @@ export const employeesAPI = {
 
   deleteEmployee: async (id: string): Promise<{ message: string }> => {
     const response = await api.delete(`/employees/${id}`);
+    return response.data;
+  },
+};
+
+export const orgStructureAPI = {
+  getTree: async (): Promise<OrgStructureResponse> => {
+    const response = await api.get('/org-structure/tree');
+    return response.data;
+  },
+
+  updateManager: async (
+    employeeId: string,
+    managerId: string | null
+  ): Promise<{ message: string }> => {
+    const response = await api.patch(`/org-structure/employees/${employeeId}/manager`, {
+      managerId: managerId ? Number(managerId) : null,
+    });
     return response.data;
   },
 };

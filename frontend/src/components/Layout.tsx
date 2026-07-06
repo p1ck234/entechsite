@@ -14,7 +14,8 @@ import {
   Heart,
   Calendar,
   Bot,
-  DoorOpen
+  DoorOpen,
+  Network
 } from 'lucide-react';
 import Logo from './Logo';
 
@@ -158,6 +159,7 @@ const Layout: React.FC = () => {
   const navigation = [
     { name: 'Главная', href: '/home', icon: Home },
     { name: 'Адресная книга', href: '/employees', icon: Users },
+    { name: 'Структура', href: '/org', icon: Network },
     { name: 'База знаний', href: '/courses', icon: BookOpen },
     { name: 'Наша жизнь', href: '/life', icon: Heart },
     { name: 'Календарь мероприятий', href: '/events', icon: Calendar },

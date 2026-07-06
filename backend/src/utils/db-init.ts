@@ -79,6 +79,20 @@ export async function initializeDatabase(pool: Pool) {
       `);
 
       await pool.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'employees' AND column_name = 'manager_id'
+          ) THEN
+            ALTER TABLE employees
+              ADD COLUMN manager_id INTEGER REFERENCES employees(id) ON DELETE SET NULL;
+            CREATE INDEX IF NOT EXISTS idx_employees_manager_id ON employees(manager_id);
+          END IF;
+        END $$;
+      `);
+
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS courses (
           id SERIAL PRIMARY KEY,
           title VARCHAR(255) NOT NULL,
@@ -323,6 +337,28 @@ export async function initializeDatabase(pool: Pool) {
           CREATE INDEX IF NOT EXISTS idx_employees_telegram_id ON employees(telegram_id) WHERE telegram_id IS NOT NULL;
         `);
         console.log('✅ Колонка telegram_id уже существует (BIGINT)');
+      }
+
+      const managerIdCheck = await pool.query(`
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'employees' AND column_name = 'manager_id'
+      `);
+
+      if (managerIdCheck.rows.length === 0) {
+        await pool.query(`
+          ALTER TABLE employees
+            ADD COLUMN manager_id INTEGER REFERENCES employees(id) ON DELETE SET NULL;
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_employees_manager_id ON employees(manager_id);
+        `);
+        console.log('✅ Колонка manager_id добавлена');
+      } else {
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_employees_manager_id ON employees(manager_id);
+        `);
+        console.log('✅ Колонка manager_id уже существует');
       }
       
       // Проверяем существование таблицы bots

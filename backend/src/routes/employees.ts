@@ -3,6 +3,7 @@ import { body, validationResult, query } from 'express-validator';
 import { pool } from '../db/pool';
 import bcrypt from 'bcryptjs';
 import { authenticateToken } from '../middleware/auth';
+import { wouldCreateManagerCycle } from '../utils/org-structure';
 
 const router = express.Router();
 
@@ -186,7 +187,8 @@ router.post('/', authenticateToken, [
   body('email').isEmail().normalizeEmail(),
   body('phone').notEmpty().trim(),
   body('telegram').optional().isString(),
-  body('photo').optional().isString()
+  body('photo').optional().isString(),
+  body('managerId').optional({ nullable: true }).isInt({ min: 1 })
 ], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
@@ -207,9 +209,20 @@ router.post('/', authenticateToken, [
       email,
       phone,
       telegram,
-      photo
+      photo,
+      managerId
     } = req.body;
     const normalizedTelegram = normalizeTelegramUsername(telegram);
+
+    if (managerId) {
+      const manager = await pool.query(
+        `SELECT id FROM employees WHERE id = $1 AND is_active = true AND status = 'APPROVED'`,
+        [managerId]
+      );
+      if (manager.rows.length === 0) {
+        return res.status(400).json({ message: 'Руководитель не найден или неактивен' });
+      }
+    }
 
     // Check if active employee with email already exists
     const existingEmployee = await pool.query('SELECT id FROM employees WHERE email = $1 AND is_active = true', [email]);
@@ -219,9 +232,9 @@ router.post('/', authenticateToken, [
     }
 
     const result = await pool.query(
-      `INSERT INTO employees (first_name, last_name, middle_name, position, department, email, phone, telegram, photo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [firstName, lastName, middleName, position, department, email, phone, normalizedTelegram, photo]
+      `INSERT INTO employees (first_name, last_name, middle_name, position, department, email, phone, telegram, photo, manager_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [firstName, lastName, middleName, position, department, email, phone, normalizedTelegram, photo, managerId || null]
     );
 
     res.status(201).json({
@@ -245,6 +258,7 @@ router.put('/:id', authenticateToken, [
   body('telegram').optional().isString(),
   body('photo').optional().isString(),
   body('isActive').optional().isBoolean(),
+  body('managerId').optional({ nullable: true }).isInt({ min: 1 }),
   body('role').optional().isIn(['ADMIN', 'USER']) // Added role field
 ], async (req: any, res: any) => {
   try {
@@ -262,6 +276,24 @@ router.put('/:id', authenticateToken, [
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'telegram')) {
       updateData.telegram = normalizeTelegramUsername(updateData.telegram);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updateData, 'managerId')) {
+      const managerId = updateData.managerId;
+      if (managerId) {
+        const manager = await pool.query(
+          `SELECT id FROM employees WHERE id = $1 AND is_active = true AND status = 'APPROVED'`,
+          [managerId]
+        );
+        if (manager.rows.length === 0) {
+          return res.status(400).json({ message: 'Руководитель не найден или неактивен' });
+        }
+
+        const hasCycle = await wouldCreateManagerCycle(pool, id, managerId);
+        if (hasCycle) {
+          return res.status(400).json({ message: 'Нельзя назначить руководителя: получится цикл в структуре' });
+        }
+      }
     }
 
     // Check if employee exists
@@ -293,7 +325,8 @@ router.put('/:id', authenticateToken, [
         const dbKey = key === 'firstName' ? 'first_name' : 
                      key === 'lastName' ? 'last_name' : 
                      key === 'middleName' ? 'middle_name' : 
-                     key === 'isActive' ? 'is_active' : key;
+                     key === 'isActive' ? 'is_active' :
+                     key === 'managerId' ? 'manager_id' : key;
         updateFields.push(`${dbKey} = $${paramCount}`);
         values.push(updateData[key]);
       }

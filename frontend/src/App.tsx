@@ -11,6 +11,7 @@ import Life from './pages/Life';
 import Calendar from './pages/Calendar';
 import Bookings from './pages/Bookings';
 import Bots from './pages/Bots';
+import OrgStructure from './pages/OrgStructure';
 import LoadingSpinner from './components/LoadingSpinner';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -49,6 +50,7 @@ const AppRoutes: React.FC = () => {
       }>
         <Route path="/home" element={<Home />} />
         <Route path="/employees" element={<Employees />} />
+        <Route path="/org" element={<OrgStructure />} />
         <Route path="/courses" element={<Courses />} />
         <Route path="/life" element={<Life />} />
         <Route path="/events" element={<Calendar />} />

@@ -21,6 +21,30 @@ export interface Employee {
   createdAt: string;
   updatedAt: string;
   userRole?: 'ADMIN' | 'USER'; // Role from users table
+  managerId?: string | null;
+}
+
+export interface OrgEmployee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string;
+  position: string;
+  department: string;
+  photo?: string;
+  managerId?: string | null;
+}
+
+export interface OrgTreeNode {
+  employee: OrgEmployee;
+  children: OrgTreeNode[];
+}
+
+export interface OrgStructureResponse {
+  companyName: string;
+  total: number;
+  roots: OrgTreeNode[];
+  employees: OrgEmployee[];
 }
 
 export interface Course {

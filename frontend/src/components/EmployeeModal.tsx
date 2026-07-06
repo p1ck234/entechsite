@@ -25,7 +25,9 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
     telegram: '',
     photo: '',
     role: 'USER' as 'ADMIN' | 'USER',
+    managerId: '',
   });
+  const [managerOptions, setManagerOptions] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState('');
@@ -44,6 +46,26 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
   ];
 
   useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+
+    const loadManagers = async () => {
+      try {
+        const response = await employeesAPI.getEmployees({
+          limit: 500,
+          status: 'APPROVED',
+        });
+        setManagerOptions(response.employees.filter((item) => item.isActive));
+      } catch {
+        setManagerOptions([]);
+      }
+    };
+
+    loadManagers();
+  }, [isAdmin]);
+
+  useEffect(() => {
     if (employee) {
       setFormData({
         firstName: employee.firstName,
@@ -56,6 +78,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
         telegram: employee.telegram || '',
         photo: employee.photo || '',
         role: (employee.userRole as 'ADMIN' | 'USER') || 'USER',
+        managerId: employee.managerId || '',
       });
     } else {
       setFormData({
@@ -69,6 +92,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
         telegram: '',
         photo: '',
         role: 'USER',
+        managerId: '',
       });
     }
   }, [employee]);
@@ -79,10 +103,15 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
     setError('');
 
     try {
+      const payload = {
+        ...formData,
+        managerId: formData.managerId || null,
+      };
+
       if (employee) {
-        await employeesAPI.updateEmployee(employee.id, formData);
+        await employeesAPI.updateEmployee(employee.id, payload);
       } else {
-        await employeesAPI.createEmployee({ ...formData, isActive: true });
+        await employeesAPI.createEmployee({ ...payload, isActive: true });
       }
       onClose();
     } catch (err: any) {
@@ -264,6 +293,31 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ employee, onClose }) => {
                   ))}
                 </select>
               </div>
+
+              {isAdmin && (
+                <div>
+                  <label htmlFor="managerId" className="block text-sm font-medium text-pastel-700 mb-2">
+                    Руководитель
+                  </label>
+                  <select
+                    id="managerId"
+                    name="managerId"
+                    value={formData.managerId}
+                    onChange={handleChange}
+                    className="input-field"
+                  >
+                    <option value="">Без руководителя (верхний уровень)</option>
+                    {managerOptions
+                      .filter((option) => option.id !== employee?.id)
+                      .map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {[option.lastName, option.firstName, option.middleName].filter(Boolean).join(' ')}
+                          {option.position ? ` — ${option.position}` : ''}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-pastel-700 mb-2">

@@ -9,6 +9,7 @@ import { getDatabaseUrl, pool } from './db/pool';
 // Import routes
 import authRoutes from './routes/auth';
 import employeeRoutes from './routes/employees';
+import orgStructureRoutes from './routes/org-structure';
 import courseRoutes from './routes/courses';
 import lessonRoutes from './routes/lessons';
 import userRoutes from './routes/users';
@@ -222,6 +223,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
+app.use('/api/org-structure', orgStructureRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/lessons', lessonRoutes);
 app.use('/api/users', userRoutes);
