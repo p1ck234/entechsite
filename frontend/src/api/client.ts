@@ -307,19 +307,33 @@ export const orgStructureAPI = {
     employeeId: string,
     managerId: string | null
   ): Promise<{ message: string }> => {
-    try {
-      const response = await api.patch(`/org-structure/employees/${employeeId}/manager`, {
-        managerId: managerId ? Number(managerId) : null,
-      });
-      return response.data;
-    } catch (error: any) {
-      if (error.response?.status !== 404) {
-        throw error;
+    const normalizedManagerId = managerId ? String(managerId) : null;
+    const attempts: Array<() => Promise<{ message: string }>> = [
+      async () => {
+        const response = await api.patch(`/org-structure/employees/${employeeId}/manager`, {
+          managerId: normalizedManagerId ? Number(normalizedManagerId) : null,
+        });
+        return response.data;
+      },
+      async () => {
+        const response = await employeesAPI.updateEmployee(employeeId, {
+          managerId: normalizedManagerId,
+        });
+        return { message: response.message };
+      },
+    ];
+
+    let lastError: any;
+    for (const attempt of attempts) {
+      try {
+        return await attempt();
+      } catch (error: any) {
+        lastError = error;
+        console.warn('Update manager attempt failed:', error.response?.status, error.response?.data);
       }
     }
 
-    const response = await employeesAPI.updateEmployee(employeeId, { managerId });
-    return { message: response.message };
+    throw lastError;
   },
 };
 

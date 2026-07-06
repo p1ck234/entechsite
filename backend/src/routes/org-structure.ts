@@ -41,7 +41,16 @@ router.patch(
   '/employees/:id/manager',
   authenticateToken,
   requireAdmin,
-  [body('managerId').optional({ nullable: true }).isInt({ min: 1 })],
+  [body('managerId').optional({ values: 'falsy' }).custom((value) => {
+    if (value === null || value === undefined || value === '') {
+      return true;
+    }
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      throw new Error('Некорректный руководитель');
+    }
+    return true;
+  })],
   async (req: AuthRequest, res: any) => {
     try {
       const errors = validationResult(req);
@@ -95,9 +104,11 @@ router.patch(
         message: 'Руководитель обновлён',
         employee: mapOrgEmployee(updated.rows[0]),
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Update employee manager error:', error);
-      res.status(500).json({ message: 'Internal server error' });
+      res.status(500).json({
+        message: error?.message || 'Internal server error',
+      });
     }
   }
 );

@@ -1,16 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, Network, Users, Loader2 } from 'lucide-react';
+import { Search, Network, Users, Loader2, Building2, GitBranch } from 'lucide-react';
 import { orgStructureAPI } from '../api/client';
-import { OrgEmployee, OrgStructureResponse } from '../types';
+import { OrgEmployee, OrgStructureResponse, OrgViewMode } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import OrgMobileTree from '../components/OrgMobileTree';
+import OrgDepartmentChart from '../components/OrgDepartmentChart';
 import {
   OrgChartNode,
   employeeMatchesSearch,
   getOrgEmployeeName,
 } from '../components/OrgChart';
 import { useAuth } from '../contexts/AuthContext';
-import { canAssignManager } from '../utils/orgStructure';
+import {
+  buildDepartmentGroups,
+  buildOrgTree,
+  canAssignManager,
+  countManagerLinks,
+} from '../utils/orgStructure';
 
 const OrgStructure: React.FC = () => {
   const { isAdmin } = useAuth();
@@ -18,6 +24,7 @@ const OrgStructure: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<OrgViewMode>('departments');
   const [selectedEmployee, setSelectedEmployee] = useState<OrgEmployee | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -61,9 +68,24 @@ const OrgStructure: React.FC = () => {
       return;
     }
 
-    const timer = window.setTimeout(() => setActionMessage(null), 4000);
+    const timer = window.setTimeout(() => setActionMessage(null), 5000);
     return () => window.clearTimeout(timer);
   }, [actionMessage]);
+
+  const hierarchyRoots = useMemo(
+    () => (data ? buildOrgTree(data.employees) : []),
+    [data]
+  );
+
+  const departmentGroups = useMemo(
+    () => (data ? buildDepartmentGroups(data.employees) : []),
+    [data]
+  );
+
+  const managerLinksCount = useMemo(
+    () => (data ? countManagerLinks(data.employees) : 0),
+    [data]
+  );
 
   const managerOptions = useMemo(() => {
     if (!data) {
@@ -100,7 +122,7 @@ const OrgStructure: React.FC = () => {
       return;
     }
 
-    const validation = canAssignManager(employeeId, managerId, data.roots);
+    const validation = canAssignManager(employeeId, managerId, hierarchyRoots);
     if (!validation.valid) {
       setActionMessage({ type: 'error', text: validation.reason || 'Недопустимое назначение' });
       return;
@@ -118,11 +140,12 @@ const OrgStructure: React.FC = () => {
         setSelectedEmployee(updatedEmployee);
       }
 
-      setActionMessage({ type: 'success', text: 'Структура обновлена' });
+      setActionMessage({ type: 'success', text: 'Связь сохранена — схема обновлена' });
     } catch (err: any) {
+      const validationError = err.response?.data?.errors?.[0]?.msg;
       setActionMessage({
         type: 'error',
-        text: err.response?.data?.message || 'Не удалось обновить руководителя',
+        text: err.response?.data?.message || validationError || 'Не удалось сохранить связь',
       });
     } finally {
       setAssigning(false);
@@ -147,7 +170,7 @@ const OrgStructure: React.FC = () => {
       return;
     }
 
-    const validation = canAssignManager(draggingId, targetId, data.roots);
+    const validation = canAssignManager(draggingId, targetId, hierarchyRoots);
     setDropTargetId(targetId);
     setDropInvalid(!validation.valid);
     event.dataTransfer.dropEffect = validation.valid ? 'move' : 'none';
@@ -175,10 +198,7 @@ const OrgStructure: React.FC = () => {
       return;
     }
 
-    await handleAssignManager(
-      selectedEmployee.id,
-      managerDraft || null
-    );
+    await handleAssignManager(selectedEmployee.id, managerDraft || null);
   };
 
   const handleDetachManager = async () => {
@@ -206,6 +226,21 @@ const OrgStructure: React.FC = () => {
     return null;
   }
 
+  const chartProps = {
+    searchQuery,
+    selectedId: selectedEmployee?.id || null,
+    isAdmin,
+    draggingId,
+    dropTargetId,
+    dropInvalid,
+    onSelect: setSelectedEmployee,
+    onDragStart: handleDragStart,
+    onDragEnd: handleDragEnd,
+    onDragOver: handleDragOver,
+    onDragLeave: handleDragLeave,
+    onDrop: handleDrop,
+  };
+
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -216,11 +251,11 @@ const OrgStructure: React.FC = () => {
           </div>
           <h1 className="text-3xl font-bold text-pastel-900">Структура компании</h1>
           <p className="mt-1 text-sm text-pastel-600">
-            {data.companyName} · {data.total} сотрудников в схеме
+            {data.companyName} · {data.total} сотрудников · {departmentGroups.length} отделов · {managerLinksCount} связей
           </p>
           {isAdmin && (
             <p className="mt-2 text-xs text-pastel-500">
-              Перетащите сотрудника на карточку руководителя или измените связь в панели справа.
+              Перетащите сотрудника на руководителя или выберите связь в панели справа.
             </p>
           )}
         </div>
@@ -237,6 +272,33 @@ const OrgStructure: React.FC = () => {
         </div>
       </div>
 
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setViewMode('departments')}
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition-colors ${
+            viewMode === 'departments'
+              ? 'bg-primary-500 text-white'
+              : 'bg-white/70 text-pastel-700 border border-pastel-200'
+          }`}
+        >
+          <Building2 className="h-4 w-4" />
+          По отделам
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode('hierarchy')}
+          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition-colors ${
+            viewMode === 'hierarchy'
+              ? 'bg-primary-500 text-white'
+              : 'bg-white/70 text-pastel-700 border border-pastel-200'
+          }`}
+        >
+          <GitBranch className="h-4 w-4" />
+          По подчинению
+        </button>
+      </div>
+
       {actionMessage && (
         <div
           className={`mb-4 rounded-2xl border px-4 py-3 text-sm ${
@@ -249,49 +311,41 @@ const OrgStructure: React.FC = () => {
         </div>
       )}
 
+      {viewMode === 'hierarchy' && managerLinksCount === 0 && (
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Связи подчинения ещё не настроены. Назначьте руководителей или переключитесь на вид «По отделам».
+        </div>
+      )}
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
-          <div className="hidden overflow-x-auto rounded-3xl border border-pastel-200 bg-white/80 p-6 md:block">
-            {data.roots.length === 0 ? (
+          <div className="hidden rounded-3xl border border-pastel-200 bg-white/80 p-6 md:block">
+            {viewMode === 'departments' ? (
+              <OrgDepartmentChart groups={departmentGroups} {...chartProps} />
+            ) : hierarchyRoots.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center text-pastel-600">
                 <Users className="mb-3 h-10 w-10 text-pastel-400" />
                 <p className="font-medium">Пока нет иерархии</p>
-                <p className="mt-1 max-w-md text-sm">
-                  Назначьте руководителей в адресной книге — сотрудники без руководителя появятся на верхнем уровне.
-                </p>
               </div>
             ) : (
-              <div className="flex min-w-max flex-wrap justify-center gap-10 pl-4">
-                {data.roots.map((root) => (
-                  <OrgChartNode
-                    key={root.employee.id}
-                    node={root}
-                    searchQuery={searchQuery}
-                    selectedId={selectedEmployee?.id || null}
-                    isAdmin={isAdmin}
-                    draggingId={draggingId}
-                    dropTargetId={dropTargetId}
-                    dropInvalid={dropInvalid}
-                    onSelect={setSelectedEmployee}
-                    onDragStart={handleDragStart}
-                    onDragEnd={handleDragEnd}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                  />
-                ))}
+              <div className="overflow-x-auto">
+                <div className="flex min-w-max flex-wrap justify-center gap-10 pl-4">
+                  {hierarchyRoots.map((root) => (
+                    <OrgChartNode key={root.employee.id} node={root} {...chartProps} />
+                  ))}
+                </div>
               </div>
             )}
           </div>
 
           <div className="rounded-3xl border border-pastel-200 bg-white/80 p-4 md:hidden">
-            {data.roots.length === 0 ? (
+            {hierarchyRoots.length === 0 ? (
               <div className="py-8 text-center text-sm text-pastel-500">
                 Нет данных для отображения иерархии
               </div>
             ) : (
               <OrgMobileTree
-                roots={data.roots}
+                roots={viewMode === 'departments' ? departmentGroups.flatMap((group) => group.roots) : hierarchyRoots}
                 searchQuery={searchQuery}
                 selectedId={selectedEmployee?.id || null}
                 onSelect={setSelectedEmployee}
@@ -332,7 +386,7 @@ const OrgStructure: React.FC = () => {
               {isAdmin && (
                 <div className="mt-5 space-y-3 border-t border-pastel-200 pt-4">
                   <label htmlFor="managerDraft" className="block text-sm font-medium text-pastel-700">
-                    Изменить руководителя
+                    Назначить руководителя
                   </label>
                   <select
                     id="managerDraft"
@@ -346,6 +400,7 @@ const OrgStructure: React.FC = () => {
                       <option key={option.id} value={option.id}>
                         {getOrgEmployeeName(option)}
                         {option.position ? ` — ${option.position}` : ''}
+                        {option.department ? ` (${option.department})` : ''}
                       </option>
                     ))}
                   </select>
@@ -358,7 +413,7 @@ const OrgStructure: React.FC = () => {
                       className="btn-primary flex items-center justify-center gap-2"
                     >
                       {assigning && <Loader2 className="h-4 w-4 animate-spin" />}
-                      Сохранить
+                      Сохранить связь
                     </button>
                     {selectedEmployee.managerId && (
                       <button
@@ -376,8 +431,8 @@ const OrgStructure: React.FC = () => {
             </div>
           ) : (
             <div className="text-sm text-pastel-600">
-              Выберите сотрудника на схеме или в списке, чтобы увидеть детали
-              {isAdmin ? ' и изменить подчинение.' : '.'}
+              Выберите сотрудника на схеме, чтобы увидеть детали
+              {isAdmin ? ' и назначить руководителя.' : '.'}
             </div>
           )}
         </aside>

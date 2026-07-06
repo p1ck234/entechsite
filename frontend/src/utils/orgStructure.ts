@@ -1,4 +1,4 @@
-import { OrgEmployee, OrgTreeNode } from '../types';
+import { OrgEmployee, OrgTreeNode, OrgDepartmentGroup } from '../types';
 
 export const getEmployeeFullName = (employee: OrgEmployee): string =>
   [employee.lastName, employee.firstName, employee.middleName].filter(Boolean).join(' ');
@@ -88,12 +88,30 @@ export const canAssignManager = (
 
 export const countDirectReports = (node: OrgTreeNode): number => node.children.length;
 
-export const countTotalReports = (node: OrgTreeNode): number => {
-  let total = node.children.length;
+export const buildDepartmentGroups = (employees: OrgEmployee[]): OrgDepartmentGroup[] => {
+  const departments = [...new Set(employees.map((employee) => employee.department || 'Без отдела'))]
+    .sort((left, right) => left.localeCompare(right, 'ru'));
 
-  for (const child of node.children) {
-    total += countTotalReports(child);
-  }
+  return departments.map((department) => {
+    const deptEmployees = employees.filter(
+      (employee) => (employee.department || 'Без отдела') === department
+    );
+    const deptIds = new Set(deptEmployees.map((employee) => employee.id));
+    const scopedEmployees = deptEmployees.map((employee) => {
+      if (employee.managerId && deptIds.has(employee.managerId)) {
+        return employee;
+      }
+      return { ...employee, managerId: null };
+    });
 
-  return total;
+    return {
+      department,
+      employees: deptEmployees,
+      roots: buildOrgTree(scopedEmployees),
+      employeeCount: deptEmployees.length,
+    };
+  });
 };
+
+export const countManagerLinks = (employees: OrgEmployee[]): number =>
+  employees.filter((employee) => employee.managerId).length;

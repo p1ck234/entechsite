@@ -309,7 +309,12 @@ router.put('/:id', authenticateToken, [
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'managerId')) {
       await ensureManagerIdColumn(pool);
-      const managerId = updateData.managerId;
+      const managerId = updateData.managerId === null || updateData.managerId === ''
+        ? null
+        : String(updateData.managerId);
+
+      updateData.managerId = managerId;
+
       if (managerId) {
         const manager = await pool.query(
           `SELECT id FROM employees WHERE id = $1 AND is_active = true AND status = 'APPROVED'`,

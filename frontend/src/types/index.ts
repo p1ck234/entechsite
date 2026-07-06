@@ -40,6 +40,15 @@ export interface OrgTreeNode {
   children: OrgTreeNode[];
 }
 
+export interface OrgDepartmentGroup {
+  department: string;
+  employees: OrgEmployee[];
+  roots: OrgTreeNode[];
+  employeeCount: number;
+}
+
+export type OrgViewMode = 'departments' | 'hierarchy';
+
 export interface OrgStructureResponse {
   companyName: string;
   total: number;
