@@ -289,21 +289,14 @@ const buildTreeFromEmployees = async (): Promise<OrgStructureResponse> => {
 
 export const orgStructureAPI = {
   getTree: async (): Promise<OrgStructureResponse> => {
-    try {
-      const response = await api.get('/org-structure/tree');
-      return response.data;
-    } catch (error: any) {
-      if (error.response?.status !== 404) {
-        throw error;
-      }
-    }
+    const endpoints = ['/org-structure/tree', '/employees/org-tree'];
 
-    try {
-      const response = await api.get('/employees/org-tree');
-      return response.data;
-    } catch (error: any) {
-      if (error.response?.status !== 404) {
-        throw error;
+    for (const endpoint of endpoints) {
+      try {
+        const response = await api.get(endpoint);
+        return response.data;
+      } catch (error: any) {
+        console.warn(`Org tree endpoint failed (${endpoint}):`, error.response?.status, error.response?.data);
       }
     }
 

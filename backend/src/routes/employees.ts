@@ -4,6 +4,7 @@ import { pool } from '../db/pool';
 import bcrypt from 'bcryptjs';
 import { authenticateToken } from '../middleware/auth';
 import { wouldCreateManagerCycle, buildOrgTree, mapOrgEmployee } from '../utils/org-structure';
+import { ensureManagerIdColumn } from '../utils/ensure-schema';
 
 const router = express.Router();
 
@@ -157,6 +158,8 @@ router.get('/me', authenticateToken, async (req: any, res: any) => {
 // Org tree (дублирует /api/org-structure/tree для совместимости)
 router.get('/org-tree', authenticateToken, async (_req: any, res: any) => {
   try {
+    await ensureManagerIdColumn(pool);
+
     const result = await pool.query(
       `SELECT e.id, e.first_name, e.last_name, e.middle_name, e.position, e.department, e.photo, e.manager_id
        FROM employees e
@@ -249,12 +252,13 @@ router.post('/', authenticateToken, [
       }
     }
 
-    // Check if active employee with email already exists
     const existingEmployee = await pool.query('SELECT id FROM employees WHERE email = $1 AND is_active = true', [email]);
 
     if (existingEmployee.rows.length > 0) {
       return res.status(400).json({ message: 'Employee with this email already exists' });
     }
+
+    await ensureManagerIdColumn(pool);
 
     const result = await pool.query(
       `INSERT INTO employees (first_name, last_name, middle_name, position, department, email, phone, telegram, photo, manager_id)
@@ -304,6 +308,7 @@ router.put('/:id', authenticateToken, [
     }
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'managerId')) {
+      await ensureManagerIdColumn(pool);
       const managerId = updateData.managerId;
       if (managerId) {
         const manager = await pool.query(

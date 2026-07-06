@@ -3,27 +3,34 @@ import { body, validationResult } from 'express-validator';
 import { pool } from '../db/pool';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
 import { buildOrgTree, mapOrgEmployee, wouldCreateManagerCycle } from '../utils/org-structure';
+import { ensureManagerIdColumn } from '../utils/ensure-schema';
 
 const router = express.Router();
 
+const loadOrgTree = async () => {
+  await ensureManagerIdColumn(pool);
+
+  const result = await pool.query(
+    `SELECT e.id, e.first_name, e.last_name, e.middle_name, e.position, e.department, e.photo, e.manager_id
+     FROM employees e
+     WHERE e.is_active = true AND e.status = 'APPROVED'
+     ORDER BY e.last_name ASC, e.first_name ASC`
+  );
+
+  const employees = result.rows.map(mapOrgEmployee);
+  const roots = buildOrgTree(employees);
+
+  return {
+    companyName: 'EnTech',
+    total: employees.length,
+    roots,
+    employees,
+  };
+};
+
 router.get('/tree', authenticateToken, async (_req: AuthRequest, res) => {
   try {
-    const result = await pool.query(
-      `SELECT e.id, e.first_name, e.last_name, e.middle_name, e.position, e.department, e.photo, e.manager_id
-       FROM employees e
-       WHERE e.is_active = true AND e.status = 'APPROVED'
-       ORDER BY e.last_name ASC, e.first_name ASC`
-    );
-
-    const employees = result.rows.map(mapOrgEmployee);
-    const roots = buildOrgTree(employees);
-
-    res.json({
-      companyName: 'EnTech',
-      total: employees.length,
-      roots,
-      employees,
-    });
+    res.json(await loadOrgTree());
   } catch (error) {
     console.error('Get org tree error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -46,6 +53,8 @@ router.patch(
       const managerId = req.body.managerId === null || req.body.managerId === undefined
         ? null
         : String(req.body.managerId);
+
+      await ensureManagerIdColumn(pool);
 
       const existing = await pool.query('SELECT id, manager_id FROM employees WHERE id = $1', [id]);
       if (existing.rows.length === 0) {
