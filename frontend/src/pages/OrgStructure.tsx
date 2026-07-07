@@ -396,7 +396,7 @@ const OrgStructure: React.FC = () => {
           </div>
         </div>
 
-        <aside className="rounded-3xl border border-pastel-200 bg-white/90 p-5 h-fit">
+        <aside className="self-start rounded-3xl border border-pastel-200 bg-white/90 p-5 xl:sticky xl:top-6 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
           {selectedEmployee ? (
             <div>
               <div className="text-sm text-pastel-500">Выбран сотрудник</div>
