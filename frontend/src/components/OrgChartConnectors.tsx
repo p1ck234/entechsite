@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 
 export const ORG_CHART_CHILD_GAP = 20;
 
@@ -21,32 +21,105 @@ interface OrgConnectorChildrenProps {
   children: React.ReactNode;
 }
 
-export const OrgConnectorChildren: React.FC<OrgConnectorChildrenProps> = ({ childCount, children }) => (
-  <div className="flex flex-col items-center">
-    <OrgConnectorStem height={24} />
-    <div
-      className="relative inline-flex items-start justify-center pt-6"
-      style={{ gap: ORG_CHART_CHILD_GAP }}
-    >
-      {childCount > 1 && (
-        <div
-          className="pointer-events-none absolute top-6 h-0.5 rounded-full"
-          style={{ left: 24, right: 24, backgroundColor: connectorColor }}
-          aria-hidden
-        />
-      )}
-      {children}
+export const OrgConnectorChildren: React.FC<OrgConnectorChildrenProps> = ({ childCount, children }) => {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [line, setLine] = useState<{ left: number; width: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    if (!row || childCount <= 1) {
+      setLine(null);
+      return;
+    }
+
+    const measure = () => {
+      const items = row.querySelectorAll<HTMLElement>('[data-connector-item]');
+      if (items.length < 2) {
+        setLine(null);
+        return;
+      }
+
+      const rowRect = row.getBoundingClientRect();
+      const firstRect = items[0].getBoundingClientRect();
+      const lastRect = items[items.length - 1].getBoundingClientRect();
+      const left = firstRect.left + firstRect.width / 2 - rowRect.left;
+      const right = lastRect.left + lastRect.width / 2 - rowRect.left;
+
+      setLine({ left, width: Math.max(0, right - left) });
+    };
+
+    measure();
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(row);
+    for (const item of row.querySelectorAll('[data-connector-item]')) {
+      observer.observe(item);
+    }
+
+    return () => observer.disconnect();
+  }, [childCount, children]);
+
+  return (
+    <div className="flex flex-col items-center">
+      <OrgConnectorStem height={24} />
+      <div
+        ref={rowRef}
+        className="relative inline-flex items-start justify-center pt-6"
+        style={{ gap: ORG_CHART_CHILD_GAP }}
+      >
+        {line && line.width > 0 && (
+          <div
+            className="pointer-events-none absolute top-6 h-0.5 rounded-full"
+            style={{ left: line.left, width: line.width, backgroundColor: connectorColor }}
+            aria-hidden
+          />
+        )}
+        {children}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 interface OrgConnectorDropProps {
   children: React.ReactNode;
 }
 
 export const OrgConnectorDrop: React.FC<OrgConnectorDropProps> = ({ children }) => (
-  <div className="flex shrink-0 flex-col items-center">
+  <div className="flex shrink-0 flex-col items-center" data-connector-item>
     <OrgConnectorStem height={24} />
+    {children}
+  </div>
+);
+
+interface OrgConnectorSideBranchProps {
+  children: React.ReactNode;
+}
+
+export const OrgConnectorSideBranch: React.FC<OrgConnectorSideBranchProps> = ({ children }) => (
+  <div className="flex min-w-0 items-start">
+    <div className="flex w-5 shrink-0 items-center self-center">
+      <div className="h-0.5 w-full rounded-full" style={{ backgroundColor: connectorColor }} aria-hidden />
+    </div>
+    <div
+      className="relative flex flex-col gap-4 border-l-2 py-1 pl-4"
+      style={{ borderColor: connectorColor }}
+    >
+      {children}
+    </div>
+  </div>
+);
+
+interface OrgConnectorSideItemProps {
+  children: React.ReactNode;
+}
+
+export const OrgConnectorSideItem: React.FC<OrgConnectorSideItemProps> = ({ children }) => (
+  <div className="relative">
+    <div
+      className="absolute -left-4 top-1/2 h-0.5 w-4 -translate-y-1/2 rounded-full"
+      style={{ backgroundColor: connectorColor }}
+      aria-hidden
+    />
     {children}
   </div>
 );

@@ -4,7 +4,7 @@ import { OrgEmployee, OrgTreeNode } from '../types';
 import ImageWithLoader from './ImageWithLoader';
 import { formatDepartmentLabel, getOrgNodeLabel, groupOrgNodesByDepartment, getDepartmentGroupKey, isOrgRoleNode } from '../utils/orgStructure';
 import OrgDepartmentBranch from './OrgDepartmentBranch';
-import { OrgConnectorChildren, OrgConnectorDrop } from './OrgChartConnectors';
+import { OrgConnectorChildren, OrgConnectorDrop, OrgConnectorSideBranch, OrgConnectorSideItem } from './OrgChartConnectors';
 
 const AVATAR_OPTIONS = {
   width: 96,
@@ -312,7 +312,15 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
     return null;
   }
 
-  const useDepartmentBranches = branchChildrenByDepartment && hasChildren;
+  const childrenSameDepartment =
+    visibleChildren.length > 0 &&
+    visibleChildren.every(
+      (child) =>
+        getDepartmentGroupKey(child.employee.department) === getDepartmentGroupKey(node.employee.department)
+    );
+
+  const useSideLayout = hideDepartmentOnCard && hasChildren && childrenSameDepartment;
+  const useDepartmentBranches = branchChildrenByDepartment && hasChildren && !useSideLayout;
   const departmentGroups = useDepartmentBranches ? groupOrgNodesByDepartment(visibleChildren) : null;
 
   const childNodeProps = {
@@ -349,30 +357,51 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
     </OrgDepartmentBranch>
   );
 
+  const card = (
+    <OrgEmployeeCard
+      employee={node.employee}
+      isSelected={selectedId === node.employee.id}
+      isDimmed={Boolean(searchQuery.trim()) && !employeeMatchesSearch(node.employee, searchQuery)}
+      isAdmin={isAdmin}
+      isDragging={draggingId === node.employee.id}
+      isDropTarget={dropTargetId === node.employee.id}
+      isDropInvalid={dropInvalid}
+      directReportsCount={getDirectReportsCount?.(node.employee.id) ?? node.children.length}
+      isDepartmentHead={departmentHeadId === node.employee.id}
+      isExecutiveRoot={isExecutiveRoot}
+      hideDepartmentOnCard={hideDepartmentOnCard}
+      hasChildren={hasChildren}
+      isExpanded={isExpanded}
+      onToggleExpand={onToggleExpand}
+      onSelect={onSelect}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    />
+  );
+
+  if (useSideLayout) {
+    return (
+      <div className="flex w-full min-w-0 items-start">
+        <div className="shrink-0">{card}</div>
+        {hasChildren && isExpanded && (
+          <OrgConnectorSideBranch>
+            {visibleChildren.map((child) => (
+              <OrgConnectorSideItem key={child.employee.id}>
+                <OrgChartNode node={child} hideDepartmentOnCard {...childNodeProps} />
+              </OrgConnectorSideItem>
+            ))}
+          </OrgConnectorSideBranch>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center">
-      <OrgEmployeeCard
-        employee={node.employee}
-        isSelected={selectedId === node.employee.id}
-        isDimmed={Boolean(searchQuery.trim()) && !employeeMatchesSearch(node.employee, searchQuery)}
-        isAdmin={isAdmin}
-        isDragging={draggingId === node.employee.id}
-        isDropTarget={dropTargetId === node.employee.id}
-        isDropInvalid={dropInvalid}
-        directReportsCount={getDirectReportsCount?.(node.employee.id) ?? node.children.length}
-        isDepartmentHead={departmentHeadId === node.employee.id}
-        isExecutiveRoot={isExecutiveRoot}
-        hideDepartmentOnCard={hideDepartmentOnCard}
-        hasChildren={hasChildren}
-        isExpanded={isExpanded}
-        onToggleExpand={onToggleExpand}
-        onSelect={onSelect}
-        onDragStart={onDragStart}
-        onDragEnd={onDragEnd}
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-        onDrop={onDrop}
-      />
+      {card}
 
       {hasChildren && isExpanded && (
         <OrgConnectorChildren
