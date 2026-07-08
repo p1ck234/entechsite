@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { Children, isValidElement, useLayoutEffect, useRef, useState } from 'react';
 
 export const ORG_CHART_CHILD_GAP = 20;
 
@@ -97,10 +97,16 @@ interface OrgConnectorVerticalStackProps {
 
 export const OrgConnectorVerticalStack: React.FC<OrgConnectorVerticalStackProps> = ({ children }) => (
   <div
-    className="relative ml-2 mt-2 flex flex-col gap-2.5 border-l-2 py-0.5 pl-3"
+    className="relative ml-1 mt-2 border-l-2 pl-2"
     style={{ borderColor: connectorColor }}
   >
-    {children}
+    {Children.map(children, (child) =>
+      isValidElement(child) ? (
+        <div key={child.key} className="mb-3 block w-full shrink-0 last:mb-0">
+          {child}
+        </div>
+      ) : null
+    )}
   </div>
 );
 

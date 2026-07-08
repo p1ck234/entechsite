@@ -57,6 +57,7 @@ interface OrgEmployeeCardProps {
   isDepartmentHead?: boolean;
   isExecutiveRoot?: boolean;
   hideDepartmentOnCard?: boolean;
+  compact?: boolean;
   hasChildren?: boolean;
   isExpanded?: boolean;
   onToggleExpand?: (employeeId: string) => void;
@@ -80,6 +81,7 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
   isDepartmentHead = false,
   isExecutiveRoot = false,
   hideDepartmentOnCard = false,
+  compact = false,
   hasChildren = false,
   isExpanded = true,
   onToggleExpand,
@@ -97,7 +99,8 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
   return (
     <div
       className={`
-        relative rounded-2xl transition-all
+        relative shrink-0
+        ${compact ? 'w-full py-1' : ''}
         ${isDragging ? 'scale-95 opacity-40' : ''}
         ${isDropTarget && !isDropInvalid ? 'ring-2 ring-primary-300 ring-offset-2' : ''}
         ${isDropTarget && isDropInvalid ? 'ring-2 ring-red-300 ring-offset-2' : ''}
@@ -125,7 +128,7 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
             onDragStart(employee.id);
           }}
           onDragEnd={onDragEnd}
-          className="absolute -left-2 top-1/2 z-10 -translate-y-1/2 cursor-grab rounded-lg border border-slate-200 bg-white p-1 text-slate-400 shadow-sm hover:border-slate-300 active:cursor-grabbing"
+          className={`absolute top-1/2 z-10 -translate-y-1/2 cursor-grab rounded-lg border border-slate-200 bg-white p-1 text-slate-400 shadow-sm hover:border-slate-300 active:cursor-grabbing ${compact ? 'left-0' : '-left-2'}`}
           title="Перетащите на карточку руководителя"
         >
           <GripVertical className="h-4 w-4" />
@@ -139,7 +142,7 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
             event.stopPropagation();
             onToggleExpand(employee.id);
           }}
-          className="absolute -right-2 top-1/2 z-10 -translate-y-1/2 rounded-lg border border-slate-200 bg-white p-1 text-slate-500 shadow-sm hover:border-slate-300 hover:bg-slate-50"
+          className={`absolute top-1/2 z-10 -translate-y-1/2 rounded-lg border border-slate-200 bg-white p-1 text-slate-500 shadow-sm hover:border-slate-300 hover:bg-slate-50 ${compact ? 'right-0' : '-right-2'}`}
           aria-label={isExpanded ? 'Свернуть ветку' : 'Развернуть ветку'}
         >
           {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -153,8 +156,8 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
         className={`
           group text-left transition-all duration-200
           ${isRole
-            ? 'w-[200px] rounded-xl border border-dashed border-slate-300 bg-slate-50/80 px-3 py-3 hover:border-slate-400 hover:bg-white'
-            : `w-[240px] rounded-xl border bg-white px-3 py-2.5 shadow-sm hover:shadow-md ${
+            ? `${compact ? 'w-full' : 'w-[200px]'} rounded-xl border border-dashed border-slate-300 bg-slate-50/80 px-3 py-3 hover:border-slate-400 hover:bg-white`
+            : `${compact ? 'w-full' : 'w-[240px]'} rounded-xl border bg-white px-3 py-2.5 shadow-sm hover:shadow-md ${
                 isExecutiveRoot
                   ? 'border-primary-200/80 ring-1 ring-primary-100'
                   : 'border-slate-200/90 hover:border-slate-300'
@@ -363,6 +366,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
       isDepartmentHead={departmentHeadId === node.employee.id}
       isExecutiveRoot={isExecutiveRoot}
       hideDepartmentOnCard={hideDepartmentOnCard}
+      compact={hideDepartmentOnCard}
       hasChildren={hasChildren}
       isExpanded={isExpanded}
       onToggleExpand={onToggleExpand}
@@ -377,7 +381,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
 
   if (hideDepartmentOnCard) {
     return (
-      <div className="flex w-full flex-col items-stretch">
+      <div className="block w-full shrink-0">
         {card}
         {hasChildren && isExpanded && (
           <OrgConnectorVerticalStack>
