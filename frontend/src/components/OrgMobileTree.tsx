@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { OrgEmployee, OrgTreeNode } from '../types';
+import { countDirectReports, formatDepartmentLabel } from '../utils/orgStructure';
 import { employeeMatchesSearch, getOrgEmployeeName, treeNodeHasMatch } from './OrgChart';
 import ImageWithLoader from './ImageWithLoader';
-import { countDirectReports } from '../utils/orgStructure';
 
 const AVATAR_OPTIONS = {
   width: 64,
@@ -136,7 +136,7 @@ const OrgMobileTreeNode: React.FC<OrgMobileTreeNodeProps> = ({
                   {getOrgEmployeeName(employee)}
                 </div>
                 <div className="truncate text-xs text-pastel-600">{employee.position}</div>
-                <div className="truncate text-[11px] text-pastel-500">{employee.department}</div>
+                <div className="truncate text-[11px] text-pastel-500">{formatDepartmentLabel(employee.department)}</div>
               </div>
 
               {hasChildren && (

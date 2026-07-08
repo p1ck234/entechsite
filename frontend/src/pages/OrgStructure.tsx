@@ -29,6 +29,7 @@ const OrgStructure: React.FC = () => {
   const [selectedEmployee, setSelectedEmployee] = useState<OrgEmployee | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [dropTargetCompany, setDropTargetCompany] = useState(false);
   const [dropInvalid, setDropInvalid] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [managerDraft, setManagerDraft] = useState('');
@@ -156,12 +157,14 @@ const OrgStructure: React.FC = () => {
   const handleDragStart = (employeeId: string) => {
     setDraggingId(employeeId);
     setDropTargetId(null);
+    setDropTargetCompany(false);
     setDropInvalid(false);
   };
 
   const handleDragEnd = () => {
     setDraggingId(null);
     setDropTargetId(null);
+    setDropTargetCompany(false);
     setDropInvalid(false);
   };
 
@@ -171,6 +174,7 @@ const OrgStructure: React.FC = () => {
       return;
     }
 
+    setDropTargetCompany(false);
     const validation = canAssignManager(draggingId, targetId, hierarchyRoots);
     setDropTargetId(targetId);
     setDropInvalid(!validation.valid);
@@ -182,6 +186,32 @@ const OrgStructure: React.FC = () => {
       setDropTargetId(null);
       setDropInvalid(false);
     }
+  };
+
+  const handleDragOverCompany = (event: React.DragEvent) => {
+    event.preventDefault();
+    if (!draggingId) {
+      return;
+    }
+
+    setDropTargetId(null);
+    setDropInvalid(false);
+    setDropTargetCompany(true);
+    event.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDragLeaveCompany = () => {
+    setDropTargetCompany(false);
+  };
+
+  const handleDropOnCompany = async (event: React.DragEvent) => {
+    event.preventDefault();
+    if (!draggingId) {
+      return;
+    }
+
+    await handleAssignManager(draggingId, null);
+    handleDragEnd();
   };
 
   const handleDrop = async (event: React.DragEvent, targetId: string) => {
@@ -300,7 +330,7 @@ const OrgStructure: React.FC = () => {
           </p>
           {isAdmin && (
             <p className="mt-2 text-xs text-pastel-500">
-              Перетащите сотрудника на руководителя или выберите связь в панели справа.
+              Перетащите на блок «Компания» — верхний уровень (гендиректор). На карточку руководителя — подчинение.
             </p>
           )}
         </div>
@@ -371,7 +401,11 @@ const OrgStructure: React.FC = () => {
                 roots={hierarchyRoots}
                 totalEmployees={data.total}
                 managerLinksCount={managerLinksCount}
+                dropTargetCompany={dropTargetCompany}
                 getDirectReportsCount={getDirectReportsCount}
+                onDragOverCompany={handleDragOverCompany}
+                onDragLeaveCompany={handleDragLeaveCompany}
+                onDropOnCompany={handleDropOnCompany}
                 {...chartProps}
               />
             ) : (
@@ -424,7 +458,7 @@ const OrgStructure: React.FC = () => {
                           data.employees.find((employee) => employee.id === selectedEmployee.managerId) ||
                             selectedEmployee
                         )
-                      : 'Верхний уровень'}
+                      : 'Прикреплён к компании'}
                   </dd>
                 </div>
               </dl>
@@ -441,7 +475,7 @@ const OrgStructure: React.FC = () => {
                     className="input-field"
                     disabled={assigning}
                   >
-                    <option value="">Без руководителя (верхний уровень)</option>
+                    <option value="">К компании (верхний уровень)</option>
                     {managerOptions.map((option) => (
                       <option key={option.id} value={option.id}>
                         {getOrgEmployeeName(option)}
@@ -468,7 +502,7 @@ const OrgStructure: React.FC = () => {
                         disabled={assigning}
                         className="rounded-xl border border-pastel-300 px-4 py-2 text-sm text-pastel-700 hover:bg-pastel-50"
                       >
-                        Отвязать
+                        К компании
                       </button>
                     )}
                   </div>

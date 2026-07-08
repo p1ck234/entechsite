@@ -3,6 +3,17 @@ import { OrgEmployee, OrgTreeNode, OrgDepartmentGroup } from '../types';
 export const getEmployeeFullName = (employee: OrgEmployee): string =>
   [employee.lastName, employee.firstName, employee.middleName].filter(Boolean).join(' ');
 
+const leadershipScore = (position: string): number => {
+  const normalized = position.toLowerCase();
+  if (normalized.includes('генеральн')) return 0;
+  if (normalized.includes('коммерческ') && normalized.includes('директор')) return 1;
+  if (normalized.includes('директор')) return 2;
+  if (normalized.includes('руководитель') || normalized.includes('начальник')) return 3;
+  if (normalized.includes('старш')) return 4;
+  if (normalized.includes('менеджер')) return 5;
+  return 6;
+};
+
 export const buildOrgTree = (employees: OrgEmployee[]): OrgTreeNode[] => {
   const byId = new Map(employees.map((employee) => [employee.id, employee]));
   const childrenByManager = new Map<string, OrgEmployee[]>();
@@ -32,7 +43,13 @@ export const buildOrgTree = (employees: OrgEmployee[]): OrgTreeNode[] => {
       }
       return !byId.has(employee.managerId) || employee.managerId === employee.id;
     })
-    .sort((left, right) => getEmployeeFullName(left).localeCompare(getEmployeeFullName(right), 'ru'))
+    .sort((left, right) => {
+      const scoreDiff = leadershipScore(left.position) - leadershipScore(right.position);
+      if (scoreDiff !== 0) {
+        return scoreDiff;
+      }
+      return getEmployeeFullName(left).localeCompare(getEmployeeFullName(right), 'ru');
+    })
     .map(buildNode);
 };
 
@@ -124,15 +141,9 @@ export const countDepartmentInternalLinks = (employees: OrgEmployee[]): number =
 export const departmentHasHierarchy = (group: OrgDepartmentGroup): boolean =>
   countDepartmentInternalLinks(group.employees) > 0;
 
-const leadershipScore = (position: string): number => {
-  const normalized = position.toLowerCase();
-  if (normalized.includes('генеральн')) return 0;
-  if (normalized.includes('коммерческ') && normalized.includes('директор')) return 1;
-  if (normalized.includes('директор')) return 2;
-  if (normalized.includes('руководитель') || normalized.includes('начальник')) return 3;
-  if (normalized.includes('старш')) return 4;
-  if (normalized.includes('менеджер')) return 5;
-  return 6;
+export const formatDepartmentLabel = (department?: string | null): string => {
+  const normalized = department?.trim();
+  return normalized || 'Без отдела';
 };
 
 export const sortEmployeesBySeniority = (employees: OrgEmployee[]): OrgEmployee[] =>
@@ -142,6 +153,15 @@ export const sortEmployeesBySeniority = (employees: OrgEmployee[]): OrgEmployee[
       return scoreDiff;
     }
     return getEmployeeFullName(left).localeCompare(getEmployeeFullName(right), 'ru');
+  });
+
+export const sortCompanyRoots = (roots: OrgTreeNode[]): OrgTreeNode[] =>
+  [...roots].sort((left, right) => {
+    const scoreDiff = leadershipScore(left.employee.position) - leadershipScore(right.employee.position);
+    if (scoreDiff !== 0) {
+      return scoreDiff;
+    }
+    return getEmployeeFullName(left.employee).localeCompare(getEmployeeFullName(right.employee), 'ru');
   });
 
 export const guessDepartmentHead = (employees: OrgEmployee[]): OrgEmployee | null => {

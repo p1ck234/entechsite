@@ -1,7 +1,8 @@
 import React from 'react';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, Building2 } from 'lucide-react';
 import { OrgEmployee, OrgTreeNode } from '../types';
 import ImageWithLoader from './ImageWithLoader';
+import { formatDepartmentLabel } from '../utils/orgStructure';
 
 const AVATAR_OPTIONS = {
   width: 96,
@@ -78,6 +79,7 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
   onDrop,
 }) => {
   const initials = `${employee.firstName?.charAt(0) || '?'}${employee.lastName?.charAt(0) || '?'}`;
+  const departmentLabel = formatDepartmentLabel(employee.department);
 
   return (
     <div
@@ -122,7 +124,7 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
         onClick={() => onSelect(employee)}
         data-employee-id={employee.id}
         className={`
-          w-44 sm:w-52 rounded-2xl border bg-white px-4 py-3 text-left shadow-sm transition-all
+          w-48 sm:w-56 rounded-2xl border bg-white px-4 py-3 text-left shadow-sm transition-all
           hover:-translate-y-0.5 hover:shadow-md
           ${isSelected ? 'border-primary-500 ring-2 ring-primary-200' : 'border-pastel-200'}
           ${isDimmed ? 'opacity-35' : 'opacity-100'}
@@ -151,7 +153,13 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
               {getOrgEmployeeName(employee)}
             </div>
             <div className="truncate text-xs text-pastel-600">{employee.position}</div>
-            <div className="truncate text-[11px] text-pastel-500">{employee.department}</div>
+            <div
+              className="mt-1 flex items-start justify-center gap-1 text-[11px] font-medium leading-snug text-pastel-700"
+              title={departmentLabel}
+            >
+              <Building2 className="mt-0.5 h-3 w-3 shrink-0 text-pastel-400" />
+              <span className="line-clamp-2 text-left">{departmentLabel}</span>
+            </div>
             {directReportsCount > 0 && (
               <div className="mt-1 text-[11px] font-medium text-primary-600">
                 {directReportsCount} в подчинении
