@@ -12,7 +12,7 @@ interface OrgDepartmentBranchProps {
 const OrgDepartmentBranch: React.FC<OrgDepartmentBranchProps> = ({ department, children }) => (
   <div className="flex shrink-0 flex-col items-center" data-connector-item>
     <OrgConnectorStem height={24} />
-    <div className="min-w-[240px] max-w-full rounded-xl border border-slate-200 bg-slate-50/40 px-3 pb-3 pt-2.5">
+    <div className="w-max min-w-[240px] max-w-none rounded-xl border border-slate-200 bg-slate-50/40 px-3 pb-3 pt-2.5">
       <div className="mb-2.5 flex items-center justify-center gap-1.5 text-slate-500">
         <Building2 className="h-3 w-3 shrink-0" />
         <span className="max-w-[220px] truncate text-[10px] font-semibold uppercase tracking-[0.12em]">
