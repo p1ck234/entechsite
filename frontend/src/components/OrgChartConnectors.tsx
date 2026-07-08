@@ -52,4 +52,4 @@ export const OrgConnectorDrop: React.FC<OrgConnectorDropProps> = ({ children }) 
 );
 
 export const orgChartCanvasClassName =
-  'rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-50/80 via-white to-primary-50/30 bg-[radial-gradient(circle,_#cbd5e1_0.6px,_transparent_0.6px)] bg-[length:20px_20px] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]';
+  'rounded-2xl border border-slate-200 bg-white';

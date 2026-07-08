@@ -5,6 +5,7 @@ import { OrgChartNode } from './OrgChart';
 import OrgDepartmentBranch from './OrgDepartmentBranch';
 import { OrgConnectorChildren, OrgConnectorStem, orgChartCanvasClassName } from './OrgChartConnectors';
 import { useChartPan } from '../hooks/useChartPan';
+import { groupOrgNodesByDepartment } from '../utils/orgStructure';
 
 interface CompanyOrgChartProps {
   companyName: string;
@@ -85,6 +86,7 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
   };
 
   const singleRoot = roots.length === 1;
+  const groupedRoots = groupOrgNodesByDepartment(roots);
 
   React.useEffect(() => {
     initialScrollDone.current = false;
@@ -201,10 +203,12 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
                   {...chartProps}
                 />
               ) : (
-                <OrgConnectorChildren childCount={roots.length}>
-                  {roots.map((root) => (
-                    <OrgDepartmentBranch key={root.employee.id} department={root.employee.department}>
-                      <OrgChartNode node={root} hideDepartmentOnCard {...chartProps} />
+                <OrgConnectorChildren childCount={groupedRoots.length}>
+                  {groupedRoots.map((group) => (
+                    <OrgDepartmentBranch key={group.department || '__none__'} department={group.department}>
+                      {group.nodes.map((root) => (
+                        <OrgChartNode key={root.employee.id} node={root} hideDepartmentOnCard {...chartProps} />
+                      ))}
                     </OrgDepartmentBranch>
                   ))}
                 </OrgConnectorChildren>

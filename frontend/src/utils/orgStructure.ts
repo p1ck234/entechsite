@@ -193,6 +193,33 @@ export const formatDepartmentLabel = (department?: string | null): string => {
   return normalized || 'Без отдела';
 };
 
+export const getDepartmentGroupKey = (department?: string | null): string =>
+  (department || '').trim().toLowerCase() || '__none__';
+
+export const groupOrgNodesByDepartment = (
+  nodes: OrgTreeNode[]
+): Array<{ department: string | null; nodes: OrgTreeNode[] }> => {
+  const groups = new Map<string, OrgTreeNode[]>();
+  const order: string[] = [];
+
+  for (const node of nodes) {
+    const key = getDepartmentGroupKey(node.employee.department);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key)!.push(node);
+  }
+
+  return order.map((key) => {
+    const grouped = groups.get(key)!;
+    return {
+      department: key === '__none__' ? null : grouped[0].employee.department ?? null,
+      nodes: grouped,
+    };
+  });
+};
+
 export const sortEmployeesBySeniority = (employees: OrgEmployee[]): OrgEmployee[] =>
   [...employees].sort((left, right) => {
     const scoreDiff = leadershipScore(left.position) - leadershipScore(right.position);

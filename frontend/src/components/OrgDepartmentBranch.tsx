@@ -19,7 +19,7 @@ const OrgDepartmentBranch: React.FC<OrgDepartmentBranchProps> = ({ department, c
           {formatDepartmentLabel(department)}
         </span>
       </div>
-      <div className="flex flex-col items-center">{children}</div>
+      <div className="flex flex-col items-center gap-5">{children}</div>
     </div>
   </div>
 );

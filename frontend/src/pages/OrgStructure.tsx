@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, Network, Loader2, Building2, GitBranch, ListTree, LayoutGrid, Plus } from 'lucide-react';
+import { Search, Network, Loader2, Building2, GitBranch, Plus } from 'lucide-react';
 import { orgStructureAPI } from '../api/client';
 import { OrgEmployee, OrgStructureResponse, OrgViewMode } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
-import OrgMobileTree from '../components/OrgMobileTree';
 import OrgDepartmentChart from '../components/OrgDepartmentChart';
 import CompanyOrgChart from '../components/CompanyOrgChart';
 import {
@@ -37,7 +36,6 @@ const OrgStructure: React.FC = () => {
   const [assigning, setAssigning] = useState(false);
   const [managerDraft, setManagerDraft] = useState('');
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [desktopLayout, setDesktopLayout] = useState<'chart' | 'list'>('list');
   const [chartScale, setChartScale] = useState(0.75);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [showAddRole, setShowAddRole] = useState(false);
@@ -492,47 +490,18 @@ const OrgStructure: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => setDesktopLayout('list')}
-          className={`hidden items-center gap-2 rounded-xl px-3 py-2 text-sm md:inline-flex ${
-            desktopLayout === 'list'
-              ? 'bg-pastel-800 text-white'
-              : 'border border-pastel-200 bg-white text-pastel-700'
-          }`}
+          onClick={handleExpandAll}
+          className="hidden rounded-xl border border-pastel-200 px-3 py-2 text-xs text-pastel-600 hover:bg-pastel-50 md:inline-block"
         >
-          <ListTree className="h-4 w-4" />
-          Список
+          Развернуть всё
         </button>
         <button
           type="button"
-          onClick={() => setDesktopLayout('chart')}
-          className={`hidden items-center gap-2 rounded-xl px-3 py-2 text-sm md:inline-flex ${
-            desktopLayout === 'chart'
-              ? 'bg-pastel-800 text-white'
-              : 'border border-pastel-200 bg-white text-pastel-700'
-          }`}
+          onClick={handleCollapseAll}
+          className="hidden rounded-xl border border-pastel-200 px-3 py-2 text-xs text-pastel-600 hover:bg-pastel-50 md:inline-block"
         >
-          <LayoutGrid className="h-4 w-4" />
-          Схема
+          Свернуть
         </button>
-
-        {desktopLayout === 'chart' && (
-          <>
-            <button
-              type="button"
-              onClick={handleExpandAll}
-              className="hidden rounded-xl border border-pastel-200 px-3 py-2 text-xs text-pastel-600 hover:bg-pastel-50 md:inline-block"
-            >
-              Развернуть всё
-            </button>
-            <button
-              type="button"
-              onClick={handleCollapseAll}
-              className="hidden rounded-xl border border-pastel-200 px-3 py-2 text-xs text-pastel-600 hover:bg-pastel-50 md:inline-block"
-            >
-              Свернуть
-            </button>
-          </>
-        )}
       </div>
 
       {actionMessage && (
@@ -555,47 +524,30 @@ const OrgStructure: React.FC = () => {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
-          <div className={`${desktopLayout === 'chart' ? 'hidden md:block' : 'hidden'}`}>
-            {viewMode === 'company' ? (
-              <CompanyOrgChart
-                companyName={data.companyName}
-                roots={hierarchyRoots}
-                totalEmployees={data.total}
-                managerLinksCount={managerLinksCount}
-                dropTargetCompany={dropTargetCompany}
-                chartScale={chartScale}
-                onZoomIn={handleZoomIn}
-                onZoomOut={handleZoomOut}
-                getDirectReportsCount={getDirectReportsCount}
-                onDragOverCompany={handleDragOverCompany}
-                onDragLeaveCompany={handleDragLeaveCompany}
-                onDropOnCompany={handleDropOnCompany}
-                {...chartProps}
-              />
-            ) : (
-              <OrgDepartmentChart
-                groups={departmentGroups}
-                assigning={assigning}
-                onAssignDepartmentHead={handleAssignDepartmentHead}
-                {...chartProps}
-              />
-            )}
-          </div>
-
-          <div className={`rounded-2xl border border-pastel-200 bg-white p-4 block ${desktopLayout === 'chart' ? 'md:hidden' : ''}`}>
-            {listRoots.length === 0 ? (
-              <div className="py-8 text-center text-sm text-pastel-500">
-                Нет данных для отображения иерархии
-              </div>
-            ) : (
-              <OrgMobileTree
-                roots={listRoots}
-                searchQuery={searchQuery}
-                selectedId={selectedEmployee?.id || null}
-                onSelect={setSelectedEmployee}
-              />
-            )}
-          </div>
+          {viewMode === 'company' ? (
+            <CompanyOrgChart
+              companyName={data.companyName}
+              roots={hierarchyRoots}
+              totalEmployees={data.total}
+              managerLinksCount={managerLinksCount}
+              dropTargetCompany={dropTargetCompany}
+              chartScale={chartScale}
+              onZoomIn={handleZoomIn}
+              onZoomOut={handleZoomOut}
+              getDirectReportsCount={getDirectReportsCount}
+              onDragOverCompany={handleDragOverCompany}
+              onDragLeaveCompany={handleDragLeaveCompany}
+              onDropOnCompany={handleDropOnCompany}
+              {...chartProps}
+            />
+          ) : (
+            <OrgDepartmentChart
+              groups={departmentGroups}
+              assigning={assigning}
+              onAssignDepartmentHead={handleAssignDepartmentHead}
+              {...chartProps}
+            />
+          )}
         </div>
 
         <aside className="self-start rounded-3xl border border-pastel-200 bg-white/90 p-5 xl:sticky xl:top-6 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">

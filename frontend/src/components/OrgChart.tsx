@@ -2,7 +2,7 @@ import React from 'react';
 import { Briefcase, ChevronDown, ChevronRight, GripVertical, Building2 } from 'lucide-react';
 import { OrgEmployee, OrgTreeNode } from '../types';
 import ImageWithLoader from './ImageWithLoader';
-import { formatDepartmentLabel, getOrgNodeLabel, isOrgRoleNode } from '../utils/orgStructure';
+import { formatDepartmentLabel, getOrgNodeLabel, groupOrgNodesByDepartment, getDepartmentGroupKey, isOrgRoleNode } from '../utils/orgStructure';
 import OrgDepartmentBranch from './OrgDepartmentBranch';
 import { OrgConnectorChildren, OrgConnectorDrop } from './OrgChartConnectors';
 
@@ -313,6 +313,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
   }
 
   const useDepartmentBranches = branchChildrenByDepartment && hasChildren;
+  const departmentGroups = useDepartmentBranches ? groupOrgNodesByDepartment(visibleChildren) : null;
 
   const childNodeProps = {
     searchQuery,
@@ -322,6 +323,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
     dropTargetId,
     dropInvalid,
     departmentHeadId,
+    branchChildrenByDepartment: useDepartmentBranches,
     expandedIds,
     onToggleExpand,
     getDirectReportsCount,
@@ -333,22 +335,19 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
     onDrop,
   };
 
-  const renderChildNode = (child: OrgTreeNode) => {
-    const chartNode = <OrgChartNode node={child} {...childNodeProps} />;
+  const renderChildNode = (child: OrgTreeNode) => (
+    <OrgConnectorDrop key={child.employee.id}>
+      <OrgChartNode node={child} {...childNodeProps} />
+    </OrgConnectorDrop>
+  );
 
-    if (!useDepartmentBranches) {
-      return <OrgConnectorDrop key={child.employee.id}>{chartNode}</OrgConnectorDrop>;
-    }
-
-    return (
-      <OrgDepartmentBranch
-        key={child.employee.id}
-        department={child.employee.department}
-      >
-        <OrgChartNode node={child} hideDepartmentOnCard {...childNodeProps} />
-      </OrgDepartmentBranch>
-    );
-  };
+  const renderDepartmentGroup = (group: { department: string | null; nodes: OrgTreeNode[] }) => (
+    <OrgDepartmentBranch key={getDepartmentGroupKey(group.department)} department={group.department}>
+      {group.nodes.map((child) => (
+        <OrgChartNode key={child.employee.id} node={child} hideDepartmentOnCard {...childNodeProps} />
+      ))}
+    </OrgDepartmentBranch>
+  );
 
   return (
     <div className="flex flex-col items-center">
@@ -376,8 +375,12 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
       />
 
       {hasChildren && isExpanded && (
-        <OrgConnectorChildren childCount={visibleChildren.length}>
-          {visibleChildren.map((child) => renderChildNode(child))}
+        <OrgConnectorChildren
+          childCount={useDepartmentBranches ? departmentGroups!.length : visibleChildren.length}
+        >
+          {useDepartmentBranches
+            ? departmentGroups!.map((group) => renderDepartmentGroup(group))
+            : visibleChildren.map((child) => renderChildNode(child))}
         </OrgConnectorChildren>
       )}
     </div>
