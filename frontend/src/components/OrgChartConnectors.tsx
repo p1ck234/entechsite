@@ -1,13 +1,19 @@
 import React from 'react';
 
-export const ORG_CHART_CHILD_GAP = 40;
+export const ORG_CHART_CHILD_GAP = 20;
+
+const connectorColor = '#94a3b8';
 
 interface OrgConnectorStemProps {
   height?: number;
 }
 
 export const OrgConnectorStem: React.FC<OrgConnectorStemProps> = ({ height = 28 }) => (
-  <div className="w-px shrink-0 bg-pastel-300" style={{ height }} aria-hidden />
+  <div
+    className="w-0.5 shrink-0 rounded-full"
+    style={{ height, backgroundColor: connectorColor }}
+    aria-hidden
+  />
 );
 
 interface OrgConnectorChildrenProps {
@@ -17,15 +23,15 @@ interface OrgConnectorChildrenProps {
 
 export const OrgConnectorChildren: React.FC<OrgConnectorChildrenProps> = ({ childCount, children }) => (
   <div className="flex flex-col items-center">
-    <OrgConnectorStem height={28} />
+    <OrgConnectorStem height={24} />
     <div
-      className="relative inline-flex items-start justify-center"
+      className="relative inline-flex items-start justify-center pt-6"
       style={{ gap: ORG_CHART_CHILD_GAP }}
     >
       {childCount > 1 && (
         <div
-          className="pointer-events-none absolute top-0 h-px bg-pastel-300"
-          style={{ left: 32, right: 32 }}
+          className="pointer-events-none absolute top-6 h-0.5 rounded-full"
+          style={{ left: 24, right: 24, backgroundColor: connectorColor }}
           aria-hidden
         />
       )}
@@ -40,7 +46,10 @@ interface OrgConnectorDropProps {
 
 export const OrgConnectorDrop: React.FC<OrgConnectorDropProps> = ({ children }) => (
   <div className="flex shrink-0 flex-col items-center">
-    <OrgConnectorStem height={28} />
+    <OrgConnectorStem height={24} />
     {children}
   </div>
 );
+
+export const orgChartCanvasClassName =
+  'rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-50/80 via-white to-primary-50/30 bg-[radial-gradient(circle,_#cbd5e1_0.6px,_transparent_0.6px)] bg-[length:20px_20px] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]';

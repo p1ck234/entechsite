@@ -56,6 +56,7 @@ interface OrgEmployeeCardProps {
   directReportsCount?: number;
   isDepartmentHead?: boolean;
   isExecutiveRoot?: boolean;
+  hideDepartmentOnCard?: boolean;
   hasChildren?: boolean;
   isExpanded?: boolean;
   onToggleExpand?: (employeeId: string) => void;
@@ -78,6 +79,7 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
   directReportsCount = 0,
   isDepartmentHead = false,
   isExecutiveRoot = false,
+  hideDepartmentOnCard = false,
   hasChildren = false,
   isExpanded = true,
   onToggleExpand,
@@ -97,7 +99,7 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
       className={`
         relative rounded-2xl transition-all
         ${isDragging ? 'scale-95 opacity-40' : ''}
-        ${isDropTarget && !isDropInvalid ? 'ring-2 ring-pastel-400 ring-offset-2' : ''}
+        ${isDropTarget && !isDropInvalid ? 'ring-2 ring-primary-300 ring-offset-2' : ''}
         ${isDropTarget && isDropInvalid ? 'ring-2 ring-red-300 ring-offset-2' : ''}
       `}
       onDragOver={(event) => {
@@ -123,7 +125,7 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
             onDragStart(employee.id);
           }}
           onDragEnd={onDragEnd}
-          className="absolute -left-2 top-1/2 z-10 -translate-y-1/2 cursor-grab rounded-lg border border-pastel-200 bg-white p-1 text-pastel-400 shadow-sm active:cursor-grabbing"
+          className="absolute -left-2 top-1/2 z-10 -translate-y-1/2 cursor-grab rounded-lg border border-slate-200 bg-white p-1 text-slate-400 shadow-sm hover:border-slate-300 active:cursor-grabbing"
           title="Перетащите на карточку руководителя"
         >
           <GripVertical className="h-4 w-4" />
@@ -137,7 +139,7 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
             event.stopPropagation();
             onToggleExpand(employee.id);
           }}
-          className="absolute -right-2 top-1/2 z-10 -translate-y-1/2 rounded-lg border border-pastel-200 bg-white p-1 text-pastel-500 shadow-sm hover:bg-pastel-50"
+          className="absolute -right-2 top-1/2 z-10 -translate-y-1/2 rounded-lg border border-slate-200 bg-white p-1 text-slate-500 shadow-sm hover:border-slate-300 hover:bg-slate-50"
           aria-label={isExpanded ? 'Свернуть ветку' : 'Развернуть ветку'}
         >
           {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -149,67 +151,99 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
         onClick={() => onSelect(employee)}
         data-employee-id={employee.id}
         className={`
-          text-left transition-all
+          group text-left transition-all duration-200
           ${isRole
-            ? 'w-[180px] rounded-lg border border-dashed border-pastel-300 bg-pastel-50 px-3 py-3 hover:border-pastel-400'
-            : `w-[220px] rounded-xl border bg-white px-4 py-3.5 shadow-sm hover:border-pastel-300 hover:shadow-md ${isExecutiveRoot ? 'border-pastel-400 shadow-md' : 'border-pastel-200'}`
+            ? 'w-[200px] rounded-xl border border-dashed border-slate-300 bg-slate-50/80 px-3 py-3 hover:border-slate-400 hover:bg-white'
+            : `w-[250px] rounded-2xl border bg-white/95 px-3.5 py-3 shadow-[0_2px_10px_rgba(15,23,42,0.05)] backdrop-blur-sm hover:-translate-y-0.5 hover:shadow-[0_10px_28px_rgba(15,23,42,0.09)] ${
+                isExecutiveRoot
+                  ? 'border-primary-200/80 ring-1 ring-primary-100'
+                  : 'border-slate-200/90 hover:border-slate-300'
+              }`
           }
-          ${isSelected ? 'border-pastel-500 ring-2 ring-pastel-200' : ''}
+          ${isSelected ? 'border-primary-400 ring-2 ring-primary-100' : ''}
           ${isDimmed ? 'opacity-35' : 'opacity-100'}
         `}
       >
         {isRole ? (
           <div className="flex flex-col items-center gap-2 text-center">
-            <Briefcase className="h-4 w-4 text-pastel-500" />
-            <div className="text-sm font-medium leading-snug text-pastel-900">{employee.position}</div>
-            <div className="text-[10px] uppercase tracking-wide text-pastel-500">Роль</div>
-            <div className="inline-flex max-w-full items-center gap-1 text-[10px] text-pastel-500">
-              <Building2 className="h-3 w-3 shrink-0" />
-              <span className="truncate">{departmentLabel}</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+              <Briefcase className="h-4 w-4" />
             </div>
+            <div className="text-sm font-medium leading-snug text-slate-900">{employee.position}</div>
+            <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Роль</div>
+            {!hideDepartmentOnCard && (
+              <div className="inline-flex max-w-full items-center gap-1 text-[10px] text-slate-500">
+                <Building2 className="h-3 w-3 shrink-0" />
+                <span className="truncate">{departmentLabel}</span>
+              </div>
+            )}
             {directReportsCount > 0 && (
-              <div className="text-[11px] text-pastel-500">{directReportsCount} в подчинении</div>
+              <div className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                {directReportsCount} в подчинении
+              </div>
             )}
           </div>
-        ) : (
-          <div className="flex flex-col items-center gap-2">
-            {isDepartmentHead && (
-              <span className="rounded-md bg-pastel-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-pastel-600">
-                Руководитель отдела
-              </span>
-            )}
-            <div
-              className={`relative flex items-center justify-center overflow-hidden rounded-full bg-pastel-800 ${
-                isExecutiveRoot ? 'h-14 w-14' : 'h-12 w-12'
-              }`}
-            >
+        ) : isExecutiveRoot ? (
+          <div className="flex flex-col items-center gap-2.5 py-1">
+            <div className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 shadow-md ring-2 ring-white">
               {employee.photo ? (
                 <ImageWithLoader
                   src={employee.photo}
                   alt={getOrgNodeLabel(employee)}
-                  className={`rounded-full object-cover ${isExecutiveRoot ? 'h-14 w-14' : 'h-12 w-12'}`}
+                  className="h-14 w-14 rounded-2xl object-cover"
                   imageOptions={AVATAR_OPTIONS}
                 />
               ) : (
-                <span className={`font-semibold text-white ${isExecutiveRoot ? 'text-sm' : 'text-xs'}`}>
-                  {initials}
-                </span>
+                <span className="text-sm font-bold text-white">{initials}</span>
               )}
             </div>
             <div className="w-full text-center">
-              <div className="text-sm font-semibold leading-snug text-pastel-900">
-                {getOrgNodeLabel(employee)}
-              </div>
-              <div className="mt-0.5 text-xs leading-snug text-pastel-500">{employee.position}</div>
-              <div
-                className="mx-auto mt-2 inline-flex max-w-full items-center gap-1 text-[10px] text-pastel-500"
-                title={departmentLabel}
-              >
-                <Building2 className="h-3 w-3 shrink-0" />
-                <span className="truncate">{departmentLabel}</span>
-              </div>
+              <div className="text-base font-bold leading-snug text-slate-900">{getOrgNodeLabel(employee)}</div>
+              <div className="mt-0.5 text-xs text-slate-500">{employee.position}</div>
+              {!hideDepartmentOnCard && (
+                <div className="mx-auto mt-2 inline-flex max-w-full items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] text-slate-600">
+                  <Building2 className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{departmentLabel}</span>
+                </div>
+              )}
               {directReportsCount > 0 && (
-                <div className="mt-1.5 text-[11px] text-pastel-500">
+                <div className="mt-2 inline-flex rounded-full bg-primary-50 px-2.5 py-0.5 text-[11px] font-medium text-primary-700">
+                  {directReportsCount} в подчинении
+                  {!isExpanded ? ' · свёрнуто' : ''}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start gap-3">
+            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-slate-700 to-slate-800 shadow-sm ring-2 ring-white">
+              {employee.photo ? (
+                <ImageWithLoader
+                  src={employee.photo}
+                  alt={getOrgNodeLabel(employee)}
+                  className="h-11 w-11 rounded-xl object-cover"
+                  imageOptions={AVATAR_OPTIONS}
+                />
+              ) : (
+                <span className="text-xs font-bold text-white">{initials}</span>
+              )}
+            </div>
+            <div className="min-w-0 flex-1 pt-0.5">
+              {isDepartmentHead && (
+                <span className="mb-1 inline-block rounded-md bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700">
+                  Руководитель
+                </span>
+              )}
+              <div className="text-sm font-semibold leading-snug text-slate-900">{getOrgNodeLabel(employee)}</div>
+              <div className="mt-0.5 line-clamp-2 text-xs leading-snug text-slate-500">{employee.position}</div>
+              {!hideDepartmentOnCard && (
+                <div className="mt-1.5 inline-flex max-w-full items-center gap-1 text-[10px] text-slate-500">
+                  <Building2 className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{departmentLabel}</span>
+                </div>
+              )}
+              {directReportsCount > 0 && (
+                <div className="mt-1.5 text-[11px] font-medium text-primary-600/90">
                   {directReportsCount} в подчинении
                   {!isExpanded ? ' · свёрнуто' : ''}
                 </div>
@@ -233,6 +267,7 @@ interface OrgChartNodeProps {
   departmentHeadId?: string | null;
   isExecutiveRoot?: boolean;
   branchChildrenByDepartment?: boolean;
+  hideDepartmentOnCard?: boolean;
   expandedIds: Set<string>;
   onToggleExpand: (employeeId: string) => void;
   getDirectReportsCount?: (employeeId: string) => number;
@@ -255,6 +290,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
   departmentHeadId,
   isExecutiveRoot = false,
   branchChildrenByDepartment = false,
+  hideDepartmentOnCard = false,
   expandedIds,
   onToggleExpand,
   getDirectReportsCount,
@@ -297,7 +333,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
     onDrop,
   };
 
-  const renderChildNode = (child: OrgTreeNode, index: number) => {
+  const renderChildNode = (child: OrgTreeNode) => {
     const chartNode = <OrgChartNode node={child} {...childNodeProps} />;
 
     if (!useDepartmentBranches) {
@@ -308,9 +344,8 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
       <OrgDepartmentBranch
         key={child.employee.id}
         department={child.employee.department}
-        showDivider={index > 0}
       >
-        {chartNode}
+        <OrgChartNode node={child} hideDepartmentOnCard {...childNodeProps} />
       </OrgDepartmentBranch>
     );
   };
@@ -328,6 +363,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
         directReportsCount={getDirectReportsCount?.(node.employee.id) ?? node.children.length}
         isDepartmentHead={departmentHeadId === node.employee.id}
         isExecutiveRoot={isExecutiveRoot}
+        hideDepartmentOnCard={hideDepartmentOnCard}
         hasChildren={hasChildren}
         isExpanded={isExpanded}
         onToggleExpand={onToggleExpand}
@@ -341,7 +377,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
 
       {hasChildren && isExpanded && (
         <OrgConnectorChildren childCount={visibleChildren.length}>
-          {visibleChildren.map((child, index) => renderChildNode(child, index))}
+          {visibleChildren.map((child) => renderChildNode(child))}
         </OrgConnectorChildren>
       )}
     </div>

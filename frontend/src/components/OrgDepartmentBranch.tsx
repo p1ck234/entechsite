@@ -9,20 +9,18 @@ interface OrgDepartmentBranchProps {
   children: React.ReactNode;
 }
 
-const OrgDepartmentBranch: React.FC<OrgDepartmentBranchProps> = ({
-  department,
-  showDivider = false,
-  children,
-}) => (
-  <div
-    className={`flex shrink-0 flex-col items-center px-8 ${showDivider ? 'border-l border-pastel-200' : ''}`}
-  >
-    <OrgConnectorStem height={28} />
-    <div className="mb-3 flex max-w-[240px] items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-pastel-500">
-      <Building2 className="h-3 w-3 shrink-0" />
-      <span className="truncate">{formatDepartmentLabel(department)}</span>
+const OrgDepartmentBranch: React.FC<OrgDepartmentBranchProps> = ({ department, children }) => (
+  <div className="flex shrink-0 flex-col items-center">
+    <OrgConnectorStem height={24} />
+    <div className="min-w-[240px] rounded-2xl border border-slate-200/70 bg-white/80 px-4 pb-4 pt-3 shadow-[0_6px_24px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+      <div className="mb-3 flex items-center justify-center gap-1.5 rounded-xl bg-slate-50/90 px-3 py-2">
+        <Building2 className="h-3.5 w-3.5 shrink-0 text-primary-500/70" />
+        <span className="max-w-[210px] truncate text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600">
+          {formatDepartmentLabel(department)}
+        </span>
+      </div>
+      <div className="flex flex-col items-center">{children}</div>
     </div>
-    <div className="flex flex-col items-center">{children}</div>
   </div>
 );
 
