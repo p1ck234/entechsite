@@ -91,35 +91,15 @@ export const OrgConnectorDrop: React.FC<OrgConnectorDropProps> = ({ children }) 
   </div>
 );
 
-interface OrgConnectorSideBranchProps {
+interface OrgConnectorVerticalStackProps {
   children: React.ReactNode;
 }
 
-export const OrgConnectorSideBranch: React.FC<OrgConnectorSideBranchProps> = ({ children }) => (
-  <div className="flex min-w-0 items-start">
-    <div className="flex w-5 shrink-0 items-center self-center">
-      <div className="h-0.5 w-full rounded-full" style={{ backgroundColor: connectorColor }} aria-hidden />
-    </div>
-    <div
-      className="relative flex flex-col gap-4 border-l-2 py-1 pl-4"
-      style={{ borderColor: connectorColor }}
-    >
-      {children}
-    </div>
-  </div>
-);
-
-interface OrgConnectorSideItemProps {
-  children: React.ReactNode;
-}
-
-export const OrgConnectorSideItem: React.FC<OrgConnectorSideItemProps> = ({ children }) => (
-  <div className="relative">
-    <div
-      className="absolute -left-4 top-1/2 h-0.5 w-4 -translate-y-1/2 rounded-full"
-      style={{ backgroundColor: connectorColor }}
-      aria-hidden
-    />
+export const OrgConnectorVerticalStack: React.FC<OrgConnectorVerticalStackProps> = ({ children }) => (
+  <div
+    className="relative ml-2 mt-2 flex flex-col gap-2.5 border-l-2 py-0.5 pl-3"
+    style={{ borderColor: connectorColor }}
+  >
     {children}
   </div>
 );

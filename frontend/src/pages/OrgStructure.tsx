@@ -101,7 +101,7 @@ const OrgStructure: React.FC = () => {
       return;
     }
 
-    setExpandedIds(collectExpandedIdsUpToDepth(listRoots, 3));
+    setExpandedIds(collectExpandedIdsUpToDepth(listRoots, 2));
   }, [listRoots]);
 
   const managerLinksCount = useMemo(

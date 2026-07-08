@@ -4,7 +4,7 @@ import { OrgEmployee, OrgTreeNode } from '../types';
 import ImageWithLoader from './ImageWithLoader';
 import { formatDepartmentLabel, getOrgNodeLabel, groupOrgNodesByDepartment, getDepartmentGroupKey, isOrgRoleNode } from '../utils/orgStructure';
 import OrgDepartmentBranch from './OrgDepartmentBranch';
-import { OrgConnectorChildren, OrgConnectorDrop, OrgConnectorSideBranch, OrgConnectorSideItem } from './OrgChartConnectors';
+import { OrgConnectorChildren, OrgConnectorDrop, OrgConnectorVerticalStack } from './OrgChartConnectors';
 
 const AVATAR_OPTIONS = {
   width: 96,
@@ -154,7 +154,7 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
           group text-left transition-all duration-200
           ${isRole
             ? 'w-[200px] rounded-xl border border-dashed border-slate-300 bg-slate-50/80 px-3 py-3 hover:border-slate-400 hover:bg-white'
-            : `w-[250px] rounded-2xl border bg-white/95 px-3.5 py-3 shadow-[0_2px_10px_rgba(15,23,42,0.05)] backdrop-blur-sm hover:-translate-y-0.5 hover:shadow-[0_10px_28px_rgba(15,23,42,0.09)] ${
+            : `w-[240px] rounded-xl border bg-white px-3 py-2.5 shadow-sm hover:shadow-md ${
                 isExecutiveRoot
                   ? 'border-primary-200/80 ring-1 ring-primary-100'
                   : 'border-slate-200/90 hover:border-slate-300'
@@ -312,19 +312,8 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
     return null;
   }
 
-  const childrenSameDepartment =
-    visibleChildren.length > 0 &&
-    visibleChildren.every(
-      (child) =>
-        getDepartmentGroupKey(child.employee.department) === getDepartmentGroupKey(node.employee.department)
-    );
-
-  const childrenAreFlat = visibleChildren.every((child) => child.children.length === 0);
-
-  const useSideLayout =
-    hideDepartmentOnCard && hasChildren && childrenSameDepartment && childrenAreFlat;
   const useDepartmentBranches =
-    branchChildrenByDepartment && hasChildren && !useSideLayout && !hideDepartmentOnCard;
+    branchChildrenByDepartment && hasChildren && !hideDepartmentOnCard;
   const departmentGroups = useDepartmentBranches ? groupOrgNodesByDepartment(visibleChildren) : null;
 
   const childNodeProps = {
@@ -335,7 +324,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
     dropTargetId,
     dropInvalid,
     departmentHeadId,
-    branchChildrenByDepartment: useDepartmentBranches,
+    branchChildrenByDepartment: hideDepartmentOnCard ? false : branchChildrenByDepartment,
     expandedIds,
     onToggleExpand,
     getDirectReportsCount,
@@ -386,23 +375,21 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
     />
   );
 
-  if (useSideLayout) {
+  if (hideDepartmentOnCard) {
     return (
-      <div className="inline-flex max-w-full items-start">
-        <div className="shrink-0">{card}</div>
+      <div className="flex w-full flex-col items-stretch">
+        {card}
         {hasChildren && isExpanded && (
-          <OrgConnectorSideBranch>
+          <OrgConnectorVerticalStack>
             {visibleChildren.map((child) => (
-              <OrgConnectorSideItem key={child.employee.id}>
-                <OrgChartNode
-                  node={child}
-                  hideDepartmentOnCard
-                  {...childNodeProps}
-                  branchChildrenByDepartment={false}
-                />
-              </OrgConnectorSideItem>
+              <OrgChartNode
+                key={child.employee.id}
+                node={child}
+                hideDepartmentOnCard
+                {...childNodeProps}
+              />
             ))}
-          </OrgConnectorSideBranch>
+          </OrgConnectorVerticalStack>
         )}
       </div>
     );
