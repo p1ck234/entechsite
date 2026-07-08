@@ -2,8 +2,14 @@ import React from 'react';
 import { Building2, Network } from 'lucide-react';
 import { OrgTreeNode } from '../types';
 import { OrgChartNode } from './OrgChart';
-import { formatDepartmentLabel } from '../utils/orgStructure';
-import { OrgMultiRootBus, OrgVerticalLine } from './OrgChartConnectors';
+import { getDepartmentTheme } from '../utils/orgDepartmentTheme';
+import OrgDepartmentBranch from './OrgDepartmentBranch';
+import {
+  ORG_CHART_COLUMN_GAP,
+  ORG_CHART_COLUMN_WIDTH,
+  OrgConnectorFork,
+  OrgConnectorStem,
+} from './OrgChartConnectors';
 
 interface CompanyOrgChartProps {
   companyName: string;
@@ -74,7 +80,6 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
     <div className="overflow-x-auto pb-4">
       <div className="mx-auto flex min-w-max flex-col items-center px-4 py-6">
         <div className="relative flex w-full flex-col items-center">
-          {/* Корень дерева — компания */}
           <div
             className={`relative z-10 w-full max-w-md rounded-3xl border bg-gradient-to-br from-white via-primary-50/40 to-pastel-50 px-8 py-5 text-center shadow-[0_12px_40px_rgba(15,23,42,0.08)] transition-all ${
               dropTargetCompany
@@ -122,34 +127,51 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
           </div>
 
           {roots.length > 0 && (
-            <div className="flex flex-col items-center">
-              <OrgVerticalLine heightClass={singleRoot ? 'h-10' : 'h-8'} />
-              {!singleRoot && <OrgMultiRootBus columns={roots.length} />}
-            </div>
+            <OrgConnectorStem height={singleRoot ? 40 : 36} color="#475569" />
           )}
 
-          {/* Уровень под компанией */}
-          <div
-            className={`flex items-start justify-center gap-8 ${singleRoot ? 'flex-col items-center' : 'flex-wrap'}`}
-          >
-            {roots.map((root) => (
-              <div key={root.employee.id} className="flex flex-col items-center">
-                {!singleRoot && (
-                  <>
-                    <div className="mb-2 rounded-full border border-pastel-200 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-pastel-600 shadow-sm">
-                      {formatDepartmentLabel(root.employee.department)}
+          {singleRoot ? (
+            <OrgChartNode
+              node={roots[0]}
+              isExecutiveRoot
+              branchChildrenByDepartment
+              connectorColor="#475569"
+              {...chartProps}
+            />
+          ) : (
+            <>
+              <OrgConnectorFork
+                columns={roots.length}
+                columnWidth={ORG_CHART_COLUMN_WIDTH}
+                gap={ORG_CHART_COLUMN_GAP}
+                color="#475569"
+              />
+              <div
+                className="flex items-start justify-center"
+                style={{ gap: ORG_CHART_COLUMN_GAP }}
+              >
+                {roots.map((root) => {
+                  const theme = getDepartmentTheme(root.employee.department);
+                  return (
+                    <div
+                      key={root.employee.id}
+                      className="flex flex-col items-center"
+                      style={{ width: ORG_CHART_COLUMN_WIDTH }}
+                    >
+                      <OrgDepartmentBranch theme={theme}>
+                        <OrgChartNode
+                          node={root}
+                          connectorColor={theme.lineColor}
+                          departmentTheme={theme}
+                          {...chartProps}
+                        />
+                      </OrgDepartmentBranch>
                     </div>
-                    <OrgVerticalLine heightClass="h-4" />
-                  </>
-                )}
-                <OrgChartNode
-                  node={root}
-                  isExecutiveRoot={singleRoot}
-                  {...chartProps}
-                />
+                  );
+                })}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -3,6 +3,15 @@ import { GripVertical, Building2 } from 'lucide-react';
 import { OrgEmployee, OrgTreeNode } from '../types';
 import ImageWithLoader from './ImageWithLoader';
 import { formatDepartmentLabel } from '../utils/orgStructure';
+import { DepartmentTheme, getDepartmentTheme } from '../utils/orgDepartmentTheme';
+import OrgDepartmentBranch from './OrgDepartmentBranch';
+import {
+  ORG_CHART_BRANCH_COLUMN_GAP,
+  ORG_CHART_BRANCH_COLUMN_WIDTH,
+  ORG_CHART_COLUMN_GAP,
+  ORG_CHART_COLUMN_WIDTH,
+  OrgConnectorFork,
+} from './OrgChartConnectors';
 
 const AVATAR_OPTIONS = {
   width: 96,
@@ -54,6 +63,7 @@ interface OrgEmployeeCardProps {
   directReportsCount?: number;
   isDepartmentHead?: boolean;
   isExecutiveRoot?: boolean;
+  departmentTheme?: DepartmentTheme;
   onSelect: (employee: OrgEmployee) => void;
   onDragStart: (employeeId: string) => void;
   onDragEnd: () => void;
@@ -73,6 +83,7 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
   directReportsCount = 0,
   isDepartmentHead = false,
   isExecutiveRoot = false,
+  departmentTheme,
   onSelect,
   onDragStart,
   onDragEnd,
@@ -82,12 +93,13 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
 }) => {
   const initials = `${employee.firstName?.charAt(0) || '?'}${employee.lastName?.charAt(0) || '?'}`;
   const departmentLabel = formatDepartmentLabel(employee.department);
+  const theme = departmentTheme ?? getDepartmentTheme(employee.department);
 
   return (
     <div
       className={`
         relative rounded-2xl transition-all
-        ${isDragging ? 'opacity-40 scale-95' : ''}
+        ${isDragging ? 'scale-95 opacity-40' : ''}
         ${isDropTarget && !isDropInvalid ? 'ring-2 ring-green-400 ring-offset-2' : ''}
         ${isDropTarget && isDropInvalid ? 'ring-2 ring-red-300 ring-offset-2' : ''}
       `}
@@ -126,8 +138,10 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
         onClick={() => onSelect(employee)}
         data-employee-id={employee.id}
         className={`
-          w-52 sm:w-60 rounded-2xl border bg-white/95 px-4 py-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition-all
+          w-52 rounded-2xl border border-l-[3px] bg-white px-4 py-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition-all
           hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(15,23,42,0.1)]
+          sm:w-60
+          ${departmentTheme ? theme.cardAccentClass : 'border-l-pastel-200'}
           ${isExecutiveRoot ? 'border-primary-300 ring-1 ring-primary-100' : 'border-pastel-200/90'}
           ${isSelected ? 'border-primary-500 ring-2 ring-primary-200' : ''}
           ${isDimmed ? 'opacity-35' : 'opacity-100'}
@@ -161,10 +175,10 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
             </div>
             <div className="mt-0.5 text-xs leading-snug text-pastel-600">{employee.position}</div>
             <div
-              className="mx-auto mt-2 inline-flex max-w-full items-center gap-1 rounded-full bg-pastel-50 px-2.5 py-1 text-[10px] font-medium text-pastel-700"
+              className={`mx-auto mt-2 inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium ${theme.headerClass} ${theme.titleClass}`}
               title={departmentLabel}
             >
-              <Building2 className="h-3 w-3 shrink-0 text-pastel-400" />
+              <Building2 className="h-3 w-3 shrink-0 opacity-70" />
               <span className="truncate">{departmentLabel}</span>
             </div>
             {directReportsCount > 0 && (
@@ -189,6 +203,9 @@ interface OrgChartNodeProps {
   dropInvalid: boolean;
   departmentHeadId?: string | null;
   isExecutiveRoot?: boolean;
+  branchChildrenByDepartment?: boolean;
+  connectorColor?: string;
+  departmentTheme?: DepartmentTheme;
   getDirectReportsCount?: (employeeId: string) => number;
   onSelect: (employee: OrgEmployee) => void;
   onDragStart: (employeeId: string) => void;
@@ -208,6 +225,9 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
   dropInvalid,
   departmentHeadId,
   isExecutiveRoot = false,
+  branchChildrenByDepartment = false,
+  connectorColor,
+  departmentTheme,
   getDirectReportsCount,
   onSelect,
   onDragStart,
@@ -225,6 +245,47 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
     return null;
   }
 
+  const nodeTheme = departmentTheme ?? getDepartmentTheme(node.employee.department);
+  const lineColor = connectorColor ?? nodeTheme.lineColor;
+  const useDepartmentBranches = branchChildrenByDepartment && visibleChildren.length > 0;
+  const columnWidth = useDepartmentBranches ? ORG_CHART_BRANCH_COLUMN_WIDTH : ORG_CHART_COLUMN_WIDTH;
+  const columnGap = useDepartmentBranches ? ORG_CHART_BRANCH_COLUMN_GAP : ORG_CHART_COLUMN_GAP;
+
+  const childNodeProps = {
+    searchQuery,
+    selectedId,
+    isAdmin,
+    draggingId,
+    dropTargetId,
+    dropInvalid,
+    departmentHeadId,
+    getDirectReportsCount,
+    onSelect,
+    onDragStart,
+    onDragEnd,
+    onDragOver,
+    onDragLeave,
+    onDrop,
+  };
+
+  const renderChildNode = (child: OrgTreeNode, wrapInBranch: boolean) => {
+    const childTheme = getDepartmentTheme(child.employee.department);
+    const chartNode = (
+      <OrgChartNode
+        node={child}
+        connectorColor={childTheme.lineColor}
+        departmentTheme={wrapInBranch ? childTheme : undefined}
+        {...childNodeProps}
+      />
+    );
+
+    if (!wrapInBranch) {
+      return chartNode;
+    }
+
+    return <OrgDepartmentBranch theme={childTheme}>{chartNode}</OrgDepartmentBranch>;
+  };
+
   return (
     <div className="flex flex-col items-center">
       <OrgEmployeeCard
@@ -238,6 +299,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
         directReportsCount={getDirectReportsCount?.(node.employee.id) ?? node.children.length}
         isDepartmentHead={departmentHeadId === node.employee.id}
         isExecutiveRoot={isExecutiveRoot}
+        departmentTheme={departmentTheme}
         onSelect={onSelect}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
@@ -247,35 +309,24 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
       />
 
       {visibleChildren.length > 0 && (
-        <div className="mt-4 flex flex-col items-center">
-          <div className="h-5 w-px bg-gradient-to-b from-pastel-300 to-pastel-200" />
-          <div className="relative flex flex-wrap items-start justify-center gap-8 px-2 pt-5">
-            {visibleChildren.length > 1 && (
-              <div
-                className="pointer-events-none absolute top-0 h-px bg-gradient-to-r from-transparent via-pastel-300 to-transparent"
-                style={{ left: '10%', right: '10%' }}
-              />
-            )}
+        <div className="flex w-full flex-col items-center">
+          <OrgConnectorFork
+            columns={visibleChildren.length}
+            columnWidth={columnWidth}
+            gap={columnGap}
+            color={lineColor}
+          />
+          <div
+            className="flex items-start justify-center"
+            style={{ gap: columnGap }}
+          >
             {visibleChildren.map((child) => (
-              <div key={child.employee.id} className="flex flex-col items-center">
-                <div className="h-5 w-px bg-pastel-300" />
-                <OrgChartNode
-                  node={child}
-                  searchQuery={searchQuery}
-                  selectedId={selectedId}
-                  isAdmin={isAdmin}
-                  draggingId={draggingId}
-                  dropTargetId={dropTargetId}
-                  dropInvalid={dropInvalid}
-                  departmentHeadId={departmentHeadId}
-                  getDirectReportsCount={getDirectReportsCount}
-                  onSelect={onSelect}
-                  onDragStart={onDragStart}
-                  onDragEnd={onDragEnd}
-                  onDragOver={onDragOver}
-                  onDragLeave={onDragLeave}
-                  onDrop={onDrop}
-                />
+              <div
+                key={child.employee.id}
+                className="flex flex-col items-center"
+                style={{ width: columnWidth }}
+              >
+                {renderChildNode(child, useDepartmentBranches)}
               </div>
             ))}
           </div>
