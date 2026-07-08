@@ -66,42 +66,42 @@ export const OrgConnectorBranchSlot: React.FC<OrgConnectorBranchSlotProps> = ({
 };
 
 interface OrgConnectorVerticalStackProps {
-  depth?: number;
   children: React.ReactNode;
 }
 
-export const OrgConnectorVerticalStack: React.FC<OrgConnectorVerticalStackProps> = ({
-  depth = 0,
-  children,
-}) => {
-  const isNested = depth > 0;
+export const OrgConnectorVerticalStack: React.FC<OrgConnectorVerticalStackProps> = ({ children }) => {
+  const items = Children.toArray(children).filter(isValidElement);
 
   return (
-    <div
-      className={`relative mt-2 ${isNested ? 'ml-3' : 'ml-1 border-l-2 pl-2'}`}
-      style={isNested ? undefined : { borderColor: connectorColor }}
-    >
-      {Children.map(children, (child) =>
-        isValidElement(child) ? (
-          <div key={child.key} className="relative mb-3 block w-full shrink-0 last:mb-0">
-            {!isNested && (
-              <div
-                className="absolute -left-2 top-[1.35rem] h-0.5 w-2 rounded-full"
-                style={{ backgroundColor: connectorColor }}
-                aria-hidden
-              />
-            )}
-            {isNested && (
+    <div className="relative mt-0.5">
+      <div className="ml-3 flex justify-start">
+        <OrgConnectorStem height={12} />
+      </div>
+      <div
+        className="relative ml-3 border-l-2 pl-3"
+        style={{ borderColor: connectorColor }}
+      >
+        {items.map((child, index) => {
+          const isLast = index === items.length - 1;
+
+          return (
+            <div key={child.key} className="relative mb-3 block w-full shrink-0 last:mb-0">
               <div
                 className="absolute -left-3 top-[1.35rem] h-0.5 w-3 rounded-full"
                 style={{ backgroundColor: connectorColor }}
                 aria-hidden
               />
-            )}
-            {child}
-          </div>
-        ) : null
-      )}
+              {isLast && (
+                <div
+                  className="absolute -left-[13px] top-[calc(1.35rem+2px)] bottom-0 w-1 bg-white"
+                  aria-hidden
+                />
+              )}
+              {child}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

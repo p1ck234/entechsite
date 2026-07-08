@@ -102,7 +102,7 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
   const cardSurfaceClass = `
     flex items-stretch overflow-hidden rounded-xl transition-all duration-200
     ${isRole
-      ? 'border border-dashed border-slate-300 bg-slate-50/80 hover:border-slate-400 hover:bg-white'
+      ? 'border border-dashed border-slate-300 bg-white shadow-sm hover:border-slate-400'
       : `border bg-white shadow-sm hover:shadow-md ${
           isExecutiveRoot
             ? 'border-primary-200/80 ring-1 ring-primary-100'
@@ -111,7 +111,7 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
     }
     ${isSelected ? 'border-primary-400 ring-2 ring-primary-100' : ''}
     ${isDimmed ? 'opacity-35' : 'opacity-100'}
-    ${compact ? 'w-full' : isRole ? 'w-[200px]' : 'w-[240px]'}
+    ${compact ? 'w-full' : isRole ? 'w-[240px]' : 'w-[240px]'}
   `;
 
   return (
@@ -167,23 +167,22 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
           className={`min-w-0 flex-1 px-3 py-2.5 text-left ${isDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
         >
         {isRole ? (
-          <div className="flex flex-col items-center gap-2 text-center">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-slate-500">
               <Briefcase className="h-4 w-4" />
             </div>
-            <div className="text-sm font-medium leading-snug text-slate-900">{employee.position}</div>
-            <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Роль</div>
-            {!hideDepartmentOnCard && (
-              <div className="inline-flex max-w-full items-center gap-1 text-[10px] text-slate-500">
-                <Building2 className="h-3 w-3 shrink-0" />
-                <span className="truncate">{departmentLabel}</span>
-              </div>
-            )}
-            {directReportsCount > 0 && (
-              <div className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                {directReportsCount} в подчинении
-              </div>
-            )}
+            <div className="min-w-0 flex-1 pt-0.5">
+              <span className="mb-1 inline-block rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+                Роль
+              </span>
+              <div className="text-sm font-semibold leading-snug text-slate-900">{employee.position}</div>
+              {directReportsCount > 0 && (
+                <div className="mt-1.5 text-[11px] font-medium text-slate-600">
+                  {directReportsCount} подч.
+                  {!isExpanded && !compact ? ' · свёрнуто' : ''}
+                </div>
+              )}
+            </div>
           </div>
         ) : isExecutiveRoot ? (
           <div className="flex flex-col items-center gap-2.5 py-1">
@@ -385,7 +384,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
       <div className="block w-full shrink-0">
         {card}
         {hasChildren && isExpanded && (
-          <OrgConnectorVerticalStack depth={treeDepth}>
+          <OrgConnectorVerticalStack>
             {visibleChildren.map((child) => (
               <OrgChartNode
                 key={child.employee.id}
