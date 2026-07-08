@@ -3,7 +3,7 @@ import { Building2, Hand, Network, ZoomIn, ZoomOut } from 'lucide-react';
 import { OrgTreeNode } from '../types';
 import { OrgChartNode } from './OrgChart';
 import OrgDepartmentBranch from './OrgDepartmentBranch';
-import { OrgConnectorChildren, OrgConnectorStem, orgChartCanvasClassName } from './OrgChartConnectors';
+import { OrgConnectorBranchSlot, OrgConnectorChildren, OrgConnectorStem, orgChartCanvasClassName } from './OrgChartConnectors';
 import { useChartPan } from '../hooks/useChartPan';
 import { groupOrgNodesByDepartment } from '../utils/orgStructure';
 
@@ -203,17 +203,20 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
                   {...chartProps}
                 />
               ) : (
-                <OrgConnectorChildren childCount={groupedRoots.length}>
-                  {groupedRoots.map((group) => (
-                    <OrgDepartmentBranch
+                <OrgConnectorChildren>
+                  {groupedRoots.map((group, index) => (
+                    <OrgConnectorBranchSlot
                       key={group.department || '__none__'}
-                      department={group.department}
+                      index={index}
+                      total={groupedRoots.length}
                       showStem={groupedRoots.length > 1}
                     >
-                      {group.nodes.map((root) => (
-                        <OrgChartNode key={root.employee.id} node={root} hideDepartmentOnCard {...chartProps} />
-                      ))}
-                    </OrgDepartmentBranch>
+                      <OrgDepartmentBranch department={group.department}>
+                        {group.nodes.map((root) => (
+                          <OrgChartNode key={root.employee.id} node={root} hideDepartmentOnCard {...chartProps} />
+                        ))}
+                      </OrgDepartmentBranch>
+                    </OrgConnectorBranchSlot>
                   ))}
                 </OrgConnectorChildren>
               )}

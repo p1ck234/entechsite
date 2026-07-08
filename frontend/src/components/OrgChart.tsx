@@ -4,7 +4,7 @@ import { OrgEmployee, OrgTreeNode } from '../types';
 import ImageWithLoader from './ImageWithLoader';
 import { formatDepartmentLabel, getOrgNodeLabel, groupOrgNodesByDepartment, getDepartmentGroupKey, isOrgRoleNode } from '../utils/orgStructure';
 import OrgDepartmentBranch from './OrgDepartmentBranch';
-import { OrgConnectorChildren, OrgConnectorDrop, OrgConnectorVerticalStack } from './OrgChartConnectors';
+import { OrgConnectorBranchSlot, OrgConnectorChildren, OrgConnectorVerticalStack } from './OrgChartConnectors';
 
 const AVATAR_OPTIONS = {
   width: 96,
@@ -247,8 +247,8 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
               )}
               {directReportsCount > 0 && (
                 <div className="mt-1.5 text-[11px] font-medium text-primary-600/90">
-                  {directReportsCount} в подчинении
-                  {!isExpanded ? ' · свёрнуто' : ''}
+                  {directReportsCount} подч.
+                  {!isExpanded && !compact ? ' · свёрнуто' : ''}
                 </div>
               )}
             </div>
@@ -271,6 +271,7 @@ interface OrgChartNodeProps {
   isExecutiveRoot?: boolean;
   branchChildrenByDepartment?: boolean;
   hideDepartmentOnCard?: boolean;
+  treeDepth?: number;
   expandedIds: Set<string>;
   onToggleExpand: (employeeId: string) => void;
   getDirectReportsCount?: (employeeId: string) => number;
@@ -294,6 +295,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
   isExecutiveRoot = false,
   branchChildrenByDepartment = false,
   hideDepartmentOnCard = false,
+  treeDepth = 0,
   expandedIds,
   onToggleExpand,
   getDirectReportsCount,
@@ -341,24 +343,6 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
 
   const branchCount = useDepartmentBranches ? departmentGroups!.length : visibleChildren.length;
 
-  const renderChildNode = (child: OrgTreeNode) => (
-    <OrgConnectorDrop key={child.employee.id} showStem={branchCount > 1}>
-      <OrgChartNode node={child} hideDepartmentOnCard={hideDepartmentOnCard} {...childNodeProps} />
-    </OrgConnectorDrop>
-  );
-
-  const renderDepartmentGroup = (group: { department: string | null; nodes: OrgTreeNode[] }) => (
-    <OrgDepartmentBranch
-      key={getDepartmentGroupKey(group.department)}
-      department={group.department}
-      showStem={branchCount > 1}
-    >
-      {group.nodes.map((child) => (
-        <OrgChartNode key={child.employee.id} node={child} hideDepartmentOnCard {...childNodeProps} />
-      ))}
-    </OrgDepartmentBranch>
-  );
-
   const card = (
     <OrgEmployeeCard
       employee={node.employee}
@@ -390,12 +374,13 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
       <div className="block w-full shrink-0">
         {card}
         {hasChildren && isExpanded && (
-          <OrgConnectorVerticalStack>
+          <OrgConnectorVerticalStack depth={treeDepth}>
             {visibleChildren.map((child) => (
               <OrgChartNode
                 key={child.employee.id}
                 node={child}
                 hideDepartmentOnCard
+                treeDepth={treeDepth + 1}
                 {...childNodeProps}
               />
             ))}
@@ -410,10 +395,37 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
       {card}
 
       {hasChildren && isExpanded && (
-        <OrgConnectorChildren childCount={branchCount}>
+        <OrgConnectorChildren>
           {useDepartmentBranches
-            ? departmentGroups!.map((group) => renderDepartmentGroup(group))
-            : visibleChildren.map((child) => renderChildNode(child))}
+            ? departmentGroups!.map((group, index) => (
+                <OrgConnectorBranchSlot
+                  key={getDepartmentGroupKey(group.department)}
+                  index={index}
+                  total={branchCount}
+                  showStem={branchCount > 1}
+                >
+                  <OrgDepartmentBranch department={group.department}>
+                    {group.nodes.map((child) => (
+                      <OrgChartNode
+                        key={child.employee.id}
+                        node={child}
+                        hideDepartmentOnCard
+                        {...childNodeProps}
+                      />
+                    ))}
+                  </OrgDepartmentBranch>
+                </OrgConnectorBranchSlot>
+              ))
+            : visibleChildren.map((child, index) => (
+                <OrgConnectorBranchSlot
+                  key={child.employee.id}
+                  index={index}
+                  total={branchCount}
+                  showStem={branchCount > 1}
+                >
+                  <OrgChartNode node={child} hideDepartmentOnCard={hideDepartmentOnCard} {...childNodeProps} />
+                </OrgConnectorBranchSlot>
+              ))}
         </OrgConnectorChildren>
       )}
     </div>
