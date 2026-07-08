@@ -1,6 +1,9 @@
 import React, { useMemo, useState } from 'react';
+import { Hand } from 'lucide-react';
 import { OrgDepartmentGroup } from '../types';
 import { OrgChartNode, OrgEmployeeCard, getOrgEmployeeName } from './OrgChart';
+import { orgChartCanvasClassName } from './OrgChartConnectors';
+import { useChartPan } from '../hooks/useChartPan';
 import {
   countDepartmentInternalLinks,
   departmentHasHierarchy,
@@ -34,6 +37,7 @@ const DepartmentSection: React.FC<{
   chartProps: Omit<OrgDepartmentChartProps, 'groups' | 'onAssignDepartmentHead'>;
   onAssignDepartmentHead: (headId: string) => Promise<void>;
 }> = ({ group, chartProps, onAssignDepartmentHead }) => {
+  const pan = useChartPan(Boolean(chartProps.draggingId));
   const suggestedHead = useMemo(() => guessDepartmentHead(group.employees), [group.employees]);
   const [headDraft, setHeadDraft] = useState(suggestedHead?.id || '');
   const hasHierarchy = departmentHasHierarchy(group);
@@ -101,11 +105,19 @@ const DepartmentSection: React.FC<{
       )}
 
       {hasHierarchy ? (
-        <div className="overflow-x-auto">
-          <div className="flex min-w-max justify-center gap-10 py-2">
-            {group.roots.map((root) => (
-              <OrgChartNode key={root.employee.id} node={root} {...chartNodeProps} />
-            ))}
+        <div className={orgChartCanvasClassName}>
+          <div
+            ref={pan.containerRef}
+            onMouseDown={pan.onMouseDown}
+            className={`max-h-[36rem] overflow-auto p-4 ${pan.className}`}
+          >
+            <div className="box-border min-h-[18rem] min-w-full p-6">
+              <div className="mx-auto flex w-max justify-center gap-10 py-2">
+                {group.roots.map((root) => (
+                  <OrgChartNode key={root.employee.id} node={root} hideDepartmentOnCard {...chartNodeProps} />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       ) : (
@@ -174,15 +186,24 @@ const OrgDepartmentChart: React.FC<OrgDepartmentChartProps> = ({
   ...chartProps
 }) => {
   return (
-    <div className="space-y-8">
-      {groups.map((group) => (
-        <DepartmentSection
-          key={group.department}
-          group={group}
-          chartProps={chartProps}
-          onAssignDepartmentHead={(headId) => onAssignDepartmentHead(group.department, headId)}
-        />
-      ))}
+    <div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-xs text-slate-500">
+          <Hand className="h-3.5 w-3.5" />
+          Зажмите ЛКМ на фоне схемы и перетаскивайте
+        </span>
+      </div>
+
+      <div className="space-y-8">
+        {groups.map((group) => (
+          <DepartmentSection
+            key={group.department}
+            group={group}
+            chartProps={chartProps}
+            onAssignDepartmentHead={(headId) => onAssignDepartmentHead(group.department, headId)}
+          />
+        ))}
+      </div>
     </div>
   );
 };

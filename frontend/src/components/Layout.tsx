@@ -15,9 +15,22 @@ import {
   Calendar,
   Bot,
   DoorOpen,
-  Network
+  Network,
+  MoreHorizontal,
+  X
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import Logo from './Logo';
+
+type TelegramNavPlacement = 'primary' | 'more';
+
+interface NavigationItem {
+  name: string;
+  href: string;
+  icon: LucideIcon;
+  telegram: TelegramNavPlacement;
+  adminOnly?: boolean;
+}
 
 const TELEGRAM_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 const TELEGRAM_OAUTH_STORAGE_KEY = 'telegramOAuthData';
@@ -29,6 +42,7 @@ const Layout: React.FC = () => {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
+  const [telegramMoreOpen, setTelegramMoreOpen] = useState(false);
 
   // Обработка кнопки "Назад" в Telegram
   useEffect(() => {
@@ -56,6 +70,10 @@ const Layout: React.FC = () => {
       webApp.BackButton.offClick(handleBackButton);
     };
   }, [isTelegram, webApp, location.pathname, navigate]);
+
+  useEffect(() => {
+    setTelegramMoreOpen(false);
+  }, [location.pathname]);
 
   // Загружаем данные текущего сотрудника для отображения ФИО
   useEffect(() => {
@@ -156,16 +174,21 @@ const Layout: React.FC = () => {
     return null;
   }
 
-  const navigation = [
-    { name: 'Главная', href: '/home', icon: Home },
-    { name: 'Адресная книга', href: '/employees', icon: Users },
-    { name: 'Структура', href: '/org', icon: Network },
-    { name: 'База знаний', href: '/courses', icon: BookOpen },
-    { name: 'Наша жизнь', href: '/life', icon: Heart },
-    { name: 'Календарь мероприятий', href: '/events', icon: Calendar },
-    { name: 'Расписание', href: '/bookings', icon: DoorOpen },
-    { name: 'Боты', href: '/bots', icon: Bot },
+  const navigation: NavigationItem[] = [
+    { name: 'Главная', href: '/home', icon: Home, telegram: 'primary' },
+    { name: 'Адресная книга', href: '/employees', icon: Users, telegram: 'primary' },
+    { name: 'База знаний', href: '/courses', icon: BookOpen, telegram: 'primary' },
+    { name: 'Наша жизнь', href: '/life', icon: Heart, telegram: 'primary' },
+    { name: 'Календарь мероприятий', href: '/events', icon: Calendar, telegram: 'primary' },
+    { name: 'Боты', href: '/bots', icon: Bot, telegram: 'primary' },
+    { name: 'Структура', href: '/org', icon: Network, telegram: 'more', adminOnly: true },
+    { name: 'Расписание', href: '/bookings', icon: DoorOpen, telegram: 'more', adminOnly: true },
   ];
+
+  const visibleNavigation = navigation.filter((item) => !item.adminOnly || isAdmin);
+  const telegramPrimaryNavigation = navigation.filter((item) => item.telegram === 'primary');
+  const telegramMoreNavigation = visibleNavigation.filter((item) => item.telegram === 'more');
+  const showTelegramMore = isAdmin && telegramMoreNavigation.length > 0;
 
   const handleLogout = () => {
     logout();
@@ -173,6 +196,7 @@ const Layout: React.FC = () => {
   };
 
   const isActive = (path: string) => location.pathname === path;
+  const isMoreSectionActive = telegramMoreNavigation.some((item) => isActive(item.href));
 
   return (
     <div className={`min-h-screen flex ${isTelegram ? 'flex-col' : ''}`}>
@@ -200,7 +224,7 @@ const Layout: React.FC = () => {
 
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-2">
-            {navigation.map((item) => {
+            {visibleNavigation.map((item) => {
               const Icon = item.icon;
               return (
                 <button
@@ -270,7 +294,7 @@ const Layout: React.FC = () => {
               
               <div className="flex items-center space-x-4">
                 <h1 className="text-2xl font-bold text-pastel-800">
-                  {navigation.find(item => isActive(item.href))?.name || SITE_CONFIG.name}
+                  {navigation.find((item) => isActive(item.href))?.name || SITE_CONFIG.name}
                 </h1>
               </div>
             </div>
@@ -285,51 +309,117 @@ const Layout: React.FC = () => {
 
       {/* Bottom Navigation для Telegram */}
       {isTelegram && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-pastel-200 z-50 safe-area-inset-bottom">
-          <div className="flex justify-around items-center h-16 overflow-x-auto">
-            {navigation.map((item) => {
-              const Icon = item.icon;
-              // Сокращаем длинные названия для мобильных
-              let shortName = item.name;
-              
-              // Специальные сокращения для конкретных пунктов
-              if (item.name === 'Адресная книга') {
-                shortName = 'АК';
-              } else if (item.name === 'Календарь мероприятий') {
-                shortName = 'КМ';
-              } else if (item.name === 'Расписание') {
-                shortName = 'РС';
-              } else if (item.name === 'База знаний') {
-                shortName = 'БЗ';
-              } else if (item.name === 'Наша жизнь') {
-                shortName = 'НЖ';
-              } else if (item.name === 'Боты') {
-                shortName = 'Б';
-              } else if (item.name.length > 8) {
-                // Для остальных длинных названий берем первые буквы слов
-                shortName = item.name.split(' ').map(w => w[0]).join('');
-              }
-              
-              return (
+        <>
+          {showTelegramMore && telegramMoreOpen && (
+            <div
+              className="fixed inset-0 z-[55] bg-black/35"
+              onClick={() => setTelegramMoreOpen(false)}
+              role="presentation"
+            />
+          )}
+
+          {showTelegramMore && telegramMoreOpen && (
+            <div className="fixed bottom-16 left-0 right-0 z-[60] mx-3 rounded-2xl border border-pastel-200 bg-white p-2 shadow-xl">
+              <div className="mb-1 flex items-center justify-between px-2 py-1">
+                <span className="text-sm font-semibold text-pastel-800">Разделы</span>
                 <button
-                  key={item.name}
-                  onClick={() => navigate(item.href)}
-                  className={`
-                    flex flex-col items-center justify-center flex-1 min-w-[50px] h-full transition-colors px-0.5
-                    ${isActive(item.href)
-                      ? 'text-primary-600'
-                      : 'text-pastel-600'
-                    }
-                  `}
-                  title={item.name}
+                  type="button"
+                  onClick={() => setTelegramMoreOpen(false)}
+                  className="rounded-lg p-1 text-pastel-500 hover:bg-pastel-100"
+                  aria-label="Закрыть"
                 >
-                  <Icon className="w-5 h-5 mb-0.5 flex-shrink-0" />
-                  <span className="text-[9px] leading-tight text-center font-medium">{shortName}</span>
+                  <X className="h-4 w-4" />
                 </button>
-              );
-            })}
-          </div>
-        </nav>
+              </div>
+              <div className="space-y-1">
+                {telegramMoreNavigation.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.name}
+                      type="button"
+                      onClick={() => {
+                        navigate(item.href);
+                        setTelegramMoreOpen(false);
+                      }}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
+                        isActive(item.href)
+                          ? 'bg-primary-50 text-primary-700'
+                          : 'text-pastel-700 hover:bg-pastel-50'
+                      }`}
+                    >
+                      <Icon className="h-5 w-5 shrink-0" />
+                      <span className="text-sm font-medium">{item.name}</span>
+                      {item.adminOnly && (
+                        <span className="ml-auto rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
+                          Админ
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTelegramMoreOpen(false);
+                    handleLogout();
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-red-600 hover:bg-red-50"
+                >
+                  <LogOut className="h-5 w-5 shrink-0" />
+                  <span className="text-sm font-medium">Выйти</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-pastel-200 bg-white/95 backdrop-blur-sm safe-area-inset-bottom">
+            <div className={`grid h-16 ${showTelegramMore ? 'grid-cols-7' : 'grid-cols-6'}`}>
+              {telegramPrimaryNavigation.map((item) => {
+                const Icon = item.icon;
+                const shortLabels: Record<string, string> = {
+                  Главная: 'Главная',
+                  'Адресная книга': 'Люди',
+                  'База знаний': 'Курсы',
+                  'Наша жизнь': 'Жизнь',
+                  'Календарь мероприятий': 'Календарь',
+                  Боты: 'Боты',
+                };
+
+                return (
+                  <button
+                    key={item.name}
+                    type="button"
+                    onClick={() => navigate(item.href)}
+                    className={`flex flex-col items-center justify-center gap-0.5 px-1 transition-colors ${
+                      isActive(item.href) ? 'text-primary-600' : 'text-pastel-600'
+                    }`}
+                    title={item.name}
+                  >
+                    <Icon className="h-5 w-5 shrink-0" />
+                    <span className="max-w-full truncate text-[10px] font-medium leading-tight">
+                      {shortLabels[item.name] || item.name}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {showTelegramMore && (
+                <button
+                  type="button"
+                  onClick={() => setTelegramMoreOpen((prev) => !prev)}
+                  className={`flex flex-col items-center justify-center gap-0.5 px-1 transition-colors ${
+                    isMoreSectionActive || telegramMoreOpen ? 'text-primary-600' : 'text-pastel-600'
+                  }`}
+                  title="Ещё"
+                >
+                  <MoreHorizontal className="h-5 w-5 shrink-0" />
+                  <span className="text-[10px] font-medium leading-tight">Ещё</span>
+                </button>
+              )}
+            </div>
+          </nav>
+        </>
       )}
     </div>
   );

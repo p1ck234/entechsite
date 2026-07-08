@@ -45,6 +45,8 @@ interface OrgMobileTreeProps {
   searchQuery: string;
   selectedId: string | null;
   onSelect: (employee: OrgEmployee) => void;
+  compact?: boolean;
+  showToolbar?: boolean;
 }
 
 interface OrgMobileTreeNodeProps {
@@ -53,6 +55,7 @@ interface OrgMobileTreeNodeProps {
   searchQuery: string;
   selectedId: string | null;
   expandedIds: Set<string>;
+  compact?: boolean;
   onToggle: (employeeId: string) => void;
   onSelect: (employee: OrgEmployee) => void;
 }
@@ -63,6 +66,7 @@ const OrgMobileTreeNode: React.FC<OrgMobileTreeNodeProps> = ({
   searchQuery,
   selectedId,
   expandedIds,
+  compact = false,
   onToggle,
   onSelect,
 }) => {
@@ -86,16 +90,21 @@ const OrgMobileTreeNode: React.FC<OrgMobileTreeNodeProps> = ({
     <div>
       <div
         className="flex items-stretch gap-1"
-        style={{ paddingLeft: `${depth * 14}px` }}
+        style={{ paddingLeft: `${depth * (compact ? 12 : 14)}px` }}
       >
         {depth > 0 && (
-          <div className="mr-1 w-3 shrink-0 border-l border-b border-pastel-300 rounded-bl-lg self-start h-5 mt-4" />
+          <div
+            className={`mr-1 w-3 shrink-0 self-start rounded-bl-lg border-b border-l border-pastel-300 ${
+              compact ? 'mt-3 h-4' : 'mt-4 h-5'
+            }`}
+          />
         )}
 
         <div className="min-w-0 flex-1">
           <div
             className={`
-              flex items-center gap-2 rounded-2xl border px-2 py-2 transition-colors
+              flex items-center gap-2 border transition-colors
+              ${compact ? 'rounded-xl px-1.5 py-1.5' : 'rounded-2xl px-2 py-2'}
               ${isSelected ? 'border-pastel-500 bg-pastel-50' : 'border-pastel-200 bg-white'}
               ${searchQuery.trim() && !isMatch ? 'opacity-50' : ''}
               ${isRole ? 'border-dashed bg-pastel-50/80' : ''}
@@ -120,7 +129,11 @@ const OrgMobileTreeNode: React.FC<OrgMobileTreeNodeProps> = ({
               onClick={() => onSelect(employee)}
               className="flex min-w-0 flex-1 items-center gap-3 text-left"
             >
-              <div className={`h-10 w-10 shrink-0 overflow-hidden rounded-full flex items-center justify-center ${isRole ? 'border border-dashed border-pastel-300 bg-white' : 'bg-pastel-800'}`}>
+              <div
+                className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full ${
+                  compact ? 'h-9 w-9' : 'h-10 w-10'
+                } ${isRole ? 'border border-dashed border-pastel-300 bg-white' : 'bg-pastel-800'}`}
+              >
                 {!isRole && employee.photo ? (
                   <ImageWithLoader
                     src={employee.photo}
@@ -165,6 +178,7 @@ const OrgMobileTreeNode: React.FC<OrgMobileTreeNodeProps> = ({
               searchQuery={searchQuery}
               selectedId={selectedId}
               expandedIds={expandedIds}
+              compact={compact}
               onToggle={onToggle}
               onSelect={onSelect}
             />
@@ -180,6 +194,8 @@ const OrgMobileTree: React.FC<OrgMobileTreeProps> = ({
   searchQuery,
   selectedId,
   onSelect,
+  compact = false,
+  showToolbar = true,
 }) => {
   const defaultExpanded = useMemo(
     () => new Set(roots.map((root) => root.employee.id)),
@@ -226,19 +242,31 @@ const OrgMobileTree: React.FC<OrgMobileTreeProps> = ({
     setExpandedIds(new Set());
   };
 
+  if (roots.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-pastel-200 px-3 py-4 text-center text-xs text-pastel-500">
+        Нет сотрудников для отображения
+      </div>
+    );
+  }
+
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="text-sm font-medium text-pastel-700">Иерархия</div>
-        <div className="flex gap-2 text-xs">
-          <button type="button" onClick={expandAll} className="text-primary-600 hover:underline">
-            Развернуть всё
-          </button>
-          <button type="button" onClick={collapseAll} className="text-pastel-500 hover:underline">
-            Свернуть
-          </button>
+      {showToolbar && (
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className={`font-medium text-pastel-700 ${compact ? 'text-xs' : 'text-sm'}`}>
+            Иерархия
+          </div>
+          <div className="flex gap-2 text-xs">
+            <button type="button" onClick={expandAll} className="text-primary-600 hover:underline">
+              Развернуть всё
+            </button>
+            <button type="button" onClick={collapseAll} className="text-pastel-500 hover:underline">
+              Свернуть
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="space-y-1">
         {roots.map((root) => (
@@ -249,6 +277,7 @@ const OrgMobileTree: React.FC<OrgMobileTreeProps> = ({
             searchQuery={searchQuery}
             selectedId={selectedId}
             expandedIds={expandedIds}
+            compact={compact}
             onToggle={handleToggle}
             onSelect={onSelect}
           />

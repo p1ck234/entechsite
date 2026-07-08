@@ -381,10 +381,11 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
 
   if (hideDepartmentOnCard) {
     return (
-      <div className="block w-full shrink-0">
-        {card}
+      <div className="org-chart-node block w-full shrink-0">
+        <div className="org-chart-card-row">{card}</div>
         {hasChildren && isExpanded && (
-          <OrgConnectorVerticalStack>
+          <div className="pt-3">
+            <OrgConnectorVerticalStack>
             {visibleChildren.map((child) => (
               <OrgChartNode
                 key={child.employee.id}
@@ -394,7 +395,8 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
                 {...childNodeProps}
               />
             ))}
-          </OrgConnectorVerticalStack>
+            </OrgConnectorVerticalStack>
+          </div>
         )}
       </div>
     );
@@ -412,7 +414,6 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
                   key={getDepartmentGroupKey(group.department)}
                   index={index}
                   total={branchCount}
-                  showStem={branchCount > 1}
                 >
                   <OrgDepartmentBranch department={group.department}>
                     {group.nodes.map((child) => (
@@ -431,7 +432,6 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
                   key={child.employee.id}
                   index={index}
                   total={branchCount}
-                  showStem={branchCount > 1}
                 >
                   <OrgChartNode node={child} hideDepartmentOnCard={hideDepartmentOnCard} {...childNodeProps} />
                 </OrgConnectorBranchSlot>

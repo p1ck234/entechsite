@@ -4,6 +4,9 @@ export const ORG_CHART_CHILD_GAP = 20;
 
 const connectorColor = '#94a3b8';
 
+/** Центр компактной карточки (аватар h-11 + py-2.5) для горизонтальной черты */
+const COMPACT_CARD_MID = '1.375rem';
+
 interface OrgConnectorStemProps {
   height?: number;
 }
@@ -71,33 +74,45 @@ interface OrgConnectorVerticalStackProps {
 
 export const OrgConnectorVerticalStack: React.FC<OrgConnectorVerticalStackProps> = ({ children }) => {
   const items = Children.toArray(children).filter(isValidElement);
+  const count = items.length;
 
   return (
-    <div className="relative mt-0.5">
-      <div className="ml-3 flex justify-start">
-        <OrgConnectorStem height={12} />
-      </div>
+    <div className="relative ml-2">
       <div
-        className="relative ml-3 border-l-2 pl-3"
-        style={{ borderColor: connectorColor }}
-      >
+        className="pointer-events-none absolute left-[7px] top-0 h-3 w-0.5 -translate-y-full rounded-full"
+        style={{ backgroundColor: connectorColor }}
+        aria-hidden
+      />
+
+      <div className="flex flex-col">
         {items.map((child, index) => {
-          const isLast = index === items.length - 1;
+          const isLast = index === count - 1;
 
           return (
-            <div key={child.key} className="relative mb-3 block w-full shrink-0 last:mb-0">
-              <div
-                className="absolute -left-3 top-[1.35rem] h-0.5 w-3 rounded-full"
-                style={{ backgroundColor: connectorColor }}
-                aria-hidden
-              />
-              {isLast && (
+            <div key={child.key} className="flex min-h-0 items-stretch">
+              <div className="relative w-4 shrink-0 self-stretch">
+                {!isLast && (
+                  <div
+                    className="pointer-events-none absolute bottom-0 left-1/2 top-0 w-0.5 -translate-x-1/2 rounded-full"
+                    style={{ backgroundColor: connectorColor }}
+                    aria-hidden
+                  />
+                )}
+                {isLast && (
+                  <div
+                    className="pointer-events-none absolute left-1/2 top-0 w-0.5 -translate-x-1/2 rounded-full"
+                    style={{ height: COMPACT_CARD_MID, backgroundColor: connectorColor }}
+                    aria-hidden
+                  />
+                )}
                 <div
-                  className="absolute -left-[13px] top-[calc(1.35rem+2px)] bottom-0 w-1 bg-white"
+                  className="pointer-events-none absolute left-1/2 top-0 h-0.5 w-1/2 -translate-y-1/2 rounded-full"
+                  style={{ top: COMPACT_CARD_MID, backgroundColor: connectorColor }}
                   aria-hidden
                 />
-              )}
-              {child}
+              </div>
+
+              <div className={`min-w-0 flex-1 ${index < count - 1 ? 'pb-3' : ''}`}>{child}</div>
             </div>
           );
         })}

@@ -1,14 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, Network, Loader2, Building2, GitBranch, Plus } from 'lucide-react';
+import { Search, Network, Loader2, Building2, GitBranch, Plus, X } from 'lucide-react';
 import { orgStructureAPI } from '../api/client';
 import { OrgEmployee, OrgStructureResponse, OrgViewMode } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import OrgDepartmentChart from '../components/OrgDepartmentChart';
 import CompanyOrgChart from '../components/CompanyOrgChart';
+import OrgMobileTree from '../components/OrgMobileTree';
 import {
   employeeMatchesSearch,
 } from '../components/OrgChart';
 import { useAuth } from '../contexts/AuthContext';
+import { useTelegram } from '../contexts/TelegramContext';
 import {
   buildDepartmentGroups,
   buildOrgTree,
@@ -22,6 +24,7 @@ import {
 
 const OrgStructure: React.FC = () => {
   const { isAdmin } = useAuth();
+  const { isTelegram } = useTelegram();
   const [data, setData] = useState<OrgStructureResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -428,26 +431,240 @@ const OrgStructure: React.FC = () => {
     onDrop: handleDrop,
   };
 
-  return (
-    <div className="p-4 sm:p-6">
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="mb-2 flex items-center gap-2 text-primary-600">
-            <Network className="h-5 w-5" />
-            <span className="text-sm font-medium">Организационная структура</span>
+  const renderEmployeeDetail = () => {
+    if (!selectedEmployee) {
+      return (
+        <div className="text-sm text-pastel-600">
+          Выберите сотрудника{isTelegram ? '' : ' на схеме'}, чтобы увидеть детали
+          {isAdmin ? ' и назначить руководителя.' : '.'}
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <div className="text-sm text-pastel-500">
+          {isOrgRoleNode(selectedEmployee) ? 'Роль на схеме' : 'Выбран сотрудник'}
+        </div>
+        <h2 className="mt-1 text-xl font-bold text-pastel-900">
+          {getOrgNodeLabel(selectedEmployee)}
+        </h2>
+        {isOrgRoleNode(selectedEmployee) && (
+          <p className="mt-1 text-xs text-pastel-500">Без привязки к аккаунту в портале</p>
+        )}
+        <dl className="mt-4 space-y-3 text-sm">
+          <div>
+            <dt className="text-pastel-500">Должность</dt>
+            <dd className="font-medium text-pastel-800">{selectedEmployee.position}</dd>
           </div>
-          <h1 className="text-3xl font-bold text-pastel-900">Структура компании</h1>
-          <p className="mt-1 text-sm text-pastel-600">
+          <div>
+            <dt className="text-pastel-500">Отдел</dt>
+            <dd className="font-medium text-pastel-800">{selectedEmployee.department}</dd>
+          </div>
+          <div>
+            <dt className="text-pastel-500">Руководитель</dt>
+            <dd className="font-medium text-pastel-800">
+              {selectedEmployee.managerId
+                ? getOrgNodeLabel(
+                    data.employees.find((employee) => employee.id === selectedEmployee.managerId) ||
+                      selectedEmployee
+                  )
+                : 'Прикреплён к компании'}
+            </dd>
+          </div>
+        </dl>
+
+        {isAdmin && (
+          <div className="mt-5 space-y-3 border-t border-pastel-200 pt-4">
+            <button
+              type="button"
+              onClick={handleToggleDisplayMode}
+              disabled={assigning}
+              className="w-full rounded-xl border border-pastel-200 px-4 py-2 text-sm text-pastel-700 hover:bg-pastel-50"
+            >
+              {isOrgRoleNode(selectedEmployee)
+                ? 'Показывать как сотрудника'
+                : 'Показывать только должность'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddRole((prev) => !prev);
+                setRoleForm((prev) => ({
+                  ...prev,
+                  managerId: selectedEmployee.id,
+                  department: selectedEmployee.department || prev.department,
+                }));
+              }}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-pastel-200 px-4 py-2 text-sm text-pastel-700 hover:bg-pastel-50"
+            >
+              <Plus className="h-4 w-4" />
+              Добавить роль подчинения
+            </button>
+
+            {showAddRole && (
+              <div className="space-y-2 rounded-xl border border-pastel-200 bg-pastel-50/60 p-3">
+                <input
+                  type="text"
+                  value={roleForm.position}
+                  onChange={(event) => setRoleForm((prev) => ({ ...prev, position: event.target.value }))}
+                  placeholder="Должность, напр. электромонтажник"
+                  className="input-field"
+                />
+                <select
+                  value={roleForm.department}
+                  onChange={(event) => setRoleForm((prev) => ({ ...prev, department: event.target.value }))}
+                  className="input-field"
+                >
+                  <option value="">Отдел</option>
+                  {departmentOptions.map((department) => (
+                    <option key={department} value={department}>
+                      {department}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={roleForm.managerId}
+                  onChange={(event) => setRoleForm((prev) => ({ ...prev, managerId: event.target.value }))}
+                  className="input-field"
+                >
+                  <option value="">Руководитель</option>
+                  {managerOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {getOrgNodeLabel(option)}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleCreateRole}
+                  disabled={assigning || !roleForm.position.trim() || !roleForm.department.trim()}
+                  className="btn-primary w-full"
+                >
+                  Сохранить роль
+                </button>
+              </div>
+            )}
+
+            <label htmlFor="managerDraft" className="block text-sm font-medium text-pastel-700">
+              Назначить руководителя
+            </label>
+            <select
+              id="managerDraft"
+              value={managerDraft}
+              onChange={(event) => setManagerDraft(event.target.value)}
+              className="input-field"
+              disabled={assigning}
+            >
+              <option value="">К компании (верхний уровень)</option>
+              {managerOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {getOrgNodeLabel(option)}
+                  {option.position ? ` — ${option.position}` : ''}
+                  {option.department ? ` (${option.department})` : ''}
+                </option>
+              ))}
+            </select>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={handleSaveManagerFromPanel}
+                disabled={assigning}
+                className="btn-primary flex items-center justify-center gap-2"
+              >
+                {assigning && <Loader2 className="h-4 w-4 animate-spin" />}
+                Сохранить связь
+              </button>
+              {selectedEmployee.managerId && (
+                <button
+                  type="button"
+                  onClick={handleDetachManager}
+                  disabled={assigning}
+                  className="rounded-xl border border-pastel-300 px-4 py-2 text-sm text-pastel-700 hover:bg-pastel-50"
+                >
+                  К компании
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderMobileOrgTree = () => {
+    if (viewMode === 'company') {
+      return (
+        <div className="rounded-2xl border border-pastel-200 bg-white p-3 shadow-sm">
+          <div className="mb-3 rounded-xl bg-gradient-to-r from-primary-50 to-white px-3 py-2.5">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-primary-600">Компания</div>
+            <div className="text-base font-bold text-pastel-900">{data.companyName}</div>
+            <div className="mt-1 text-[11px] text-pastel-500">
+              {data.total} сотрудников · {managerLinksCount} связей · {departmentGroups.length} отделов
+            </div>
+          </div>
+          <OrgMobileTree
+            roots={hierarchyRoots}
+            searchQuery={searchQuery}
+            selectedId={selectedEmployee?.id || null}
+            onSelect={setSelectedEmployee}
+            compact
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {departmentGroups.map((group) => (
+          <section
+            key={group.department}
+            className="rounded-2xl border border-pastel-200 bg-white p-3 shadow-sm"
+          >
+            <div className="mb-2 border-b border-pastel-100 pb-2">
+              <h2 className="text-sm font-bold text-pastel-900">{group.department}</h2>
+              <p className="text-[11px] text-pastel-500">{group.employeeCount} сотрудников</p>
+            </div>
+            <OrgMobileTree
+              roots={group.roots}
+              searchQuery={searchQuery}
+              selectedId={selectedEmployee?.id || null}
+              onSelect={setSelectedEmployee}
+              compact
+              showToolbar={false}
+            />
+          </section>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div className={isTelegram ? 'pb-2' : 'p-4 sm:p-6'}>
+      <div className={`mb-4 flex flex-col gap-3 ${isTelegram ? '' : 'lg:flex-row lg:items-end lg:justify-between'}`}>
+        <div>
+          {!isTelegram && (
+            <div className="mb-2 flex items-center gap-2 text-primary-600">
+              <Network className="h-5 w-5" />
+              <span className="text-sm font-medium">Организационная структура</span>
+            </div>
+          )}
+          <h1 className={`font-bold text-pastel-900 ${isTelegram ? 'text-xl' : 'text-3xl'}`}>
+            {isTelegram ? 'Структура' : 'Структура компании'}
+          </h1>
+          <p className={`text-pastel-600 ${isTelegram ? 'mt-0.5 text-xs' : 'mt-1 text-sm'}`}>
             {data.companyName} · {data.total} сотрудников · {departmentGroups.length} отделов · {managerLinksCount} связей
           </p>
-          {isAdmin && (
+          {isAdmin && !isTelegram && (
             <p className="mt-2 text-xs text-pastel-500">
               Перетащите на блок «Компания» — верхний уровень (гендиректор). На карточку руководителя — подчинение.
             </p>
           )}
         </div>
 
-        <div className="relative w-full max-w-md">
+        <div className={`relative w-full ${isTelegram ? '' : 'max-w-md'}`}>
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-pastel-400" />
           <input
             type="search"
@@ -463,44 +680,48 @@ const OrgStructure: React.FC = () => {
         <button
           type="button"
           onClick={() => setViewMode('company')}
-          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition-colors ${
+          className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors ${
             viewMode === 'company'
               ? 'bg-primary-500 text-white'
               : 'bg-white/70 text-pastel-700 border border-pastel-200'
-          }`}
+          } ${isTelegram ? 'flex-1 justify-center text-xs' : 'px-4'}`}
         >
           <GitBranch className="h-4 w-4" />
-          Общая структура
+          {isTelegram ? 'Общая' : 'Общая структура'}
         </button>
         <button
           type="button"
           onClick={() => setViewMode('departments')}
-          className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition-colors ${
+          className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors ${
             viewMode === 'departments'
               ? 'bg-primary-500 text-white'
               : 'bg-white/70 text-pastel-700 border border-pastel-200'
-          }`}
+          } ${isTelegram ? 'flex-1 justify-center text-xs' : 'px-4'}`}
         >
           <Building2 className="h-4 w-4" />
-          По отделам
+          {isTelegram ? 'Отделы' : 'По отделам'}
         </button>
 
-        <span className="hidden h-6 w-px bg-pastel-200 sm:block" />
+        {!isTelegram && (
+          <>
+            <span className="hidden h-6 w-px bg-pastel-200 sm:block" />
 
-        <button
-          type="button"
-          onClick={handleExpandAll}
-          className="hidden rounded-xl border border-pastel-200 px-3 py-2 text-xs text-pastel-600 hover:bg-pastel-50 md:inline-block"
-        >
-          Развернуть всё
-        </button>
-        <button
-          type="button"
-          onClick={handleCollapseAll}
-          className="hidden rounded-xl border border-pastel-200 px-3 py-2 text-xs text-pastel-600 hover:bg-pastel-50 md:inline-block"
-        >
-          Свернуть
-        </button>
+            <button
+              type="button"
+              onClick={handleExpandAll}
+              className="hidden rounded-xl border border-pastel-200 px-3 py-2 text-xs text-pastel-600 hover:bg-pastel-50 md:inline-block"
+            >
+              Развернуть всё
+            </button>
+            <button
+              type="button"
+              onClick={handleCollapseAll}
+              className="hidden rounded-xl border border-pastel-200 px-3 py-2 text-xs text-pastel-600 hover:bg-pastel-50 md:inline-block"
+            >
+              Свернуть
+            </button>
+          </>
+        )}
       </div>
 
       {actionMessage && (
@@ -521,6 +742,39 @@ const OrgStructure: React.FC = () => {
         </div>
       )}
 
+      {isTelegram ? (
+        <>
+          {renderMobileOrgTree()}
+
+          {selectedEmployee && (
+            <div
+              className="fixed inset-0 z-[60] flex flex-col justify-end bg-black/40"
+              onClick={() => setSelectedEmployee(null)}
+              role="presentation"
+            >
+              <div
+                className="max-h-[78vh] overflow-y-auto rounded-t-2xl bg-white p-5 pb-24 shadow-xl"
+                onClick={(event) => event.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+              >
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="text-sm font-medium text-pastel-700">Карточка сотрудника</div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedEmployee(null)}
+                    className="rounded-lg p-1 text-pastel-500 hover:bg-pastel-100"
+                    aria-label="Закрыть"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                {renderEmployeeDetail()}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
           {viewMode === 'company' ? (
@@ -550,164 +804,10 @@ const OrgStructure: React.FC = () => {
         </div>
 
         <aside className="self-start rounded-3xl border border-pastel-200 bg-white/90 p-5 xl:sticky xl:top-6 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
-          {selectedEmployee ? (
-            <div>
-              <div className="text-sm text-pastel-500">
-                {isOrgRoleNode(selectedEmployee) ? 'Роль на схеме' : 'Выбран сотрудник'}
-              </div>
-              <h2 className="mt-1 text-xl font-bold text-pastel-900">
-                {getOrgNodeLabel(selectedEmployee)}
-              </h2>
-              {isOrgRoleNode(selectedEmployee) && (
-                <p className="mt-1 text-xs text-pastel-500">Без привязки к аккаунту в портале</p>
-              )}
-              <dl className="mt-4 space-y-3 text-sm">
-                <div>
-                  <dt className="text-pastel-500">Должность</dt>
-                  <dd className="font-medium text-pastel-800">{selectedEmployee.position}</dd>
-                </div>
-                <div>
-                  <dt className="text-pastel-500">Отдел</dt>
-                  <dd className="font-medium text-pastel-800">{selectedEmployee.department}</dd>
-                </div>
-                <div>
-                  <dt className="text-pastel-500">Руководитель</dt>
-                  <dd className="font-medium text-pastel-800">
-                    {selectedEmployee.managerId
-                      ? getOrgNodeLabel(
-                          data.employees.find((employee) => employee.id === selectedEmployee.managerId) ||
-                            selectedEmployee
-                        )
-                      : 'Прикреплён к компании'}
-                  </dd>
-                </div>
-              </dl>
-
-              {isAdmin && (
-                <div className="mt-5 space-y-3 border-t border-pastel-200 pt-4">
-                  <button
-                    type="button"
-                    onClick={handleToggleDisplayMode}
-                    disabled={assigning}
-                    className="w-full rounded-xl border border-pastel-200 px-4 py-2 text-sm text-pastel-700 hover:bg-pastel-50"
-                  >
-                    {isOrgRoleNode(selectedEmployee)
-                      ? 'Показывать как сотрудника'
-                      : 'Показывать только должность'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAddRole((prev) => !prev);
-                      setRoleForm((prev) => ({
-                        ...prev,
-                        managerId: selectedEmployee.id,
-                        department: selectedEmployee.department || prev.department,
-                      }));
-                    }}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-pastel-200 px-4 py-2 text-sm text-pastel-700 hover:bg-pastel-50"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Добавить роль подчинения
-                  </button>
-
-                  {showAddRole && (
-                    <div className="space-y-2 rounded-xl border border-pastel-200 bg-pastel-50/60 p-3">
-                      <input
-                        type="text"
-                        value={roleForm.position}
-                        onChange={(event) => setRoleForm((prev) => ({ ...prev, position: event.target.value }))}
-                        placeholder="Должность, напр. электромонтажник"
-                        className="input-field"
-                      />
-                      <select
-                        value={roleForm.department}
-                        onChange={(event) => setRoleForm((prev) => ({ ...prev, department: event.target.value }))}
-                        className="input-field"
-                      >
-                        <option value="">Отдел</option>
-                        {departmentOptions.map((department) => (
-                          <option key={department} value={department}>
-                            {department}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={roleForm.managerId}
-                        onChange={(event) => setRoleForm((prev) => ({ ...prev, managerId: event.target.value }))}
-                        className="input-field"
-                      >
-                        <option value="">Руководитель</option>
-                        {managerOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {getOrgNodeLabel(option)}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={handleCreateRole}
-                        disabled={assigning || !roleForm.position.trim() || !roleForm.department.trim()}
-                        className="btn-primary w-full"
-                      >
-                        Сохранить роль
-                      </button>
-                    </div>
-                  )}
-
-                  <label htmlFor="managerDraft" className="block text-sm font-medium text-pastel-700">
-                    Назначить руководителя
-                  </label>
-                  <select
-                    id="managerDraft"
-                    value={managerDraft}
-                    onChange={(event) => setManagerDraft(event.target.value)}
-                    className="input-field"
-                    disabled={assigning}
-                  >
-                    <option value="">К компании (верхний уровень)</option>
-                    {managerOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {getOrgNodeLabel(option)}
-                        {option.position ? ` — ${option.position}` : ''}
-                        {option.department ? ` (${option.department})` : ''}
-                      </option>
-                    ))}
-                  </select>
-
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <button
-                      type="button"
-                      onClick={handleSaveManagerFromPanel}
-                      disabled={assigning}
-                      className="btn-primary flex items-center justify-center gap-2"
-                    >
-                      {assigning && <Loader2 className="h-4 w-4 animate-spin" />}
-                      Сохранить связь
-                    </button>
-                    {selectedEmployee.managerId && (
-                      <button
-                        type="button"
-                        onClick={handleDetachManager}
-                        disabled={assigning}
-                        className="rounded-xl border border-pastel-300 px-4 py-2 text-sm text-pastel-700 hover:bg-pastel-50"
-                      >
-                        К компании
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="text-sm text-pastel-600">
-              Выберите сотрудника на схеме, чтобы увидеть детали
-              {isAdmin ? ' и назначить руководителя.' : '.'}
-            </div>
-          )}
+          {renderEmployeeDetail()}
         </aside>
       </div>
+      )}
     </div>
   );
 };
