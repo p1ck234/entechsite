@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Briefcase, Building2 } from 'lucide-react';
+import { Briefcase, Building2, ChevronDown, ChevronRight } from 'lucide-react';
 import { OrgEmployee, OrgTreeNode } from '../types';
 import ImageWithLoader from './ImageWithLoader';
 import { formatDepartmentLabel, getOrgNodeLabel, groupOrgNodesByDepartment, getDepartmentGroupKey, isOrgRoleNode } from '../utils/orgStructure';
@@ -60,6 +60,7 @@ interface OrgEmployeeCardProps {
   compact?: boolean;
   hasChildren?: boolean;
   isExpanded?: boolean;
+  onToggleExpand?: (employeeId: string) => void;
   onSelect: (employee: OrgEmployee) => void;
   onDragStart: (employeeId: string) => void;
   onDragEnd: () => void;
@@ -81,7 +82,9 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
   isExecutiveRoot = false,
   hideDepartmentOnCard = false,
   compact = false,
+  hasChildren = false,
   isExpanded = true,
+  onToggleExpand,
   onSelect,
   onDragStart,
   onDragEnd,
@@ -94,6 +97,22 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
   const initials = `${employee.firstName?.charAt(0) || '?'}${employee.lastName?.charAt(0) || '?'}`;
   const isDraggable = isAdmin && !isRole;
   const dragHappenedRef = useRef(false);
+  const showExpand = hasChildren && Boolean(onToggleExpand);
+
+  const cardSurfaceClass = `
+    flex items-stretch overflow-hidden rounded-xl transition-all duration-200
+    ${isRole
+      ? 'border border-dashed border-slate-300 bg-slate-50/80 hover:border-slate-400 hover:bg-white'
+      : `border bg-white shadow-sm hover:shadow-md ${
+          isExecutiveRoot
+            ? 'border-primary-200/80 ring-1 ring-primary-100'
+            : 'border-slate-200/90 hover:border-slate-300'
+        }`
+    }
+    ${isSelected ? 'border-primary-400 ring-2 ring-primary-100' : ''}
+    ${isDimmed ? 'opacity-35' : 'opacity-100'}
+    ${compact ? 'w-full' : isRole ? 'w-[200px]' : 'w-[240px]'}
+  `;
 
   return (
     <div
@@ -118,47 +137,35 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
         onDrop(event, employee.id);
       }}
     >
-      <button
-        type="button"
-        draggable={isDraggable}
-        onDragStart={(event) => {
-          if (!isDraggable) {
-            return;
-          }
-          dragHappenedRef.current = true;
-          event.dataTransfer.effectAllowed = 'move';
-          event.dataTransfer.setData('text/employee-id', employee.id);
-          onDragStart(employee.id);
-        }}
-        onDragEnd={() => {
-          onDragEnd();
-          window.setTimeout(() => {
-            dragHappenedRef.current = false;
-          }, 0);
-        }}
-        onClick={() => {
-          if (dragHappenedRef.current) {
-            return;
-          }
-          onSelect(employee);
-        }}
-        data-employee-id={employee.id}
-        title={isDraggable ? 'Нажмите — открыть. Перетащите на карточку руководителя.' : undefined}
-        className={`
-          group text-left transition-all duration-200
-          ${isDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}
-          ${isRole
-            ? `${compact ? 'w-full' : 'w-[200px]'} rounded-xl border border-dashed border-slate-300 bg-slate-50/80 px-3 py-3 hover:border-slate-400 hover:bg-white`
-            : `${compact ? 'w-full' : 'w-[240px]'} rounded-xl border bg-white px-3 py-2.5 shadow-sm hover:shadow-md ${
-                isExecutiveRoot
-                  ? 'border-primary-200/80 ring-1 ring-primary-100'
-                  : 'border-slate-200/90 hover:border-slate-300'
-              }`
-          }
-          ${isSelected ? 'border-primary-400 ring-2 ring-primary-100' : ''}
-          ${isDimmed ? 'opacity-35' : 'opacity-100'}
-        `}
-      >
+      <div className={cardSurfaceClass}>
+        <button
+          type="button"
+          draggable={isDraggable}
+          onDragStart={(event) => {
+            if (!isDraggable) {
+              return;
+            }
+            dragHappenedRef.current = true;
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/employee-id', employee.id);
+            onDragStart(employee.id);
+          }}
+          onDragEnd={() => {
+            onDragEnd();
+            window.setTimeout(() => {
+              dragHappenedRef.current = false;
+            }, 0);
+          }}
+          onClick={() => {
+            if (dragHappenedRef.current) {
+              return;
+            }
+            onSelect(employee);
+          }}
+          data-employee-id={employee.id}
+          title={isDraggable ? 'Нажмите — открыть. Перетащите на карточку руководителя.' : undefined}
+          className={`min-w-0 flex-1 px-3 py-2.5 text-left ${isDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+        >
         {isRole ? (
           <div className="flex flex-col items-center gap-2 text-center">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
@@ -246,7 +253,19 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
             </div>
           </div>
         )}
-      </button>
+        </button>
+
+        {showExpand && (
+          <button
+            type="button"
+            onClick={() => onToggleExpand!(employee.id)}
+            className="flex shrink-0 items-center border-l border-slate-100 px-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+            aria-label={isExpanded ? 'Свернуть ветку' : 'Развернуть ветку'}
+          >
+            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
+        )}
+      </div>
     </div>
   );
 };
@@ -349,7 +368,9 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
       isExecutiveRoot={isExecutiveRoot}
       hideDepartmentOnCard={hideDepartmentOnCard}
       compact={hideDepartmentOnCard}
+      hasChildren={hasChildren}
       isExpanded={isExpanded}
+      onToggleExpand={onToggleExpand}
       onSelect={onSelect}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}

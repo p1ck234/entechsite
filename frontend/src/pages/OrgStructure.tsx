@@ -14,7 +14,6 @@ import {
   buildOrgTree,
   canAssignManager,
   collectAllExpandableIds,
-  collectExpandedIdsUpToDepth,
   countManagerLinks,
   getDirectReports,
   getOrgNodeLabel,
@@ -101,7 +100,7 @@ const OrgStructure: React.FC = () => {
       return;
     }
 
-    setExpandedIds(collectExpandedIdsUpToDepth(listRoots, 2));
+    setExpandedIds(collectAllExpandableIds(listRoots));
   }, [listRoots]);
 
   const managerLinksCount = useMemo(
