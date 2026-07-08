@@ -63,6 +63,7 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
   onDropOnCompany,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const initialScrollDone = useRef(false);
 
   const chartProps = {
     searchQuery,
@@ -85,7 +86,11 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
   const singleRoot = roots.length === 1;
 
   useEffect(() => {
-    if (searchQuery.trim()) {
+    initialScrollDone.current = false;
+  }, [roots, chartScale]);
+
+  useEffect(() => {
+    if (searchQuery.trim() || initialScrollDone.current) {
       return;
     }
 
@@ -96,8 +101,10 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
 
     requestAnimationFrame(() => {
       container.scrollLeft = Math.max(0, (container.scrollWidth - container.clientWidth) / 2);
+      container.scrollTop = 0;
+      initialScrollDone.current = true;
     });
-  }, [roots, chartScale, expandedIds, searchQuery]);
+  }, [roots, chartScale, searchQuery]);
 
   return (
     <div>
@@ -125,11 +132,12 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
         ref={scrollRef}
         className="max-h-[calc(100vh-14rem)] overflow-auto pb-6"
       >
-        <div className="flex min-w-full justify-center px-4">
-          <div
-            className="inline-flex flex-col items-center py-4"
-            style={{ zoom: chartScale }}
-          >
+        {/* w-max — полная ширина дерева для прокрутки; min-w-full — центрирование узкой схемы */}
+        <div
+          className="box-border w-max min-w-full px-4 py-4"
+          style={{ zoom: chartScale }}
+        >
+          <div className="mx-auto flex w-max flex-col items-center">
             <div
               className={`w-full max-w-sm rounded-2xl border bg-white px-6 py-5 text-center shadow-sm transition-all ${
                 dropTargetCompany
