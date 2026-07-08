@@ -41,23 +41,29 @@ export const OrgConnectorBranchSlot: React.FC<OrgConnectorBranchSlotProps> = ({
   total,
   showStem = true,
   children,
-}) => (
-  <div className="relative flex shrink-0 flex-col items-center" data-connector-item>
-    {total > 1 && (
-      <div
-        className="pointer-events-none absolute top-0 h-0.5 rounded-full"
-        style={{
-          left: index === 0 ? '50%' : 0,
-          right: index === total - 1 ? '50%' : 0,
-          backgroundColor: connectorColor,
-        }}
-        aria-hidden
-      />
-    )}
-    {showStem && <OrgConnectorStem height={20} />}
-    {children}
-  </div>
-);
+}) => {
+  const gapBridge = ORG_CHART_CHILD_GAP / 2;
+  const isFirst = index === 0;
+  const isLast = index === total - 1;
+
+  return (
+    <div className="relative flex shrink-0 flex-col items-center" data-connector-item>
+      {total > 1 && (
+        <div
+          className="pointer-events-none absolute top-0 h-0.5 rounded-full"
+          style={{
+            left: isFirst ? '50%' : -gapBridge,
+            right: isLast ? '50%' : -gapBridge,
+            backgroundColor: connectorColor,
+          }}
+          aria-hidden
+        />
+      )}
+      {showStem && <OrgConnectorStem height={20} />}
+      {children}
+    </div>
+  );
+};
 
 interface OrgConnectorVerticalStackProps {
   depth?: number;
