@@ -134,6 +134,10 @@ export const ensureEmployeesOrgSchema = async (pool: Pool): Promise<void> => {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_employees_manager_id ON employees(manager_id);
     `);
+    await pool.query(`
+      ALTER TABLE employees
+        ADD COLUMN IF NOT EXISTS org_display_mode VARCHAR(20) DEFAULT 'person';
+    `);
     employeesOrgSchemaEnsured = true;
     managerIdColumnEnsured = true;
   } catch (error) {

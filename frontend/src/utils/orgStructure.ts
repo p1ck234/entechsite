@@ -14,6 +14,53 @@ const leadershipScore = (position: string): number => {
   return 6;
 };
 
+const compareOrgEmployees = (left: OrgEmployee, right: OrgEmployee): number => {
+  const leftIsRole = left.orgDisplayMode === 'role';
+  const rightIsRole = right.orgDisplayMode === 'role';
+
+  if (leftIsRole !== rightIsRole) {
+    return leftIsRole ? 1 : -1;
+  }
+
+  if (leftIsRole && rightIsRole) {
+    return left.position.localeCompare(right.position, 'ru');
+  }
+
+  return getEmployeeFullName(left).localeCompare(getEmployeeFullName(right), 'ru');
+};
+
+export const isOrgRoleNode = (employee: OrgEmployee): boolean => employee.orgDisplayMode === 'role';
+
+export const getOrgNodeLabel = (employee: OrgEmployee): string =>
+  isOrgRoleNode(employee) ? employee.position : getEmployeeFullName(employee);
+
+export const collectExpandedIdsUpToDepth = (
+  nodes: OrgTreeNode[],
+  maxDepth: number,
+  depth = 0,
+  acc = new Set<string>()
+): Set<string> => {
+  for (const node of nodes) {
+    if (node.children.length > 0 && depth < maxDepth) {
+      acc.add(node.employee.id);
+      collectExpandedIdsUpToDepth(node.children, maxDepth, depth + 1, acc);
+    }
+  }
+
+  return acc;
+};
+
+export const collectAllExpandableIds = (nodes: OrgTreeNode[], acc = new Set<string>()): Set<string> => {
+  for (const node of nodes) {
+    if (node.children.length > 0) {
+      acc.add(node.employee.id);
+      collectAllExpandableIds(node.children, acc);
+    }
+  }
+
+  return acc;
+};
+
 export const buildOrgTree = (employees: OrgEmployee[]): OrgTreeNode[] => {
   const byId = new Map(employees.map((employee) => [employee.id, employee]));
   const childrenByManager = new Map<string, OrgEmployee[]>();
@@ -32,7 +79,7 @@ export const buildOrgTree = (employees: OrgEmployee[]): OrgTreeNode[] => {
   const buildNode = (employee: OrgEmployee): OrgTreeNode => ({
     employee,
     children: (childrenByManager.get(employee.id) || [])
-      .sort((left, right) => getEmployeeFullName(left).localeCompare(getEmployeeFullName(right), 'ru'))
+      .sort(compareOrgEmployees)
       .map(buildNode),
   });
 

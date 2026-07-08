@@ -22,6 +22,7 @@ export interface Employee {
   updatedAt: string;
   userRole?: 'ADMIN' | 'USER'; // Role from users table
   managerId?: string | null;
+  orgDisplayMode?: 'person' | 'role';
 }
 
 export interface OrgEmployee {
@@ -33,6 +34,7 @@ export interface OrgEmployee {
   department: string;
   photo?: string;
   managerId?: string | null;
+  orgDisplayMode?: 'person' | 'role';
 }
 
 export interface OrgTreeNode {

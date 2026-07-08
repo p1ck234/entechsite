@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 import { ensureEmployeesOrgSchema } from './ensure-schema';
-import { mapOrgEmployee, wouldCreateManagerCycle } from './org-structure';
+import { mapOrgEmployee, ORG_EMPLOYEE_SELECT, wouldCreateManagerCycle } from './org-structure';
 
 export class EmployeeManagerError extends Error {
   status: number;
@@ -55,7 +55,7 @@ export const updateEmployeeManager = async (
   }
 
   const updated = await pool.query(
-    `SELECT e.id, e.first_name, e.last_name, e.middle_name, e.position, e.department, e.photo, e.manager_id
+    `SELECT ${ORG_EMPLOYEE_SELECT}
      FROM employees e
      WHERE e.id = $1`,
     [employeeId]

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, Network, Loader2, Building2, GitBranch } from 'lucide-react';
+import { Search, Network, Loader2, Building2, GitBranch, ListTree, LayoutGrid, Plus } from 'lucide-react';
 import { orgStructureAPI } from '../api/client';
 import { OrgEmployee, OrgStructureResponse, OrgViewMode } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -8,15 +8,18 @@ import OrgDepartmentChart from '../components/OrgDepartmentChart';
 import CompanyOrgChart from '../components/CompanyOrgChart';
 import {
   employeeMatchesSearch,
-  getOrgEmployeeName,
 } from '../components/OrgChart';
 import { useAuth } from '../contexts/AuthContext';
 import {
   buildDepartmentGroups,
   buildOrgTree,
   canAssignManager,
+  collectAllExpandableIds,
+  collectExpandedIdsUpToDepth,
   countManagerLinks,
   getDirectReports,
+  getOrgNodeLabel,
+  isOrgRoleNode,
 } from '../utils/orgStructure';
 
 const OrgStructure: React.FC = () => {
@@ -34,6 +37,11 @@ const OrgStructure: React.FC = () => {
   const [assigning, setAssigning] = useState(false);
   const [managerDraft, setManagerDraft] = useState('');
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [desktopLayout, setDesktopLayout] = useState<'chart' | 'list'>('list');
+  const [chartScale, setChartScale] = useState(0.75);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [showAddRole, setShowAddRole] = useState(false);
+  const [roleForm, setRoleForm] = useState({ position: '', department: '', managerId: '' });
 
   const loadTree = useCallback(async () => {
     const response = await orgStructureAPI.getTree();
@@ -83,6 +91,20 @@ const OrgStructure: React.FC = () => {
     () => (data ? buildDepartmentGroups(data.employees) : []),
     [data]
   );
+
+  const listRoots = useMemo(
+    () => (viewMode === 'departments' ? departmentGroups.flatMap((group) => group.roots) : hierarchyRoots),
+    [viewMode, departmentGroups, hierarchyRoots]
+  );
+
+  useEffect(() => {
+    if (listRoots.length === 0) {
+      setExpandedIds(new Set());
+      return;
+    }
+
+    setExpandedIds(collectExpandedIdsUpToDepth(listRoots, 2));
+  }, [listRoots]);
 
   const managerLinksCount = useMemo(
     () => (data ? countManagerLinks(data.employees) : 0),
@@ -285,6 +307,97 @@ const OrgStructure: React.FC = () => {
     [data]
   );
 
+  const handleToggleExpand = useCallback((employeeId: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(employeeId)) {
+        next.delete(employeeId);
+      } else {
+        next.add(employeeId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleExpandAll = useCallback(() => {
+    setExpandedIds(collectAllExpandableIds(listRoots));
+  }, [listRoots]);
+
+  const handleCollapseAll = useCallback(() => {
+    setExpandedIds(new Set());
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    setChartScale((prev) => Math.min(1.25, Number((prev + 0.1).toFixed(2))));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setChartScale((prev) => Math.max(0.5, Number((prev - 0.1).toFixed(2))));
+  }, []);
+
+  const handleToggleDisplayMode = async () => {
+    if (!selectedEmployee || assigning) {
+      return;
+    }
+
+    const nextMode = isOrgRoleNode(selectedEmployee) ? 'person' : 'role';
+    setAssigning(true);
+    setActionMessage(null);
+
+    try {
+      const response = await orgStructureAPI.updateDisplayMode(selectedEmployee.id, nextMode);
+      await loadTree();
+      setSelectedEmployee(response.employee);
+      setActionMessage({
+        type: 'success',
+        text: nextMode === 'role' ? 'На схеме показывается только должность' : 'На схеме показывается сотрудник',
+      });
+    } catch (err: any) {
+      setActionMessage({
+        type: 'error',
+        text: err.message || err.response?.data?.message || 'Не удалось изменить режим отображения',
+      });
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleCreateRole = async () => {
+    if (!roleForm.position.trim() || !roleForm.department.trim() || assigning) {
+      return;
+    }
+
+    setAssigning(true);
+    setActionMessage(null);
+
+    try {
+      const response = await orgStructureAPI.createRole({
+        position: roleForm.position.trim(),
+        department: roleForm.department.trim(),
+        managerId: roleForm.managerId || selectedEmployee?.id || null,
+      });
+      await loadTree();
+      setSelectedEmployee(response.employee);
+      setRoleForm({ position: '', department: '', managerId: '' });
+      setShowAddRole(false);
+      setActionMessage({ type: 'success', text: 'Роль добавлена на схему' });
+    } catch (err: any) {
+      setActionMessage({
+        type: 'error',
+        text: err.message || err.response?.data?.message || 'Не удалось добавить роль',
+      });
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const departmentOptions = useMemo(
+    () => [...new Set(data?.employees.map((employee) => employee.department).filter(Boolean) || [])].sort((a, b) =>
+      a.localeCompare(b, 'ru')
+    ),
+    [data]
+  );
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -308,6 +421,8 @@ const OrgStructure: React.FC = () => {
     draggingId,
     dropTargetId,
     dropInvalid,
+    expandedIds,
+    onToggleExpand: handleToggleExpand,
     onSelect: setSelectedEmployee,
     onDragStart: handleDragStart,
     onDragEnd: handleDragEnd,
@@ -347,7 +462,7 @@ const OrgStructure: React.FC = () => {
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => setViewMode('company')}
@@ -372,6 +487,52 @@ const OrgStructure: React.FC = () => {
           <Building2 className="h-4 w-4" />
           По отделам
         </button>
+
+        <span className="hidden h-6 w-px bg-pastel-200 sm:block" />
+
+        <button
+          type="button"
+          onClick={() => setDesktopLayout('list')}
+          className={`hidden items-center gap-2 rounded-xl px-3 py-2 text-sm md:inline-flex ${
+            desktopLayout === 'list'
+              ? 'bg-pastel-800 text-white'
+              : 'border border-pastel-200 bg-white text-pastel-700'
+          }`}
+        >
+          <ListTree className="h-4 w-4" />
+          Список
+        </button>
+        <button
+          type="button"
+          onClick={() => setDesktopLayout('chart')}
+          className={`hidden items-center gap-2 rounded-xl px-3 py-2 text-sm md:inline-flex ${
+            desktopLayout === 'chart'
+              ? 'bg-pastel-800 text-white'
+              : 'border border-pastel-200 bg-white text-pastel-700'
+          }`}
+        >
+          <LayoutGrid className="h-4 w-4" />
+          Схема
+        </button>
+
+        {desktopLayout === 'chart' && (
+          <>
+            <button
+              type="button"
+              onClick={handleExpandAll}
+              className="hidden rounded-xl border border-pastel-200 px-3 py-2 text-xs text-pastel-600 hover:bg-pastel-50 md:inline-block"
+            >
+              Развернуть всё
+            </button>
+            <button
+              type="button"
+              onClick={handleCollapseAll}
+              className="hidden rounded-xl border border-pastel-200 px-3 py-2 text-xs text-pastel-600 hover:bg-pastel-50 md:inline-block"
+            >
+              Свернуть
+            </button>
+          </>
+        )}
       </div>
 
       {actionMessage && (
@@ -394,7 +555,7 @@ const OrgStructure: React.FC = () => {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
-          <div className="hidden rounded-2xl border border-pastel-200 bg-white p-2 md:block">
+          <div className={`rounded-2xl border border-pastel-200 bg-white p-2 ${desktopLayout === 'chart' ? 'hidden md:block' : 'hidden'}`}>
             {viewMode === 'company' ? (
               <CompanyOrgChart
                 companyName={data.companyName}
@@ -402,6 +563,9 @@ const OrgStructure: React.FC = () => {
                 totalEmployees={data.total}
                 managerLinksCount={managerLinksCount}
                 dropTargetCompany={dropTargetCompany}
+                chartScale={chartScale}
+                onZoomIn={handleZoomIn}
+                onZoomOut={handleZoomOut}
                 getDirectReportsCount={getDirectReportsCount}
                 onDragOverCompany={handleDragOverCompany}
                 onDragLeaveCompany={handleDragLeaveCompany}
@@ -418,14 +582,14 @@ const OrgStructure: React.FC = () => {
             )}
           </div>
 
-          <div className="rounded-3xl border border-pastel-200 bg-white/80 p-4 md:hidden">
-            {hierarchyRoots.length === 0 ? (
+          <div className={`rounded-2xl border border-pastel-200 bg-white p-4 block ${desktopLayout === 'chart' ? 'md:hidden' : ''}`}>
+            {listRoots.length === 0 ? (
               <div className="py-8 text-center text-sm text-pastel-500">
                 Нет данных для отображения иерархии
               </div>
             ) : (
               <OrgMobileTree
-                roots={viewMode === 'departments' ? departmentGroups.flatMap((group) => group.roots) : hierarchyRoots}
+                roots={listRoots}
                 searchQuery={searchQuery}
                 selectedId={selectedEmployee?.id || null}
                 onSelect={setSelectedEmployee}
@@ -437,10 +601,15 @@ const OrgStructure: React.FC = () => {
         <aside className="self-start rounded-3xl border border-pastel-200 bg-white/90 p-5 xl:sticky xl:top-6 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
           {selectedEmployee ? (
             <div>
-              <div className="text-sm text-pastel-500">Выбран сотрудник</div>
+              <div className="text-sm text-pastel-500">
+                {isOrgRoleNode(selectedEmployee) ? 'Роль на схеме' : 'Выбран сотрудник'}
+              </div>
               <h2 className="mt-1 text-xl font-bold text-pastel-900">
-                {getOrgEmployeeName(selectedEmployee)}
+                {getOrgNodeLabel(selectedEmployee)}
               </h2>
+              {isOrgRoleNode(selectedEmployee) && (
+                <p className="mt-1 text-xs text-pastel-500">Без привязки к аккаунту в портале</p>
+              )}
               <dl className="mt-4 space-y-3 text-sm">
                 <div>
                   <dt className="text-pastel-500">Должность</dt>
@@ -454,7 +623,7 @@ const OrgStructure: React.FC = () => {
                   <dt className="text-pastel-500">Руководитель</dt>
                   <dd className="font-medium text-pastel-800">
                     {selectedEmployee.managerId
-                      ? getOrgEmployeeName(
+                      ? getOrgNodeLabel(
                           data.employees.find((employee) => employee.id === selectedEmployee.managerId) ||
                             selectedEmployee
                         )
@@ -465,6 +634,77 @@ const OrgStructure: React.FC = () => {
 
               {isAdmin && (
                 <div className="mt-5 space-y-3 border-t border-pastel-200 pt-4">
+                  <button
+                    type="button"
+                    onClick={handleToggleDisplayMode}
+                    disabled={assigning}
+                    className="w-full rounded-xl border border-pastel-200 px-4 py-2 text-sm text-pastel-700 hover:bg-pastel-50"
+                  >
+                    {isOrgRoleNode(selectedEmployee)
+                      ? 'Показывать как сотрудника'
+                      : 'Показывать только должность'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddRole((prev) => !prev);
+                      setRoleForm((prev) => ({
+                        ...prev,
+                        managerId: selectedEmployee.id,
+                        department: selectedEmployee.department || prev.department,
+                      }));
+                    }}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-pastel-200 px-4 py-2 text-sm text-pastel-700 hover:bg-pastel-50"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Добавить роль подчинения
+                  </button>
+
+                  {showAddRole && (
+                    <div className="space-y-2 rounded-xl border border-pastel-200 bg-pastel-50/60 p-3">
+                      <input
+                        type="text"
+                        value={roleForm.position}
+                        onChange={(event) => setRoleForm((prev) => ({ ...prev, position: event.target.value }))}
+                        placeholder="Должность, напр. электромонтажник"
+                        className="input-field"
+                      />
+                      <select
+                        value={roleForm.department}
+                        onChange={(event) => setRoleForm((prev) => ({ ...prev, department: event.target.value }))}
+                        className="input-field"
+                      >
+                        <option value="">Отдел</option>
+                        {departmentOptions.map((department) => (
+                          <option key={department} value={department}>
+                            {department}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={roleForm.managerId}
+                        onChange={(event) => setRoleForm((prev) => ({ ...prev, managerId: event.target.value }))}
+                        className="input-field"
+                      >
+                        <option value="">Руководитель</option>
+                        {managerOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {getOrgNodeLabel(option)}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleCreateRole}
+                        disabled={assigning || !roleForm.position.trim() || !roleForm.department.trim()}
+                        className="btn-primary w-full"
+                      >
+                        Сохранить роль
+                      </button>
+                    </div>
+                  )}
+
                   <label htmlFor="managerDraft" className="block text-sm font-medium text-pastel-700">
                     Назначить руководителя
                   </label>
@@ -478,7 +718,7 @@ const OrgStructure: React.FC = () => {
                     <option value="">К компании (верхний уровень)</option>
                     {managerOptions.map((option) => (
                       <option key={option.id} value={option.id}>
-                        {getOrgEmployeeName(option)}
+                        {getOrgNodeLabel(option)}
                         {option.position ? ` — ${option.position}` : ''}
                         {option.department ? ` (${option.department})` : ''}
                       </option>

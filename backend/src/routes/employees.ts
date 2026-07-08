@@ -3,7 +3,7 @@ import { body, validationResult, query } from 'express-validator';
 import { pool } from '../db/pool';
 import bcrypt from 'bcryptjs';
 import { authenticateToken, requireAdmin } from '../middleware/auth';
-import { wouldCreateManagerCycle, buildOrgTree, mapOrgEmployee } from '../utils/org-structure';
+import { buildOrgTree, mapOrgEmployee, ORG_EMPLOYEE_SELECT, wouldCreateManagerCycle } from '../utils/org-structure';
 import { ensureEmployeesOrgSchema } from '../utils/ensure-schema';
 import { EmployeeManagerError, updateEmployeeManager } from '../utils/employee-manager';
 
@@ -162,7 +162,7 @@ router.get('/org-tree', authenticateToken, async (_req: any, res: any) => {
     await ensureEmployeesOrgSchema(pool);
 
     const result = await pool.query(
-      `SELECT e.id, e.first_name, e.last_name, e.middle_name, e.position, e.department, e.photo, e.manager_id
+      `SELECT ${ORG_EMPLOYEE_SELECT}
        FROM employees e
        WHERE e.is_active = true AND e.status = 'APPROVED'
        ORDER BY e.last_name ASC, e.first_name ASC`

@@ -9,6 +9,7 @@ export interface OrgEmployeeRow {
   department: string;
   photo?: string | null;
   manager_id?: number | string | null;
+  org_display_mode?: string | null;
 }
 
 export interface OrgEmployee {
@@ -20,12 +21,25 @@ export interface OrgEmployee {
   department: string;
   photo?: string;
   managerId?: string | null;
+  orgDisplayMode?: 'person' | 'role';
 }
 
 export interface OrgTreeNode {
   employee: OrgEmployee;
   children: OrgTreeNode[];
 }
+
+export const ORG_EMPLOYEE_SELECT = `
+  e.id,
+  e.first_name,
+  e.last_name,
+  e.middle_name,
+  e.position,
+  e.department,
+  e.photo,
+  e.manager_id,
+  COALESCE(e.org_display_mode, 'person') AS org_display_mode
+`;
 
 export const mapOrgEmployee = (row: OrgEmployeeRow): OrgEmployee => ({
   id: String(row.id),
@@ -36,7 +50,23 @@ export const mapOrgEmployee = (row: OrgEmployeeRow): OrgEmployee => ({
   department: row.department,
   photo: row.photo || undefined,
   managerId: row.manager_id ? String(row.manager_id) : null,
+  orgDisplayMode: row.org_display_mode === 'role' ? 'role' : 'person',
 });
+
+const compareOrgEmployees = (left: OrgEmployee, right: OrgEmployee): number => {
+  const leftIsRole = left.orgDisplayMode === 'role';
+  const rightIsRole = right.orgDisplayMode === 'role';
+
+  if (leftIsRole !== rightIsRole) {
+    return leftIsRole ? 1 : -1;
+  }
+
+  if (leftIsRole && rightIsRole) {
+    return left.position.localeCompare(right.position, 'ru');
+  }
+
+  return getEmployeeFullName(left).localeCompare(getEmployeeFullName(right), 'ru');
+};
 
 export const getEmployeeFullName = (employee: OrgEmployee): string =>
   [employee.lastName, employee.firstName, employee.middleName].filter(Boolean).join(' ');
@@ -59,7 +89,7 @@ export const buildOrgTree = (employees: OrgEmployee[]): OrgTreeNode[] => {
   const buildNode = (employee: OrgEmployee): OrgTreeNode => ({
     employee,
     children: (childrenByManager.get(employee.id) || [])
-      .sort((left, right) => getEmployeeFullName(left).localeCompare(getEmployeeFullName(right), 'ru'))
+      .sort(compareOrgEmployees)
       .map(buildNode),
   });
 
@@ -71,7 +101,7 @@ export const buildOrgTree = (employees: OrgEmployee[]): OrgTreeNode[] => {
 
       return !byId.has(employee.managerId) || employee.managerId === employee.id;
     })
-    .sort((left, right) => getEmployeeFullName(left).localeCompare(getEmployeeFullName(right), 'ru'))
+    .sort(compareOrgEmployees)
     .map(buildNode);
 
   return roots;

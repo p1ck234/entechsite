@@ -18,6 +18,8 @@ interface OrgDepartmentChartProps {
   draggingId: string | null;
   dropTargetId: string | null;
   dropInvalid: boolean;
+  expandedIds: Set<string>;
+  onToggleExpand: (employeeId: string) => void;
   onSelect: (employee: OrgDepartmentGroup['employees'][number]) => void;
   onDragStart: (employeeId: string) => void;
   onDragEnd: () => void;

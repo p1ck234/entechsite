@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { OrgEmployee, OrgTreeNode } from '../types';
-import { countDirectReports, formatDepartmentLabel } from '../utils/orgStructure';
-import { employeeMatchesSearch, getOrgEmployeeName, treeNodeHasMatch } from './OrgChart';
+import { countDirectReports, formatDepartmentLabel, getOrgNodeLabel, isOrgRoleNode } from '../utils/orgStructure';
+import { employeeMatchesSearch, treeNodeHasMatch } from './OrgChart';
 import ImageWithLoader from './ImageWithLoader';
 
 const AVATAR_OPTIONS = {
@@ -80,6 +80,7 @@ const OrgMobileTreeNode: React.FC<OrgMobileTreeNodeProps> = ({
   }
 
   const initials = `${employee.firstName?.charAt(0) || '?'}${employee.lastName?.charAt(0) || '?'}`;
+  const isRole = isOrgRoleNode(employee);
 
   return (
     <div>
@@ -95,8 +96,9 @@ const OrgMobileTreeNode: React.FC<OrgMobileTreeNodeProps> = ({
           <div
             className={`
               flex items-center gap-2 rounded-2xl border px-2 py-2 transition-colors
-              ${isSelected ? 'border-primary-500 bg-primary-50' : 'border-pastel-200 bg-white'}
+              ${isSelected ? 'border-pastel-500 bg-pastel-50' : 'border-pastel-200 bg-white'}
               ${searchQuery.trim() && !isMatch ? 'opacity-50' : ''}
+              ${isRole ? 'border-dashed bg-pastel-50/80' : ''}
             `}
           >
             {hasChildren ? (
@@ -118,24 +120,28 @@ const OrgMobileTreeNode: React.FC<OrgMobileTreeNodeProps> = ({
               onClick={() => onSelect(employee)}
               className="flex min-w-0 flex-1 items-center gap-3 text-left"
             >
-              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-primary-500 flex items-center justify-center">
-                {employee.photo ? (
+              <div className={`h-10 w-10 shrink-0 overflow-hidden rounded-full flex items-center justify-center ${isRole ? 'border border-dashed border-pastel-300 bg-white' : 'bg-pastel-800'}`}>
+                {!isRole && employee.photo ? (
                   <ImageWithLoader
                     src={employee.photo}
-                    alt={getOrgEmployeeName(employee)}
+                    alt={getOrgNodeLabel(employee)}
                     className="h-10 w-10 rounded-full object-cover"
                     imageOptions={AVATAR_OPTIONS}
                   />
-                ) : (
+                ) : !isRole ? (
                   <span className="text-xs font-bold text-white">{initials}</span>
+                ) : (
+                  <span className="text-[10px] font-semibold uppercase text-pastel-500">Роль</span>
                 )}
               </div>
 
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-pastel-900">
-                  {getOrgEmployeeName(employee)}
+                  {getOrgNodeLabel(employee)}
                 </div>
-                <div className="truncate text-xs text-pastel-600">{employee.position}</div>
+                {!isRole && (
+                  <div className="truncate text-xs text-pastel-600">{employee.position}</div>
+                )}
                 <div className="truncate text-[11px] text-pastel-500">{formatDepartmentLabel(employee.department)}</div>
               </div>
 

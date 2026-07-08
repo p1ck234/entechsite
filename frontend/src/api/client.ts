@@ -254,6 +254,7 @@ const mapEmployeeToOrg = (employee: Employee): OrgEmployee => ({
   department: employee.department,
   photo: employee.photo,
   managerId: employee.managerId || null,
+  orgDisplayMode: employee.orgDisplayMode,
 });
 
 const fetchAllApprovedEmployees = async (): Promise<Employee[]> => {
@@ -366,6 +367,29 @@ export const orgStructureAPI = {
     }
 
     throw new Error(extractApiErrorMessage(lastError, 'Не удалось сохранить руководителя'));
+  },
+
+  createRole: async (payload: {
+    position: string;
+    department: string;
+    managerId?: string | null;
+  }): Promise<{ message: string; employee: OrgEmployee }> => {
+    const response = await api.post('/org-structure/roles', {
+      position: payload.position,
+      department: payload.department,
+      managerId: payload.managerId ? Number(payload.managerId) : null,
+    });
+    return response.data;
+  },
+
+  updateDisplayMode: async (
+    employeeId: string,
+    orgDisplayMode: 'person' | 'role'
+  ): Promise<{ message: string; employee: OrgEmployee }> => {
+    const response = await api.patch(`/org-structure/employees/${employeeId}/display-mode`, {
+      orgDisplayMode,
+    });
+    return response.data;
   },
 };
 
