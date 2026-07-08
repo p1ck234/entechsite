@@ -1,5 +1,5 @@
-import React from 'react';
-import { Briefcase, ChevronDown, ChevronRight, GripVertical, Building2 } from 'lucide-react';
+import React, { useRef } from 'react';
+import { Briefcase, Building2 } from 'lucide-react';
 import { OrgEmployee, OrgTreeNode } from '../types';
 import ImageWithLoader from './ImageWithLoader';
 import { formatDepartmentLabel, getOrgNodeLabel, groupOrgNodesByDepartment, getDepartmentGroupKey, isOrgRoleNode } from '../utils/orgStructure';
@@ -60,7 +60,6 @@ interface OrgEmployeeCardProps {
   compact?: boolean;
   hasChildren?: boolean;
   isExpanded?: boolean;
-  onToggleExpand?: (employeeId: string) => void;
   onSelect: (employee: OrgEmployee) => void;
   onDragStart: (employeeId: string) => void;
   onDragEnd: () => void;
@@ -82,9 +81,7 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
   isExecutiveRoot = false,
   hideDepartmentOnCard = false,
   compact = false,
-  hasChildren = false,
   isExpanded = true,
-  onToggleExpand,
   onSelect,
   onDragStart,
   onDragEnd,
@@ -95,12 +92,14 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
   const isRole = isOrgRoleNode(employee);
   const departmentLabel = formatDepartmentLabel(employee.department);
   const initials = `${employee.firstName?.charAt(0) || '?'}${employee.lastName?.charAt(0) || '?'}`;
+  const isDraggable = isAdmin && !isRole;
+  const dragHappenedRef = useRef(false);
 
   return (
     <div
       className={`
         relative shrink-0
-        ${compact ? 'w-full py-1' : ''}
+        ${compact ? 'w-full' : ''}
         ${isDragging ? 'scale-95 opacity-40' : ''}
         ${isDropTarget && !isDropInvalid ? 'ring-2 ring-primary-300 ring-offset-2' : ''}
         ${isDropTarget && isDropInvalid ? 'ring-2 ring-red-300 ring-offset-2' : ''}
@@ -119,42 +118,35 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
         onDrop(event, employee.id);
       }}
     >
-      {isAdmin && !isRole && (
-        <div
-          draggable
-          onDragStart={(event) => {
-            event.dataTransfer.effectAllowed = 'move';
-            event.dataTransfer.setData('text/employee-id', employee.id);
-            onDragStart(employee.id);
-          }}
-          onDragEnd={onDragEnd}
-          className={`absolute top-1/2 z-10 -translate-y-1/2 cursor-grab rounded-lg border border-slate-200 bg-white p-1 text-slate-400 shadow-sm hover:border-slate-300 active:cursor-grabbing ${compact ? 'left-0' : '-left-2'}`}
-          title="Перетащите на карточку руководителя"
-        >
-          <GripVertical className="h-4 w-4" />
-        </div>
-      )}
-
-      {hasChildren && onToggleExpand && (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggleExpand(employee.id);
-          }}
-          className={`absolute top-1/2 z-10 -translate-y-1/2 rounded-lg border border-slate-200 bg-white p-1 text-slate-500 shadow-sm hover:border-slate-300 hover:bg-slate-50 ${compact ? 'right-0' : '-right-2'}`}
-          aria-label={isExpanded ? 'Свернуть ветку' : 'Развернуть ветку'}
-        >
-          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        </button>
-      )}
-
       <button
         type="button"
-        onClick={() => onSelect(employee)}
+        draggable={isDraggable}
+        onDragStart={(event) => {
+          if (!isDraggable) {
+            return;
+          }
+          dragHappenedRef.current = true;
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/employee-id', employee.id);
+          onDragStart(employee.id);
+        }}
+        onDragEnd={() => {
+          onDragEnd();
+          window.setTimeout(() => {
+            dragHappenedRef.current = false;
+          }, 0);
+        }}
+        onClick={() => {
+          if (dragHappenedRef.current) {
+            return;
+          }
+          onSelect(employee);
+        }}
         data-employee-id={employee.id}
+        title={isDraggable ? 'Нажмите — открыть. Перетащите на карточку руководителя.' : undefined}
         className={`
           group text-left transition-all duration-200
+          ${isDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}
           ${isRole
             ? `${compact ? 'w-full' : 'w-[200px]'} rounded-xl border border-dashed border-slate-300 bg-slate-50/80 px-3 py-3 hover:border-slate-400 hover:bg-white`
             : `${compact ? 'w-full' : 'w-[240px]'} rounded-xl border bg-white px-3 py-2.5 shadow-sm hover:shadow-md ${
@@ -357,9 +349,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
       isExecutiveRoot={isExecutiveRoot}
       hideDepartmentOnCard={hideDepartmentOnCard}
       compact={hideDepartmentOnCard}
-      hasChildren={hasChildren}
       isExpanded={isExpanded}
-      onToggleExpand={onToggleExpand}
       onSelect={onSelect}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
