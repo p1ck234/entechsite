@@ -339,14 +339,20 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
     onDrop,
   };
 
+  const branchCount = useDepartmentBranches ? departmentGroups!.length : visibleChildren.length;
+
   const renderChildNode = (child: OrgTreeNode) => (
-    <OrgConnectorDrop key={child.employee.id}>
+    <OrgConnectorDrop key={child.employee.id} showStem={branchCount > 1}>
       <OrgChartNode node={child} hideDepartmentOnCard={hideDepartmentOnCard} {...childNodeProps} />
     </OrgConnectorDrop>
   );
 
   const renderDepartmentGroup = (group: { department: string | null; nodes: OrgTreeNode[] }) => (
-    <OrgDepartmentBranch key={getDepartmentGroupKey(group.department)} department={group.department}>
+    <OrgDepartmentBranch
+      key={getDepartmentGroupKey(group.department)}
+      department={group.department}
+      showStem={branchCount > 1}
+    >
       {group.nodes.map((child) => (
         <OrgChartNode key={child.employee.id} node={child} hideDepartmentOnCard {...childNodeProps} />
       ))}
@@ -404,9 +410,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
       {card}
 
       {hasChildren && isExpanded && (
-        <OrgConnectorChildren
-          childCount={useDepartmentBranches ? departmentGroups!.length : visibleChildren.length}
-        >
+        <OrgConnectorChildren childCount={branchCount}>
           {useDepartmentBranches
             ? departmentGroups!.map((group) => renderDepartmentGroup(group))
             : visibleChildren.map((child) => renderChildNode(child))}

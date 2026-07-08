@@ -193,7 +193,7 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
                 )}
               </div>
 
-              {roots.length > 0 && <OrgConnectorStem height={32} />}
+              {roots.length > 0 && <OrgConnectorStem height={20} />}
 
               {singleRoot ? (
                 <OrgChartNode
@@ -205,7 +205,11 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
               ) : (
                 <OrgConnectorChildren childCount={groupedRoots.length}>
                   {groupedRoots.map((group) => (
-                    <OrgDepartmentBranch key={group.department || '__none__'} department={group.department}>
+                    <OrgDepartmentBranch
+                      key={group.department || '__none__'}
+                      department={group.department}
+                      showStem={groupedRoots.length > 1}
+                    >
                       {group.nodes.map((root) => (
                         <OrgChartNode key={root.employee.id} node={root} hideDepartmentOnCard {...chartProps} />
                       ))}
