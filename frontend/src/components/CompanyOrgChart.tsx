@@ -1,9 +1,10 @@
 import React, { useEffect, useRef } from 'react';
-import { Building2, Network, ZoomIn, ZoomOut } from 'lucide-react';
+import { Building2, Hand, Network, ZoomIn, ZoomOut } from 'lucide-react';
 import { OrgTreeNode } from '../types';
 import { OrgChartNode } from './OrgChart';
 import OrgDepartmentBranch from './OrgDepartmentBranch';
 import { OrgConnectorChildren, OrgConnectorStem } from './OrgChartConnectors';
+import { useChartPan } from '../hooks/useChartPan';
 
 interface CompanyOrgChartProps {
   companyName: string;
@@ -62,8 +63,8 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
   onDragLeaveCompany,
   onDropOnCompany,
 }) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
   const initialScrollDone = useRef(false);
+  const pan = useChartPan(Boolean(draggingId));
 
   const chartProps = {
     searchQuery,
@@ -94,7 +95,7 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
       return;
     }
 
-    const container = scrollRef.current;
+    const container = pan.containerRef.current;
     if (!container) {
       return;
     }
@@ -104,35 +105,41 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
       container.scrollTop = 0;
       initialScrollDone.current = true;
     });
-  }, [roots, chartScale, searchQuery]);
+  }, [roots, chartScale, searchQuery, pan.containerRef]);
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-end gap-2 text-xs text-pastel-500">
-        <button
-          type="button"
-          onClick={onZoomOut}
-          className="inline-flex items-center gap-1 rounded-lg border border-pastel-200 px-2 py-1 hover:bg-pastel-50"
-          aria-label="Уменьшить"
-        >
-          <ZoomOut className="h-3.5 w-3.5" />
-        </button>
-        <span className="min-w-[3rem] text-center">{Math.round(chartScale * 100)}%</span>
-        <button
-          type="button"
-          onClick={onZoomIn}
-          className="inline-flex items-center gap-1 rounded-lg border border-pastel-200 px-2 py-1 hover:bg-pastel-50"
-          aria-label="Увеличить"
-        >
-          <ZoomIn className="h-3.5 w-3.5" />
-        </button>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-pastel-500">
+        <span className="inline-flex items-center gap-1.5">
+          <Hand className="h-3.5 w-3.5" />
+          Зажмите ЛКМ на фоне и перетаскивайте схему
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onZoomOut}
+            className="inline-flex items-center gap-1 rounded-lg border border-pastel-200 px-2 py-1 hover:bg-pastel-50"
+            aria-label="Уменьшить"
+          >
+            <ZoomOut className="h-3.5 w-3.5" />
+          </button>
+          <span className="min-w-[3rem] text-center">{Math.round(chartScale * 100)}%</span>
+          <button
+            type="button"
+            onClick={onZoomIn}
+            className="inline-flex items-center gap-1 rounded-lg border border-pastel-200 px-2 py-1 hover:bg-pastel-50"
+            aria-label="Увеличить"
+          >
+            <ZoomIn className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       <div
-        ref={scrollRef}
-        className="max-h-[calc(100vh-14rem)] overflow-auto pb-6"
+        ref={pan.containerRef}
+        onMouseDown={pan.onMouseDown}
+        className={`max-h-[calc(100vh-14rem)] overflow-auto pb-6 ${pan.className}`}
       >
-        {/* w-max — полная ширина дерева для прокрутки; min-w-full — центрирование узкой схемы */}
         <div
           className="box-border w-max min-w-full px-4 py-4"
           style={{ zoom: chartScale }}
