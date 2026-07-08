@@ -320,7 +320,8 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
     );
 
   const useSideLayout = hideDepartmentOnCard && hasChildren && childrenSameDepartment;
-  const useDepartmentBranches = branchChildrenByDepartment && hasChildren && !useSideLayout;
+  const useDepartmentBranches =
+    branchChildrenByDepartment && hasChildren && !useSideLayout && !hideDepartmentOnCard;
   const departmentGroups = useDepartmentBranches ? groupOrgNodesByDepartment(visibleChildren) : null;
 
   const childNodeProps = {
