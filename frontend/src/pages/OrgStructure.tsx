@@ -394,7 +394,7 @@ const OrgStructure: React.FC = () => {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
-          <div className="hidden rounded-3xl border border-pastel-200 bg-white/80 p-6 md:block">
+          <div className="hidden rounded-3xl border border-pastel-200 bg-gradient-to-b from-pastel-50/60 via-white to-white p-2 shadow-sm md:block">
             {viewMode === 'company' ? (
               <CompanyOrgChart
                 companyName={data.companyName}

@@ -53,6 +53,7 @@ interface OrgEmployeeCardProps {
   isDropInvalid: boolean;
   directReportsCount?: number;
   isDepartmentHead?: boolean;
+  isExecutiveRoot?: boolean;
   onSelect: (employee: OrgEmployee) => void;
   onDragStart: (employeeId: string) => void;
   onDragEnd: () => void;
@@ -71,6 +72,7 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
   isDropInvalid,
   directReportsCount = 0,
   isDepartmentHead = false,
+  isExecutiveRoot = false,
   onSelect,
   onDragStart,
   onDragEnd,
@@ -124,44 +126,49 @@ export const OrgEmployeeCard: React.FC<OrgEmployeeCardProps> = ({
         onClick={() => onSelect(employee)}
         data-employee-id={employee.id}
         className={`
-          w-48 sm:w-56 rounded-2xl border bg-white px-4 py-3 text-left shadow-sm transition-all
-          hover:-translate-y-0.5 hover:shadow-md
-          ${isSelected ? 'border-primary-500 ring-2 ring-primary-200' : 'border-pastel-200'}
+          w-52 sm:w-60 rounded-2xl border bg-white/95 px-4 py-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition-all
+          hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(15,23,42,0.1)]
+          ${isExecutiveRoot ? 'border-primary-300 ring-1 ring-primary-100' : 'border-pastel-200/90'}
+          ${isSelected ? 'border-primary-500 ring-2 ring-primary-200' : ''}
           ${isDimmed ? 'opacity-35' : 'opacity-100'}
         `}
       >
-        <div className="flex flex-col items-center gap-2">
+        <div className="flex flex-col items-center gap-2.5">
           {isDepartmentHead && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
               Руководитель отдела
             </span>
           )}
-          <div className="relative h-14 w-14 overflow-hidden rounded-full bg-primary-500 flex items-center justify-center">
+          <div
+            className={`relative flex items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary-500 to-primary-600 shadow-md ${
+              isExecutiveRoot ? 'h-16 w-16' : 'h-14 w-14'
+            }`}
+          >
             {employee.photo ? (
               <ImageWithLoader
                 src={employee.photo}
                 alt={getOrgEmployeeName(employee)}
-                className="h-14 w-14 rounded-full object-cover"
+                className={`rounded-full object-cover ${isExecutiveRoot ? 'h-16 w-16' : 'h-14 w-14'}`}
                 imageOptions={AVATAR_OPTIONS}
               />
             ) : (
-              <span className="text-sm font-bold text-white">{initials}</span>
+              <span className={`font-bold text-white ${isExecutiveRoot ? 'text-base' : 'text-sm'}`}>{initials}</span>
             )}
           </div>
           <div className="w-full text-center">
-            <div className="truncate text-sm font-semibold text-pastel-900">
+            <div className="text-sm font-semibold leading-snug text-pastel-900">
               {getOrgEmployeeName(employee)}
             </div>
-            <div className="truncate text-xs text-pastel-600">{employee.position}</div>
+            <div className="mt-0.5 text-xs leading-snug text-pastel-600">{employee.position}</div>
             <div
-              className="mt-1 flex items-start justify-center gap-1 text-[11px] font-medium leading-snug text-pastel-700"
+              className="mx-auto mt-2 inline-flex max-w-full items-center gap-1 rounded-full bg-pastel-50 px-2.5 py-1 text-[10px] font-medium text-pastel-700"
               title={departmentLabel}
             >
-              <Building2 className="mt-0.5 h-3 w-3 shrink-0 text-pastel-400" />
-              <span className="line-clamp-2 text-left">{departmentLabel}</span>
+              <Building2 className="h-3 w-3 shrink-0 text-pastel-400" />
+              <span className="truncate">{departmentLabel}</span>
             </div>
             {directReportsCount > 0 && (
-              <div className="mt-1 text-[11px] font-medium text-primary-600">
+              <div className="mt-2 inline-flex rounded-full bg-primary-50 px-2.5 py-0.5 text-[11px] font-semibold text-primary-700">
                 {directReportsCount} в подчинении
               </div>
             )}
@@ -181,6 +188,7 @@ interface OrgChartNodeProps {
   dropTargetId: string | null;
   dropInvalid: boolean;
   departmentHeadId?: string | null;
+  isExecutiveRoot?: boolean;
   getDirectReportsCount?: (employeeId: string) => number;
   onSelect: (employee: OrgEmployee) => void;
   onDragStart: (employeeId: string) => void;
@@ -199,6 +207,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
   dropTargetId,
   dropInvalid,
   departmentHeadId,
+  isExecutiveRoot = false,
   getDirectReportsCount,
   onSelect,
   onDragStart,
@@ -228,6 +237,7 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
         isDropInvalid={dropInvalid}
         directReportsCount={getDirectReportsCount?.(node.employee.id) ?? node.children.length}
         isDepartmentHead={departmentHeadId === node.employee.id}
+        isExecutiveRoot={isExecutiveRoot}
         onSelect={onSelect}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
@@ -237,18 +247,18 @@ export const OrgChartNode: React.FC<OrgChartNodeProps> = ({
       />
 
       {visibleChildren.length > 0 && (
-        <div className="mt-3 flex flex-col items-center">
-          <div className="h-4 w-px bg-pastel-300" />
-          <div className="relative flex flex-wrap items-start justify-center gap-6 pt-4">
+        <div className="mt-4 flex flex-col items-center">
+          <div className="h-5 w-px bg-gradient-to-b from-pastel-300 to-pastel-200" />
+          <div className="relative flex flex-wrap items-start justify-center gap-8 px-2 pt-5">
             {visibleChildren.length > 1 && (
               <div
-                className="pointer-events-none absolute top-0 h-px bg-pastel-300"
-                style={{ left: '12%', right: '12%' }}
+                className="pointer-events-none absolute top-0 h-px bg-gradient-to-r from-transparent via-pastel-300 to-transparent"
+                style={{ left: '10%', right: '10%' }}
               />
             )}
             {visibleChildren.map((child) => (
               <div key={child.employee.id} className="flex flex-col items-center">
-                <div className="h-4 w-px bg-pastel-300" />
+                <div className="h-5 w-px bg-pastel-300" />
                 <OrgChartNode
                   node={child}
                   searchQuery={searchQuery}

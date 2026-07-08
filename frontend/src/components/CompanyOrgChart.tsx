@@ -1,7 +1,9 @@
 import React from 'react';
+import { Building2, Network } from 'lucide-react';
 import { OrgTreeNode } from '../types';
 import { OrgChartNode } from './OrgChart';
 import { formatDepartmentLabel } from '../utils/orgStructure';
+import { OrgMultiRootBus, OrgVerticalLine } from './OrgChartConnectors';
 
 interface CompanyOrgChartProps {
   companyName: string;
@@ -66,66 +68,88 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
     onDrop,
   };
 
+  const singleRoot = roots.length === 1;
+
   return (
-    <div className="overflow-x-auto">
-      <div className="flex min-w-max flex-col items-center py-4">
-        <div
-          className={`rounded-2xl border-2 bg-primary-50 px-8 py-4 text-center shadow-sm transition-all ${
-            dropTargetCompany
-              ? 'border-green-400 ring-2 ring-green-200'
-              : 'border-primary-300'
-          } ${isAdmin && draggingId ? 'cursor-copy' : ''}`}
-          onDragOver={(event) => {
-            if (!isAdmin) {
-              return;
-            }
-            onDragOverCompany(event);
-          }}
-          onDragLeave={() => {
-            if (!isAdmin) {
-              return;
-            }
-            onDragLeaveCompany();
-          }}
-          onDrop={(event) => {
-            if (!isAdmin) {
-              return;
-            }
-            onDropOnCompany(event);
-          }}
-        >
-          <div className="text-xs font-semibold uppercase tracking-wide text-primary-600">Компания</div>
-          <div className="text-xl font-bold text-pastel-900">{companyName}</div>
-          <div className="mt-1 text-xs text-pastel-600">
-            {totalEmployees} сотрудников · {managerLinksCount} связей подчинения
+    <div className="overflow-x-auto pb-4">
+      <div className="mx-auto flex min-w-max flex-col items-center px-4 py-6">
+        <div className="relative flex w-full flex-col items-center">
+          {/* Корень дерева — компания */}
+          <div
+            className={`relative z-10 w-full max-w-md rounded-3xl border bg-gradient-to-br from-white via-primary-50/40 to-pastel-50 px-8 py-5 text-center shadow-[0_12px_40px_rgba(15,23,42,0.08)] transition-all ${
+              dropTargetCompany
+                ? 'border-green-400 ring-4 ring-green-100'
+                : 'border-primary-200/80'
+            } ${isAdmin && draggingId ? 'cursor-copy' : ''}`}
+            onDragOver={(event) => {
+              if (!isAdmin) {
+                return;
+              }
+              onDragOverCompany(event);
+            }}
+            onDragLeave={() => {
+              if (!isAdmin) {
+                return;
+              }
+              onDragLeaveCompany();
+            }}
+            onDrop={(event) => {
+              if (!isAdmin) {
+                return;
+              }
+              onDropOnCompany(event);
+            }}
+          >
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-500 text-white shadow-md">
+              <Building2 className="h-6 w-6" />
+            </div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary-600">Компания</div>
+            <div className="mt-1 text-2xl font-bold tracking-tight text-pastel-900">{companyName}</div>
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs text-pastel-600">
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-3 py-1 shadow-sm">
+                <Network className="h-3.5 w-3.5 text-primary-500" />
+                {totalEmployees} сотрудников
+              </span>
+              <span className="rounded-full bg-white/80 px-3 py-1 shadow-sm">
+                {managerLinksCount} связей
+              </span>
+            </div>
+            {isAdmin && draggingId && (
+              <div className="mt-3 rounded-xl bg-green-50 px-3 py-2 text-[11px] font-medium text-green-800">
+                Отпустите здесь — прикрепить к компании
+              </div>
+            )}
           </div>
-          {isAdmin && draggingId && (
-            <div className="mt-2 text-[11px] font-medium text-green-700">
-              Отпустите здесь — прикрепить к компании (верхний уровень)
+
+          {roots.length > 0 && (
+            <div className="flex flex-col items-center">
+              <OrgVerticalLine heightClass={singleRoot ? 'h-10' : 'h-8'} />
+              {!singleRoot && <OrgMultiRootBus columns={roots.length} />}
             </div>
           )}
-        </div>
 
-        {roots.length > 0 && (
-          <>
-            <div className="my-3 h-8 w-px bg-pastel-400" />
-            <div
-              className="pointer-events-none mb-2 h-px bg-pastel-400"
-              style={{ width: `${Math.min(roots.length * 200, 960)}px` }}
-            />
-          </>
-        )}
-
-        <div className="flex flex-wrap items-start justify-center gap-10">
-          {roots.map((root) => (
-            <div key={root.employee.id} className="flex flex-col items-center">
-              <div className="mb-1 max-w-[13rem] rounded-full bg-pastel-100 px-3 py-1 text-center text-[11px] font-semibold text-pastel-700">
-                {formatDepartmentLabel(root.employee.department)}
+          {/* Уровень под компанией */}
+          <div
+            className={`flex items-start justify-center gap-8 ${singleRoot ? 'flex-col items-center' : 'flex-wrap'}`}
+          >
+            {roots.map((root) => (
+              <div key={root.employee.id} className="flex flex-col items-center">
+                {!singleRoot && (
+                  <>
+                    <div className="mb-2 rounded-full border border-pastel-200 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-pastel-600 shadow-sm">
+                      {formatDepartmentLabel(root.employee.department)}
+                    </div>
+                    <OrgVerticalLine heightClass="h-4" />
+                  </>
+                )}
+                <OrgChartNode
+                  node={root}
+                  isExecutiveRoot={singleRoot}
+                  {...chartProps}
+                />
               </div>
-              <div className="mb-2 h-4 w-px bg-pastel-400" />
-              <OrgChartNode node={root} {...chartProps} />
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </div>
