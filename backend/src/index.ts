@@ -32,11 +32,19 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
 
+const API_FEATURES = [
+  'employees-manager-patch',
+  'org-structure-tree',
+  'bookings-module',
+];
+
 const healthPayload = () => ({
   status: 'OK',
   timestamp: new Date().toISOString(),
   port: PORT,
   environment: process.env.NODE_ENV || 'development',
+  features: API_FEATURES,
+  gitCommit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT || null,
 });
 
 // Railway health check — без middleware, чтобы отвечать сразу после listen()

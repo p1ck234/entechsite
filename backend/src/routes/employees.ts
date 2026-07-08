@@ -339,13 +339,27 @@ router.put('/:id', authenticateToken, [
   body('telegram').optional().isString(),
   body('photo').optional().isString(),
   body('isActive').optional().isBoolean(),
-  body('managerId').optional({ nullable: true }).isInt({ min: 1 }),
+  body('managerId').optional({ nullable: true, values: 'falsy' }).custom((value) => {
+    if (value === null || value === undefined || value === '') {
+      return true;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      throw new Error('Некорректный руководитель');
+    }
+
+    return true;
+  }),
   body('role').optional().isIn(['ADMIN', 'USER']) // Added role field
 ], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({
+        message: errors.array()[0]?.msg || 'Ошибка валидации',
+        errors: errors.array(),
+      });
     }
 
     if (req.user?.role !== 'ADMIN') {
@@ -357,6 +371,23 @@ router.put('/:id', authenticateToken, [
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'telegram')) {
       updateData.telegram = normalizeTelegramUsername(updateData.telegram);
+    }
+
+    const updateKeys = Object.keys(updateData).filter(
+      (key) => key !== 'role' && updateData[key] !== undefined
+    );
+
+    if (updateKeys.length === 1 && updateKeys[0] === 'managerId') {
+      const managerId =
+        updateData.managerId === null || updateData.managerId === '' || updateData.managerId === undefined
+          ? null
+          : String(updateData.managerId);
+
+      const employee = await updateEmployeeManager(pool, id, managerId);
+      return res.json({
+        message: 'Руководитель обновлён',
+        employee,
+      });
     }
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'managerId')) {

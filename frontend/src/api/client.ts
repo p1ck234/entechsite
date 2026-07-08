@@ -287,6 +287,33 @@ const buildTreeFromEmployees = async (): Promise<OrgStructureResponse> => {
   };
 };
 
+const extractApiErrorMessage = (error: any, fallback: string): string => {
+  const data = error?.response?.data;
+  if (!data) {
+    return error?.message || fallback;
+  }
+
+  if (typeof data.message === 'string' && data.message.trim()) {
+    return data.message;
+  }
+
+  const validationMessage = data.errors?.[0]?.msg;
+  if (typeof validationMessage === 'string' && validationMessage.trim()) {
+    return validationMessage;
+  }
+
+  if (typeof data.error === 'string' && data.error.trim()) {
+    return data.error;
+  }
+
+  const status = error?.response?.status;
+  if (status === 404) {
+    return 'Маршрут API не найден — нужен redeploy backend';
+  }
+
+  return fallback;
+};
+
 export const orgStructureAPI = {
   getTree: async (): Promise<OrgStructureResponse> => {
     const endpoints = ['/org-structure/tree', '/employees/org-tree'];
@@ -338,7 +365,7 @@ export const orgStructureAPI = {
       }
     }
 
-    throw lastError;
+    throw new Error(extractApiErrorMessage(lastError, 'Не удалось сохранить руководителя'));
   },
 };
 

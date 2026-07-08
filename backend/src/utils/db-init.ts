@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { ensureEmployeesOrgSchema } from './ensure-schema';
 
 export async function initializeDatabase(pool: Pool) {
   try {
@@ -513,6 +514,9 @@ export async function initializeDatabase(pool: Pool) {
       
       console.log('✅ Проверка колонок завершена');
     }
+
+    await ensureEmployeesOrgSchema(pool);
+    console.log('✅ Схема оргструктуры (manager_id) проверена');
     
     /*
       Автосоздание первого администратора отключено по запросу.

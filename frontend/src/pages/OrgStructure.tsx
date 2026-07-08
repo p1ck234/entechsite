@@ -146,7 +146,7 @@ const OrgStructure: React.FC = () => {
       const validationError = err.response?.data?.errors?.[0]?.msg;
       setActionMessage({
         type: 'error',
-        text: err.response?.data?.message || validationError || 'Не удалось сохранить связь',
+        text: err.message || err.response?.data?.message || validationError || 'Не удалось сохранить связь',
       });
     } finally {
       setAssigning(false);
@@ -243,7 +243,7 @@ const OrgStructure: React.FC = () => {
       const validationError = err.response?.data?.errors?.[0]?.msg;
       setActionMessage({
         type: 'error',
-        text: err.response?.data?.message || validationError || 'Не удалось настроить отдел',
+        text: err.message || err.response?.data?.message || validationError || 'Не удалось настроить отдел',
       });
     } finally {
       setAssigning(false);
