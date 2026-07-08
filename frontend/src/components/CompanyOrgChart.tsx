@@ -2,14 +2,8 @@ import React from 'react';
 import { Building2, Network } from 'lucide-react';
 import { OrgTreeNode } from '../types';
 import { OrgChartNode } from './OrgChart';
-import { getDepartmentTheme } from '../utils/orgDepartmentTheme';
 import OrgDepartmentBranch from './OrgDepartmentBranch';
-import {
-  ORG_CHART_COLUMN_GAP,
-  ORG_CHART_COLUMN_WIDTH,
-  OrgConnectorFork,
-  OrgConnectorStem,
-} from './OrgChartConnectors';
+import { OrgConnectorChildren, OrgConnectorStem } from './OrgChartConnectors';
 
 interface CompanyOrgChartProps {
   companyName: string;
@@ -77,14 +71,12 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
   const singleRoot = roots.length === 1;
 
   return (
-    <div className="overflow-x-auto pb-4">
-      <div className="mx-auto flex min-w-max flex-col items-center px-4 py-6">
-        <div className="relative flex w-full flex-col items-center">
+    <div className="overflow-x-auto pb-6">
+      <div className="mx-auto flex min-w-max flex-col items-center px-6 py-8">
+        <div className="flex w-full flex-col items-center">
           <div
-            className={`relative z-10 w-full max-w-md rounded-3xl border bg-gradient-to-br from-white via-primary-50/40 to-pastel-50 px-8 py-5 text-center shadow-[0_12px_40px_rgba(15,23,42,0.08)] transition-all ${
-              dropTargetCompany
-                ? 'border-green-400 ring-4 ring-green-100'
-                : 'border-primary-200/80'
+            className={`w-full max-w-sm rounded-2xl border bg-white px-6 py-5 text-center shadow-sm transition-all ${
+              dropTargetCompany ? 'border-pastel-500 ring-2 ring-pastel-200' : 'border-pastel-200'
             } ${isAdmin && draggingId ? 'cursor-copy' : ''}`}
             onDragOver={(event) => {
               if (!isAdmin) {
@@ -105,72 +97,48 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
               onDropOnCompany(event);
             }}
           >
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-500 text-white shadow-md">
-              <Building2 className="h-6 w-6" />
+            <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-pastel-800 text-white">
+              <Building2 className="h-5 w-5" />
             </div>
-            <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary-600">Компания</div>
-            <div className="mt-1 text-2xl font-bold tracking-tight text-pastel-900">{companyName}</div>
-            <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs text-pastel-600">
-              <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-3 py-1 shadow-sm">
-                <Network className="h-3.5 w-3.5 text-primary-500" />
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-pastel-500">
+              Компания
+            </div>
+            <div className="mt-1 text-xl font-bold text-pastel-900">{companyName}</div>
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-xs text-pastel-500">
+              <span className="inline-flex items-center gap-1">
+                <Network className="h-3.5 w-3.5" />
                 {totalEmployees} сотрудников
               </span>
-              <span className="rounded-full bg-white/80 px-3 py-1 shadow-sm">
-                {managerLinksCount} связей
-              </span>
+              <span>{managerLinksCount} связей</span>
             </div>
             {isAdmin && draggingId && (
-              <div className="mt-3 rounded-xl bg-green-50 px-3 py-2 text-[11px] font-medium text-green-800">
+              <div className="mt-3 rounded-lg border border-pastel-200 bg-pastel-50 px-3 py-2 text-[11px] text-pastel-600">
                 Отпустите здесь — прикрепить к компании
               </div>
             )}
           </div>
 
-          {roots.length > 0 && (
-            <OrgConnectorStem height={singleRoot ? 40 : 36} color="#475569" />
-          )}
+          {roots.length > 0 && <OrgConnectorStem height={36} />}
 
           {singleRoot ? (
             <OrgChartNode
               node={roots[0]}
               isExecutiveRoot
               branchChildrenByDepartment
-              connectorColor="#475569"
               {...chartProps}
             />
           ) : (
-            <>
-              <OrgConnectorFork
-                columns={roots.length}
-                columnWidth={ORG_CHART_COLUMN_WIDTH}
-                gap={ORG_CHART_COLUMN_GAP}
-                color="#475569"
-              />
-              <div
-                className="flex items-start justify-center"
-                style={{ gap: ORG_CHART_COLUMN_GAP }}
-              >
-                {roots.map((root) => {
-                  const theme = getDepartmentTheme(root.employee.department);
-                  return (
-                    <div
-                      key={root.employee.id}
-                      className="flex flex-col items-center"
-                      style={{ width: ORG_CHART_COLUMN_WIDTH }}
-                    >
-                      <OrgDepartmentBranch theme={theme}>
-                        <OrgChartNode
-                          node={root}
-                          connectorColor={theme.lineColor}
-                          departmentTheme={theme}
-                          {...chartProps}
-                        />
-                      </OrgDepartmentBranch>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
+            <OrgConnectorChildren childCount={roots.length}>
+              {roots.map((root, index) => (
+                <OrgDepartmentBranch
+                  key={root.employee.id}
+                  department={root.employee.department}
+                  showDivider={index > 0}
+                >
+                  <OrgChartNode node={root} {...chartProps} />
+                </OrgDepartmentBranch>
+              ))}
+            </OrgConnectorChildren>
           )}
         </div>
       </div>
