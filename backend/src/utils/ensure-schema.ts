@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 
 let managerIdColumnEnsured = false;
+let employeesOrgSchemaEnsured = false;
 let bookingsModuleSchemaEnsured = false;
 
 export const ensureBookingsModuleSchema = async (pool: Pool): Promise<void> => {
@@ -116,8 +117,8 @@ export const ensureBookingsModuleSchema = async (pool: Pool): Promise<void> => {
 /** @deprecated используйте ensureBookingsModuleSchema */
 export const ensureBookingResourcesSchema = ensureBookingsModuleSchema;
 
-export const ensureManagerIdColumn = async (pool: Pool): Promise<void> => {
-  if (managerIdColumnEnsured) {
+export const ensureEmployeesOrgSchema = async (pool: Pool): Promise<void> => {
+  if (employeesOrgSchemaEnsured) {
     return;
   }
 
@@ -127,11 +128,21 @@ export const ensureManagerIdColumn = async (pool: Pool): Promise<void> => {
         ADD COLUMN IF NOT EXISTS manager_id INTEGER REFERENCES employees(id) ON DELETE SET NULL;
     `);
     await pool.query(`
+      ALTER TABLE employees
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+    await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_employees_manager_id ON employees(manager_id);
     `);
+    employeesOrgSchemaEnsured = true;
     managerIdColumnEnsured = true;
   } catch (error) {
+    employeesOrgSchemaEnsured = false;
     managerIdColumnEnsured = false;
     throw error;
   }
+};
+
+export const ensureManagerIdColumn = async (pool: Pool): Promise<void> => {
+  await ensureEmployeesOrgSchema(pool);
 };

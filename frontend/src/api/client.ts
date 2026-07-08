@@ -308,11 +308,16 @@ export const orgStructureAPI = {
     managerId: string | null
   ): Promise<{ message: string }> => {
     const normalizedManagerId = managerId ? String(managerId) : null;
+    const payload = {
+      managerId: normalizedManagerId ? Number(normalizedManagerId) : null,
+    };
     const attempts: Array<() => Promise<{ message: string }>> = [
       async () => {
-        const response = await api.patch(`/org-structure/employees/${employeeId}/manager`, {
-          managerId: normalizedManagerId ? Number(normalizedManagerId) : null,
-        });
+        const response = await api.patch(`/employees/${employeeId}/manager`, payload);
+        return response.data;
+      },
+      async () => {
+        const response = await api.patch(`/org-structure/employees/${employeeId}/manager`, payload);
         return response.data;
       },
       async () => {

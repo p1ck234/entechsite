@@ -2,9 +2,10 @@ import express from 'express';
 import { body, validationResult, query } from 'express-validator';
 import { pool } from '../db/pool';
 import bcrypt from 'bcryptjs';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, requireAdmin } from '../middleware/auth';
 import { wouldCreateManagerCycle, buildOrgTree, mapOrgEmployee } from '../utils/org-structure';
-import { ensureManagerIdColumn } from '../utils/ensure-schema';
+import { ensureEmployeesOrgSchema } from '../utils/ensure-schema';
+import { EmployeeManagerError, updateEmployeeManager } from '../utils/employee-manager';
 
 const router = express.Router();
 
@@ -158,7 +159,7 @@ router.get('/me', authenticateToken, async (req: any, res: any) => {
 // Org tree (дублирует /api/org-structure/tree для совместимости)
 router.get('/org-tree', authenticateToken, async (_req: any, res: any) => {
   try {
-    await ensureManagerIdColumn(pool);
+    await ensureEmployeesOrgSchema(pool);
 
     const result = await pool.query(
       `SELECT e.id, e.first_name, e.last_name, e.middle_name, e.position, e.department, e.photo, e.manager_id
@@ -181,6 +182,57 @@ router.get('/org-tree', authenticateToken, async (_req: any, res: any) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+
+router.patch(
+  '/:id/manager',
+  authenticateToken,
+  requireAdmin,
+  [body('managerId').optional({ values: 'falsy' }).custom((value) => {
+    if (value === null || value === undefined || value === '') {
+      return true;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      throw new Error('Некорректный руководитель');
+    }
+
+    return true;
+  })],
+  async (req: any, res: any) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          message: errors.array()[0]?.msg || 'Ошибка валидации',
+          errors: errors.array(),
+        });
+      }
+
+      const { id } = req.params;
+      const managerId =
+        req.body.managerId === null || req.body.managerId === undefined || req.body.managerId === ''
+          ? null
+          : String(req.body.managerId);
+
+      const employee = await updateEmployeeManager(pool, id, managerId);
+
+      res.json({
+        message: 'Руководитель обновлён',
+        employee,
+      });
+    } catch (error: any) {
+      if (error instanceof EmployeeManagerError) {
+        return res.status(error.status).json({ message: error.message });
+      }
+
+      console.error('Patch employee manager error:', error);
+      res.status(500).json({
+        message: error?.message || 'Не удалось сохранить руководителя',
+      });
+    }
+  }
+);
 
 // Get employee by ID
 router.get('/:id', authenticateToken, async (req: any, res: any) => {
@@ -258,7 +310,7 @@ router.post('/', authenticateToken, [
       return res.status(400).json({ message: 'Employee with this email already exists' });
     }
 
-    await ensureManagerIdColumn(pool);
+    await ensureEmployeesOrgSchema(pool);
 
     const result = await pool.query(
       `INSERT INTO employees (first_name, last_name, middle_name, position, department, email, phone, telegram, photo, manager_id)
@@ -308,7 +360,7 @@ router.put('/:id', authenticateToken, [
     }
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'managerId')) {
-      await ensureManagerIdColumn(pool);
+      await ensureEmployeesOrgSchema(pool);
       const managerId = updateData.managerId === null || updateData.managerId === ''
         ? null
         : String(updateData.managerId);

@@ -220,26 +220,30 @@ const OrgStructure: React.FC = () => {
       (employee) => (employee.department || 'Без отдела') === department && employee.id !== headId
     );
 
+    if (deptEmployees.length === 0) {
+      setActionMessage({ type: 'error', text: 'В отделе нет сотрудников для подчинения' });
+      return;
+    }
+
     setAssigning(true);
     setActionMessage(null);
 
     try {
       for (const employee of deptEmployees) {
-        const needsAssignment =
-          !employee.managerId ||
-          !deptEmployees.some((item) => item.id === employee.managerId);
-
-        if (needsAssignment) {
-          await orgStructureAPI.updateManager(employee.id, headId);
+        if (employee.managerId === headId) {
+          continue;
         }
+
+        await orgStructureAPI.updateManager(employee.id, headId);
       }
 
       await loadTree();
       setActionMessage({ type: 'success', text: `Отдел «${department}» подчинён выбранному руководителю` });
     } catch (err: any) {
+      const validationError = err.response?.data?.errors?.[0]?.msg;
       setActionMessage({
         type: 'error',
-        text: err.response?.data?.message || 'Не удалось настроить отдел',
+        text: err.response?.data?.message || validationError || 'Не удалось настроить отдел',
       });
     } finally {
       setAssigning(false);

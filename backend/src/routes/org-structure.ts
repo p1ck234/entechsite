@@ -2,13 +2,35 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import { pool } from '../db/pool';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
-import { buildOrgTree, mapOrgEmployee, wouldCreateManagerCycle } from '../utils/org-structure';
-import { ensureManagerIdColumn } from '../utils/ensure-schema';
+import { buildOrgTree, mapOrgEmployee } from '../utils/org-structure';
+import { ensureEmployeesOrgSchema } from '../utils/ensure-schema';
+import { EmployeeManagerError, updateEmployeeManager } from '../utils/employee-manager';
 
 const router = express.Router();
 
+const managerIdValidator = body('managerId').optional({ values: 'falsy' }).custom((value) => {
+  if (value === null || value === undefined || value === '') {
+    return true;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error('Некорректный руководитель');
+  }
+
+  return true;
+});
+
+const parseManagerId = (value: unknown): string | null => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  return String(value);
+};
+
 const loadOrgTree = async () => {
-  await ensureManagerIdColumn(pool);
+  await ensureEmployeesOrgSchema(pool);
 
   const result = await pool.query(
     `SELECT e.id, e.first_name, e.last_name, e.middle_name, e.position, e.department, e.photo, e.manager_id
@@ -41,73 +63,33 @@ router.patch(
   '/employees/:id/manager',
   authenticateToken,
   requireAdmin,
-  [body('managerId').optional({ values: 'falsy' }).custom((value) => {
-    if (value === null || value === undefined || value === '') {
-      return true;
-    }
-    const parsed = Number(value);
-    if (!Number.isInteger(parsed) || parsed < 1) {
-      throw new Error('Некорректный руководитель');
-    }
-    return true;
-  })],
+  [managerIdValidator],
   async (req: AuthRequest, res: any) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        return res.status(400).json({
+          message: errors.array()[0]?.msg || 'Ошибка валидации',
+          errors: errors.array(),
+        });
       }
 
       const { id } = req.params;
-      const managerId = req.body.managerId === null || req.body.managerId === undefined
-        ? null
-        : String(req.body.managerId);
-
-      await ensureManagerIdColumn(pool);
-
-      const existing = await pool.query('SELECT id, manager_id FROM employees WHERE id = $1', [id]);
-      if (existing.rows.length === 0) {
-        return res.status(404).json({ message: 'Сотрудник не найден' });
-      }
-
-      if (managerId) {
-        const manager = await pool.query(
-          `SELECT id FROM employees WHERE id = $1 AND is_active = true AND status = 'APPROVED'`,
-          [managerId]
-        );
-
-        if (manager.rows.length === 0) {
-          return res.status(400).json({ message: 'Руководитель не найден или неактивен' });
-        }
-
-        const hasCycle = await wouldCreateManagerCycle(pool, id, managerId);
-        if (hasCycle) {
-          return res.status(400).json({ message: 'Нельзя назначить руководителя: получится цикл в структуре' });
-        }
-      }
-
-      await pool.query(
-        `UPDATE employees
-         SET manager_id = $1, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $2`,
-        [managerId, id]
-      );
-
-      const updated = await pool.query(
-        `SELECT e.id, e.first_name, e.last_name, e.middle_name, e.position, e.department, e.photo, e.manager_id
-         FROM employees e
-         WHERE e.id = $1`,
-        [id]
-      );
+      const managerId = parseManagerId(req.body.managerId);
+      const employee = await updateEmployeeManager(pool, id, managerId);
 
       res.json({
         message: 'Руководитель обновлён',
-        employee: mapOrgEmployee(updated.rows[0]),
+        employee,
       });
     } catch (error: any) {
+      if (error instanceof EmployeeManagerError) {
+        return res.status(error.status).json({ message: error.message });
+      }
+
       console.error('Update employee manager error:', error);
       res.status(500).json({
-        message: error?.message || 'Internal server error',
+        message: error?.message || 'Не удалось сохранить руководителя',
       });
     }
   }
