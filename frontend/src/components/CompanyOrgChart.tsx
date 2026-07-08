@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Building2, Network, ZoomIn, ZoomOut } from 'lucide-react';
 import { OrgTreeNode } from '../types';
 import { OrgChartNode } from './OrgChart';
@@ -62,6 +62,8 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
   onDragLeaveCompany,
   onDropOnCompany,
 }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
   const chartProps = {
     searchQuery,
     selectedId,
@@ -81,6 +83,21 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
   };
 
   const singleRoot = roots.length === 1;
+
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      return;
+    }
+
+    const container = scrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      container.scrollLeft = Math.max(0, (container.scrollWidth - container.clientWidth) / 2);
+    });
+  }, [roots, chartScale, expandedIds, searchQuery]);
 
   return (
     <div>
@@ -104,15 +121,20 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
         </button>
       </div>
 
-      <div className="overflow-auto pb-6">
-        <div
-          className="mx-auto min-w-max px-6 py-4 transition-transform duration-150"
-          style={{ transform: `scale(${chartScale})`, transformOrigin: 'top center' }}
-        >
-          <div className="flex flex-col items-center">
+      <div
+        ref={scrollRef}
+        className="max-h-[calc(100vh-14rem)] overflow-auto pb-6"
+      >
+        <div className="flex min-w-full justify-center px-4">
+          <div
+            className="inline-flex flex-col items-center py-4"
+            style={{ zoom: chartScale }}
+          >
             <div
               className={`w-full max-w-sm rounded-2xl border bg-white px-6 py-5 text-center shadow-sm transition-all ${
-                dropTargetCompany ? 'border-pastel-500 ring-2 ring-pastel-200' : 'border-pastel-200'
+                dropTargetCompany
+                  ? 'border-pastel-500 ring-2 ring-pastel-200'
+                  : 'border-pastel-200'
               } ${isAdmin && draggingId ? 'cursor-copy' : ''}`}
               onDragOver={(event) => {
                 if (!isAdmin) {
