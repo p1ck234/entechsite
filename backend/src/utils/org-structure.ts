@@ -29,6 +29,9 @@ export interface OrgTreeNode {
   children: OrgTreeNode[];
 }
 
+/** Роли оргсхемы — не показывать в адресной книге и списках сотрудников */
+export const ORG_CHART_ROLE_SQL_FILTER = `COALESCE(e.org_display_mode, 'person') <> 'role'`;
+
 export const ORG_EMPLOYEE_SELECT = `
   e.id,
   e.first_name,

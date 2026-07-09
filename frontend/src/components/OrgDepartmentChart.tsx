@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Hand } from 'lucide-react';
 import { OrgDepartmentGroup } from '../types';
 import { OrgChartNode, OrgEmployeeCard, getOrgEmployeeName } from './OrgChart';
@@ -38,6 +38,7 @@ const DepartmentSection: React.FC<{
   onAssignDepartmentHead: (headId: string) => Promise<void>;
 }> = ({ group, chartProps, onAssignDepartmentHead }) => {
   const pan = useChartPan(Boolean(chartProps.draggingId));
+  const initialScrollDone = useRef(false);
   const suggestedHead = useMemo(() => guessDepartmentHead(group.employees), [group.employees]);
   const [headDraft, setHeadDraft] = useState(suggestedHead?.id || '');
   const hasHierarchy = departmentHasHierarchy(group);
@@ -60,6 +61,27 @@ const DepartmentSection: React.FC<{
   const sortedFlatEmployees = sortEmployeesBySeniority(group.employees);
   const headEmployee = group.employees.find((employee) => employee.id === departmentHeadId) || suggestedHead;
   const teamMembers = sortedFlatEmployees.filter((employee) => employee.id !== headEmployee?.id);
+
+  useEffect(() => {
+    initialScrollDone.current = false;
+  }, [group.department, group.roots, chartProps.searchQuery]);
+
+  useEffect(() => {
+    if (chartProps.searchQuery.trim() || initialScrollDone.current || !hasHierarchy) {
+      return;
+    }
+
+    const container = pan.containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      container.scrollLeft = 0;
+      container.scrollTop = 0;
+      initialScrollDone.current = true;
+    });
+  }, [group.department, group.roots, chartProps.searchQuery, hasHierarchy, pan.containerRef]);
 
   return (
     <section className="rounded-3xl border border-pastel-200 bg-gradient-to-b from-white to-pastel-50/60 p-5">
@@ -111,12 +133,18 @@ const DepartmentSection: React.FC<{
             onMouseDown={pan.onMouseDown}
             className={`max-h-[36rem] overflow-auto p-4 ${pan.className}`}
           >
-            <div className="box-border min-h-[18rem] min-w-full p-6">
-              <div className="mx-auto flex w-max justify-center gap-10 py-2">
-                {group.roots.map((root) => (
-                  <OrgChartNode key={root.employee.id} node={root} hideDepartmentOnCard {...chartNodeProps} />
-                ))}
-              </div>
+            <div
+              className={`inline-flex min-w-full py-2 ${
+                group.roots.length > 1
+                  ? 'flex-col items-center gap-10'
+                  : 'justify-center'
+              }`}
+            >
+              {group.roots.map((root) => (
+                <div key={root.employee.id} className="flex shrink-0 justify-center">
+                  <OrgChartNode node={root} hideDepartmentOnCard {...chartNodeProps} />
+                </div>
+              ))}
             </div>
           </div>
         </div>

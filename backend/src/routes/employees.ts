@@ -3,7 +3,7 @@ import { body, validationResult, query } from 'express-validator';
 import { pool } from '../db/pool';
 import bcrypt from 'bcryptjs';
 import { authenticateToken, requireAdmin } from '../middleware/auth';
-import { buildOrgTree, mapOrgEmployee, ORG_EMPLOYEE_SELECT, wouldCreateManagerCycle } from '../utils/org-structure';
+import { buildOrgTree, mapOrgEmployee, ORG_CHART_ROLE_SQL_FILTER, ORG_EMPLOYEE_SELECT, wouldCreateManagerCycle } from '../utils/org-structure';
 import { ensureEmployeesOrgSchema } from '../utils/ensure-schema';
 import { EmployeeManagerError, updateEmployeeManager } from '../utils/employee-manager';
 
@@ -49,17 +49,17 @@ router.get('/', authenticateToken, [
     if (statusFilter === 'PENDING') {
       // Показываем только заявки на согласовании
       paramCount++;
-      whereClause = `WHERE e.status = $${paramCount}`;
+      whereClause = `WHERE e.status = $${paramCount} AND ${ORG_CHART_ROLE_SQL_FILTER}`;
       params.push('PENDING');
     } else if (statusFilter === 'REJECTED') {
       // Показываем отклоненные или неактивные
       paramCount++;
-      whereClause = `WHERE (e.status = $${paramCount} OR e.is_active = false)`;
+      whereClause = `WHERE (e.status = $${paramCount} OR e.is_active = false) AND ${ORG_CHART_ROLE_SQL_FILTER}`;
       params.push('REJECTED');
     } else {
       // По умолчанию показываем активных и одобренных
       paramCount++;
-      whereClause = `WHERE e.is_active = true AND e.status = $${paramCount}`;
+      whereClause = `WHERE e.is_active = true AND e.status = $${paramCount} AND ${ORG_CHART_ROLE_SQL_FILTER}`;
       params.push('APPROVED');
     }
 
