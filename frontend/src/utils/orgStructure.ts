@@ -3,6 +3,123 @@ import { OrgEmployee, OrgTreeNode, OrgDepartmentGroup } from '../types';
 export const getEmployeeFullName = (employee: OrgEmployee): string =>
   [employee.lastName, employee.firstName, employee.middleName].filter(Boolean).join(' ');
 
+export const normalizeOrgId = (id: string | number | null | undefined): string | null => {
+  if (id === null || id === undefined || id === '') {
+    return null;
+  }
+
+  return String(id);
+};
+
+const resolveDepartmentManagerId = (
+  employee: OrgEmployee,
+  departmentIds: Set<string>,
+  employeesById: Map<string, OrgEmployee>
+): string | null => {
+  let currentId = normalizeOrgId(employee.managerId);
+  const visited = new Set<string>();
+
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId);
+    if (departmentIds.has(currentId)) {
+      return currentId;
+    }
+
+    const manager = employeesById.get(currentId);
+    currentId = manager ? normalizeOrgId(manager.managerId) : null;
+  }
+
+  return null;
+};
+
+const countTreeNodes = (node: OrgTreeNode): number =>
+  1 + node.children.reduce((sum, child) => sum + countTreeNodes(child), 0);
+
+export const mergeDepartmentRoots = (roots: OrgTreeNode[]): OrgTreeNode[] => {
+  if (roots.length <= 1) {
+    return roots;
+  }
+
+  const sorted = [...roots].sort((left, right) => countTreeNodes(right) - countTreeNodes(left));
+  const mergedRoot: OrgTreeNode = {
+    employee: sorted[0].employee,
+    children: [...sorted[0].children],
+  };
+  const pending = sorted.slice(1);
+
+  while (pending.length > 0) {
+    let attached = false;
+
+    for (let index = pending.length - 1; index >= 0; index -= 1) {
+      const orphan = pending[index];
+      const managerId = normalizeOrgId(orphan.employee.managerId);
+      if (!managerId) {
+        continue;
+      }
+
+      const managerNode = findNodeById([mergedRoot], managerId);
+      if (managerNode) {
+        managerNode.children = [...managerNode.children, orphan].sort((left, right) =>
+          compareOrgEmployees(left.employee, right.employee)
+        );
+        pending.splice(index, 1);
+        attached = true;
+      }
+    }
+
+    if (!attached) {
+      mergedRoot.children = [...mergedRoot.children, ...pending];
+      break;
+    }
+  }
+
+  return [mergedRoot];
+};
+
+export const buildOrgTree = (employees: OrgEmployee[]): OrgTreeNode[] => {
+  const normalizedEmployees = employees.map((employee) => ({
+    ...employee,
+    id: normalizeOrgId(employee.id)!,
+    managerId: normalizeOrgId(employee.managerId),
+  }));
+  const byId = new Map(normalizedEmployees.map((employee) => [employee.id, employee]));
+  const childrenByManager = new Map<string, OrgEmployee[]>();
+
+  for (const employee of normalizedEmployees) {
+    const managerId = employee.managerId;
+    if (!managerId || !byId.has(managerId) || managerId === employee.id) {
+      continue;
+    }
+
+    const siblings = childrenByManager.get(managerId) || [];
+    siblings.push(employee);
+    childrenByManager.set(managerId, siblings);
+  }
+
+  const buildNode = (employee: OrgEmployee): OrgTreeNode => ({
+    employee,
+    children: (childrenByManager.get(employee.id) || [])
+      .sort(compareOrgEmployees)
+      .map(buildNode),
+  });
+
+  return normalizedEmployees
+    .filter((employee) => {
+      if (!employee.managerId) {
+        return true;
+      }
+      return !byId.has(employee.managerId) || employee.managerId === employee.id;
+    })
+    .sort((left, right) => {
+      const scoreDiff = leadershipScore(left.position) - leadershipScore(right.position);
+      if (scoreDiff !== 0) {
+        return scoreDiff;
+      }
+      return getEmployeeFullName(left).localeCompare(getEmployeeFullName(right), 'ru');
+    })
+    .map(buildNode);
+};
+
 const leadershipScore = (position: string): number => {
   const normalized = position.toLowerCase();
   if (normalized.includes('генеральн')) return 0;
@@ -61,48 +178,10 @@ export const collectAllExpandableIds = (nodes: OrgTreeNode[], acc = new Set<stri
   return acc;
 };
 
-export const buildOrgTree = (employees: OrgEmployee[]): OrgTreeNode[] => {
-  const byId = new Map(employees.map((employee) => [employee.id, employee]));
-  const childrenByManager = new Map<string, OrgEmployee[]>();
-
-  for (const employee of employees) {
-    const managerId = employee.managerId;
-    if (!managerId || !byId.has(managerId) || managerId === employee.id) {
-      continue;
-    }
-
-    const siblings = childrenByManager.get(managerId) || [];
-    siblings.push(employee);
-    childrenByManager.set(managerId, siblings);
-  }
-
-  const buildNode = (employee: OrgEmployee): OrgTreeNode => ({
-    employee,
-    children: (childrenByManager.get(employee.id) || [])
-      .sort(compareOrgEmployees)
-      .map(buildNode),
-  });
-
-  return employees
-    .filter((employee) => {
-      if (!employee.managerId) {
-        return true;
-      }
-      return !byId.has(employee.managerId) || employee.managerId === employee.id;
-    })
-    .sort((left, right) => {
-      const scoreDiff = leadershipScore(left.position) - leadershipScore(right.position);
-      if (scoreDiff !== 0) {
-        return scoreDiff;
-      }
-      return getEmployeeFullName(left).localeCompare(getEmployeeFullName(right), 'ru');
-    })
-    .map(buildNode);
-};
-
 export const findNodeById = (nodes: OrgTreeNode[], employeeId: string): OrgTreeNode | null => {
+  const normalizedId = normalizeOrgId(employeeId);
   for (const node of nodes) {
-    if (node.employee.id === employeeId) {
+    if (normalizeOrgId(node.employee.id) === normalizedId) {
       return node;
     }
 
@@ -153,6 +232,9 @@ export const canAssignManager = (
 export const countDirectReports = (node: OrgTreeNode): number => node.children.length;
 
 export const buildDepartmentGroups = (employees: OrgEmployee[]): OrgDepartmentGroup[] => {
+  const employeesById = new Map(
+    employees.map((employee) => [normalizeOrgId(employee.id)!, employee])
+  );
   const departments = [...new Set(employees.map((employee) => employee.department || 'Без отдела'))]
     .sort((left, right) => left.localeCompare(right, 'ru'));
 
@@ -160,18 +242,19 @@ export const buildDepartmentGroups = (employees: OrgEmployee[]): OrgDepartmentGr
     const deptEmployees = employees.filter(
       (employee) => (employee.department || 'Без отдела') === department
     );
-    const deptIds = new Set(deptEmployees.map((employee) => employee.id));
-    const scopedEmployees = deptEmployees.map((employee) => {
-      if (employee.managerId && deptIds.has(employee.managerId)) {
-        return employee;
-      }
-      return { ...employee, managerId: null };
-    });
+    const departmentIds = new Set(
+      deptEmployees.map((employee) => normalizeOrgId(employee.id)!)
+    );
+    const scopedEmployees = deptEmployees.map((employee) => ({
+      ...employee,
+      id: normalizeOrgId(employee.id)!,
+      managerId: resolveDepartmentManagerId(employee, departmentIds, employeesById),
+    }));
 
     return {
       department,
       employees: deptEmployees,
-      roots: buildOrgTree(scopedEmployees),
+      roots: mergeDepartmentRoots(buildOrgTree(scopedEmployees)),
       employeeCount: deptEmployees.length,
     };
   });
@@ -181,8 +264,11 @@ export const countManagerLinks = (employees: OrgEmployee[]): number =>
   employees.filter((employee) => employee.managerId).length;
 
 export const countDepartmentInternalLinks = (employees: OrgEmployee[]): number => {
-  const deptIds = new Set(employees.map((employee) => employee.id));
-  return employees.filter((employee) => employee.managerId && deptIds.has(employee.managerId)).length;
+  const deptIds = new Set(employees.map((employee) => normalizeOrgId(employee.id)!));
+  return employees.filter((employee) => {
+    const managerId = normalizeOrgId(employee.managerId);
+    return managerId && deptIds.has(managerId);
+  }).length;
 };
 
 export const departmentHasHierarchy = (group: OrgDepartmentGroup): boolean =>
@@ -257,5 +343,7 @@ export const guessDepartmentHead = (employees: OrgEmployee[]): OrgEmployee | nul
   return sortEmployeesBySeniority(employees)[0] || null;
 };
 
-export const getDirectReports = (employees: OrgEmployee[], managerId: string): OrgEmployee[] =>
-  employees.filter((employee) => employee.managerId === managerId);
+export const getDirectReports = (employees: OrgEmployee[], managerId: string): OrgEmployee[] => {
+  const normalizedManagerId = normalizeOrgId(managerId);
+  return employees.filter((employee) => normalizeOrgId(employee.managerId) === normalizedManagerId);
+};

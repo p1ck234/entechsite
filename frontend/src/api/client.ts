@@ -149,7 +149,7 @@ export const employeesAPI = {
     
     // Transform snake_case to camelCase
     const transformedEmployees = response.data.employees.map((emp: any) => ({
-      id: emp.id,
+      id: String(emp.id),
       firstName: emp.first_name,
       lastName: emp.last_name,
       middleName: emp.middle_name,
@@ -165,6 +165,7 @@ export const employeesAPI = {
       userRole: emp.user_role,
       status: emp.status, // Добавляем статус
       managerId: emp.manager_id ? String(emp.manager_id) : null,
+      orgDisplayMode: emp.org_display_mode === 'role' ? 'role' : 'person',
     }));
 
     return {
@@ -246,7 +247,7 @@ export const employeesAPI = {
 };
 
 const mapEmployeeToOrg = (employee: Employee): OrgEmployee => ({
-  id: employee.id,
+  id: String(employee.id),
   firstName: employee.firstName,
   lastName: employee.lastName,
   middleName: employee.middleName,

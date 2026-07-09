@@ -133,17 +133,9 @@ const DepartmentSection: React.FC<{
             onMouseDown={pan.onMouseDown}
             className={`max-h-[36rem] overflow-auto p-4 ${pan.className}`}
           >
-            <div
-              className={`inline-flex min-w-full py-2 ${
-                group.roots.length > 1
-                  ? 'flex-col items-center gap-10'
-                  : 'justify-center'
-              }`}
-            >
+            <div className="inline-flex min-w-full justify-center py-2">
               {group.roots.map((root) => (
-                <div key={root.employee.id} className="flex shrink-0 justify-center">
-                  <OrgChartNode node={root} hideDepartmentOnCard {...chartNodeProps} />
-                </div>
+                <OrgChartNode key={root.employee.id} node={root} hideDepartmentOnCard {...chartNodeProps} />
               ))}
             </div>
           </div>
