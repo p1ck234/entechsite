@@ -85,26 +85,14 @@ export const OrgConnectorVerticalStack: React.FC<OrgConnectorVerticalStackProps>
       />
 
       <div className="flex flex-col">
-        {items.map((child, index) => {
-          const isLast = index === count - 1;
-
-          return (
+        {items.map((child, index) => (
             <div key={child.key} className="flex min-h-0 items-stretch">
               <div className="relative w-4 shrink-0 self-stretch">
-                {!isLast && (
-                  <div
-                    className="pointer-events-none absolute bottom-0 left-1/2 top-0 w-0.5 -translate-x-1/2 rounded-full"
-                    style={{ backgroundColor: connectorColor }}
-                    aria-hidden
-                  />
-                )}
-                {isLast && (
-                  <div
-                    className="pointer-events-none absolute left-1/2 top-0 w-0.5 -translate-x-1/2 rounded-full"
-                    style={{ height: COMPACT_CARD_MID, backgroundColor: connectorColor }}
-                    aria-hidden
-                  />
-                )}
+                <div
+                  className="pointer-events-none absolute bottom-0 left-1/2 top-0 w-0.5 -translate-x-1/2 rounded-full"
+                  style={{ backgroundColor: connectorColor }}
+                  aria-hidden
+                />
                 <div
                   className="pointer-events-none absolute left-1/2 top-0 h-0.5 w-1/2 -translate-y-1/2 rounded-full"
                   style={{ top: COMPACT_CARD_MID, backgroundColor: connectorColor }}
@@ -114,8 +102,7 @@ export const OrgConnectorVerticalStack: React.FC<OrgConnectorVerticalStackProps>
 
               <div className={`min-w-0 flex-1 ${index < count - 1 ? 'pb-3' : ''}`}>{child}</div>
             </div>
-          );
-        })}
+          ))}
       </div>
     </div>
   );

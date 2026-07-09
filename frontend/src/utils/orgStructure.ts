@@ -40,6 +40,16 @@ export const mergeDepartmentRoots = (roots: OrgTreeNode[]): OrgTreeNode[] => {
     return roots;
   }
 
+  const findManagerInForest = (managerId: string, forest: OrgTreeNode[]): OrgTreeNode | null => {
+    for (const root of forest) {
+      const match = findNodeById([root], managerId);
+      if (match) {
+        return match;
+      }
+    }
+    return null;
+  };
+
   const sorted = [...roots].sort((left, right) => countTreeNodes(right) - countTreeNodes(left));
   const mergedRoot: OrgTreeNode = {
     employee: sorted[0].employee,
@@ -57,7 +67,8 @@ export const mergeDepartmentRoots = (roots: OrgTreeNode[]): OrgTreeNode[] => {
         continue;
       }
 
-      const managerNode = findNodeById([mergedRoot], managerId);
+      const forest = [mergedRoot, ...pending.filter((_, pendingIndex) => pendingIndex !== index)];
+      const managerNode = findManagerInForest(managerId, forest);
       if (managerNode) {
         managerNode.children = [...managerNode.children, orphan].sort((left, right) =>
           compareOrgEmployees(left.employee, right.employee)
@@ -68,7 +79,9 @@ export const mergeDepartmentRoots = (roots: OrgTreeNode[]): OrgTreeNode[] => {
     }
 
     if (!attached) {
-      mergedRoot.children = [...mergedRoot.children, ...pending];
+      mergedRoot.children = [...mergedRoot.children, ...pending].sort((left, right) =>
+        compareOrgEmployees(left.employee, right.employee)
+      );
       break;
     }
   }
