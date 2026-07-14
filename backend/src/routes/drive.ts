@@ -2,7 +2,7 @@ import express from 'express';
 import { pool } from '../db/pool';
 import type sharp from 'sharp';
 import { authenticateToken } from '../middleware/auth';
-import { DriveCourseFolder, DriveFileItem, getDriveMediaKind, getLifeDriveItems, getTrainingDriveTree, listMediaInDriveResource, readDriveFileBuffer, streamDriveMediaContent, toDriveImageRef } from '../services/googleDrive';
+import { DriveCourseFolder, DriveFileItem, getDriveMediaKind, getLifeDriveItems, getTrainingDriveTree, listMediaInDriveResource, readDriveFileBuffer, readDriveFileThumbnail, streamDriveMediaContent, toDriveImageRef } from '../services/googleDrive';
 import {
   areEventPhotosEqual,
   extractPreviewImageRefs,
@@ -544,6 +544,24 @@ router.post('/sync-life', authenticateToken, async (req: any, res: any) => {
     });
   } finally {
     client?.release();
+  }
+});
+
+router.get('/files/:fileId/thumbnail', authenticateToken, async (req: any, res: any) => {
+  try {
+    const { fileId } = req.params;
+    const { buffer, mimeType, name } = await readDriveFileThumbnail(fileId);
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(name)}-preview.jpg"`);
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    return res.send(buffer);
+  } catch (error: any) {
+    console.error('Drive file thumbnail error:', error);
+    res.status(error?.message?.includes('недоступно') ? 404 : 502).json({
+      message: error?.message || 'Не удалось получить превью из Google Drive',
+    });
   }
 });
 

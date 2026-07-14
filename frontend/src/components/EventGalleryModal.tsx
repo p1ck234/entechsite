@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, ExternalLink, ImageOff, Play, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, ImageOff, X } from 'lucide-react';
 import { eventsAPI } from '../api/client';
 import type { Event, EventPhoto } from '../types';
 import ImageWithLoader from './ImageWithLoader';
+import VideoThumbnailTile from './VideoThumbnailTile';
 import {
   fetchDriveImageBlobUrl,
   getDriveMediaStreamUrl,
@@ -47,12 +48,7 @@ const formatMediaCount = (items: EventPhoto[]): string => {
 
 const GalleryMediaTile: React.FC<{ item: EventPhoto }> = ({ item }) => {
   if (isEventVideo(item)) {
-    return (
-      <div className="relative w-full h-full bg-pastel-900/90 flex flex-col items-center justify-center text-white p-3">
-        <Play className="w-10 h-10 mb-2" />
-        <span className="text-xs text-center line-clamp-2">{item.name}</span>
-      </div>
-    );
+    return <VideoThumbnailTile refValue={item.ref} name={item.name} />;
   }
 
   return (

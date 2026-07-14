@@ -628,6 +628,53 @@ export const streamDriveMediaContent = async (
   };
 };
 
+export const readDriveFileThumbnail = async (
+  fileId: string
+): Promise<{ buffer: Buffer; mimeType: string; name: string }> => {
+  const drive = getDriveClient();
+  const auth = getGoogleAuth();
+
+  const metaResponse = await drive.files.get({
+    fileId,
+    supportsAllDrives: true,
+    fields: 'id, name, mimeType, thumbnailLink',
+  });
+
+  if (!metaResponse.data.id) {
+    throw new Error('Файл Google Drive не найден.');
+  }
+
+  const thumbnailLink = metaResponse.data.thumbnailLink;
+  if (!thumbnailLink) {
+    throw new Error('Превью для этого файла пока недоступно.');
+  }
+
+  const authClient = await auth.getClient();
+  const accessToken = await authClient.getAccessToken();
+  const token = typeof accessToken === 'string' ? accessToken : accessToken?.token;
+
+  if (!token) {
+    throw new Error('Не удалось авторизоваться в Google Drive.');
+  }
+
+  const thumbnailResponse = await fetch(thumbnailLink, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!thumbnailResponse.ok) {
+    throw new Error(`Не удалось загрузить превью (${thumbnailResponse.status}).`);
+  }
+
+  const buffer = Buffer.from(await thumbnailResponse.arrayBuffer());
+  const mimeType = thumbnailResponse.headers.get('content-type') || 'image/jpeg';
+
+  return {
+    buffer,
+    mimeType,
+    name: metaResponse.data.name || fileId,
+  };
+};
+
 export const readDriveFileBuffer = async (fileId: string): Promise<{ buffer: Buffer; mimeType: string; name: string }> => {
   const drive = getDriveClient();
 

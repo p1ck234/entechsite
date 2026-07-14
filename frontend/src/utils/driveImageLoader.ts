@@ -37,6 +37,9 @@ const buildDriveContentPath = (fileId: string, options?: NormalizeImageUrlOption
   return `/drive/files/${encodeURIComponent(fileId)}/content${query ? `?${query}` : ''}`;
 };
 
+const buildDriveThumbnailPath = (fileId: string): string =>
+  `/drive/files/${encodeURIComponent(fileId)}/thumbnail`;
+
 export const fetchDriveImageBlobUrl = async (
   ref: string,
   options?: NormalizeImageUrlOptions
@@ -102,6 +105,123 @@ export const isVideoMimeType = (mimeType?: string): boolean => {
 export const fetchDriveFileBlobUrl = async (ref: string): Promise<string> => {
   return fetchDriveImageBlobUrl(ref);
 };
+
+export const fetchDriveVideoThumbnailBlobUrl = async (ref: string): Promise<string> => {
+  const fileId = parseDriveImageRef(ref);
+  if (!fileId) {
+    throw new Error('Некорректная ссылка на файл Google Drive');
+  }
+
+  const cacheKey = `${fileId}|thumbnail`;
+  const cached = blobCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const inflight = inflightCache.get(cacheKey);
+  if (inflight) {
+    return inflight;
+  }
+
+  const task = (async () => {
+    const response = await api.get(buildDriveThumbnailPath(fileId), {
+      responseType: 'blob',
+    });
+
+    const blob = response.data as Blob;
+    if (!(blob instanceof Blob) || blob.size === 0) {
+      throw new Error('Пустой ответ при загрузке превью');
+    }
+
+    const objectUrl = URL.createObjectURL(blob);
+    blobCache.set(cacheKey, objectUrl);
+    return objectUrl;
+  })();
+
+  inflightCache.set(cacheKey, task);
+
+  try {
+    return await task;
+  } finally {
+    inflightCache.delete(cacheKey);
+  }
+};
+
+export const captureVideoPosterFromRef = (ref: string): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const streamUrl = getDriveMediaStreamUrl(ref);
+    if (!streamUrl) {
+      reject(new Error('Не удалось получить ссылку на видео'));
+      return;
+    }
+
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.src = streamUrl;
+
+    const cleanup = () => {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('Таймаут загрузки превью видео'));
+    }, 15000);
+
+    video.addEventListener('loadeddata', () => {
+      const seekTime =
+        Number.isFinite(video.duration) && video.duration > 0
+          ? Math.min(1, video.duration * 0.1)
+          : 0.5;
+      video.currentTime = seekTime;
+    });
+
+    video.addEventListener('seeked', () => {
+      try {
+        const width = video.videoWidth || 480;
+        const height = video.videoHeight || 270;
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d');
+
+        if (!context || width === 0 || height === 0) {
+          throw new Error('Не удалось прочитать кадр видео');
+        }
+
+        context.drawImage(video, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            window.clearTimeout(timeoutId);
+            cleanup();
+
+            if (!blob) {
+              reject(new Error('Не удалось создать превью'));
+              return;
+            }
+
+            resolve(URL.createObjectURL(blob));
+          },
+          'image/jpeg',
+          0.82
+        );
+      } catch (error) {
+        window.clearTimeout(timeoutId);
+        cleanup();
+        reject(error);
+      }
+    });
+
+    video.addEventListener('error', () => {
+      window.clearTimeout(timeoutId);
+      cleanup();
+      reject(new Error('Ошибка загрузки видео для превью'));
+    });
+  });
 
 export const isPdfMimeType = (mimeType?: string): boolean => mimeType === 'application/pdf';
 
