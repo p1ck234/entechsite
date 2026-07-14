@@ -10,6 +10,7 @@ import {
   sendTelegramMessage,
 } from '../utils/support-notify';
 import { getSupportBotSecret, getSupportBotToken } from '../utils/support-bot-token';
+import { closeTodoistTask, syncTicketToTodoist } from '../utils/support-todoist';
 
 const router = express.Router();
 
@@ -100,7 +101,15 @@ const createTicketFromBot = async (params: {
     [result.rows[0].id, params.user.id]
   );
 
-  return result.rows[0];
+  const created = await pool.query(`SELECT * FROM support_tickets WHERE id = $1`, [
+    result.rows[0].id,
+  ]);
+  const ticket = created.rows[0];
+  if (ticket?.queue === 'public') {
+    await syncTicketToTodoist(pool, ticket);
+  }
+
+  return ticket || result.rows[0];
 };
 
 const applyTransition = async (
@@ -160,6 +169,10 @@ const applyTransition = async (
     subject: next.subject,
     status: toStatus,
   });
+
+  if (toStatus === 'done' && next.todoist_task_id) {
+    void closeTodoistTask(String(next.todoist_task_id));
+  }
 
   return { ticket: next };
 };

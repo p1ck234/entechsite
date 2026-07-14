@@ -22,6 +22,11 @@ import {
 } from '../utils/support-sla';
 import { canTransitionStatus } from '../utils/support-ticket-rules';
 import { notifyTelegramStatusChange } from '../utils/support-notify';
+import {
+  closeTodoistTask,
+  syncCompletedTicketsFromTodoist,
+  syncTicketToTodoist,
+} from '../utils/support-todoist';
 
 const router = express.Router();
 
@@ -58,6 +63,7 @@ const mapTicket = (row: any) => ({
   responseDueAt: row.response_due_at,
   resolveDueAt: row.resolve_due_at,
   updatedAt: row.updated_at,
+  todoistTaskId: row.todoist_task_id ? String(row.todoist_task_id) : null,
   responseSlaMet: isWithinSla(row.response_due_at, row.acknowledged_at),
   resolveSlaMet: isWithinSla(row.resolve_due_at, row.resolved_at),
   firstResponseMs: msBetween(row.created_at, row.acknowledged_at),
@@ -125,6 +131,21 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
     return res.status(500).json({ message: 'Не удалось получить права поддержки' });
   }
 });
+
+router.post(
+  '/todoist-sync',
+  authenticateToken,
+  requireAdmin,
+  async (_req: AuthRequest, res: Response) => {
+    try {
+      const result = await syncCompletedTicketsFromTodoist(pool);
+      return res.json({ message: 'Синхронизация Todoist выполнена', ...result });
+    } catch (error) {
+      console.error('Todoist sync endpoint error:', error);
+      return res.status(500).json({ message: 'Не удалось синхронизировать Todoist' });
+    }
+  }
+);
 
 router.get(
   '/kpi',
@@ -490,6 +511,24 @@ router.post(
       const ticket = result.rows[0];
       await insertEvent(ticket.id, req.user!.id, 'created', null, 'new', null);
 
+      // Публичные заявки уходят в Todoist; теневые — не синхронизируем
+      if (ticket.queue === 'public') {
+        try {
+          await syncTicketToTodoist(pool, ticket);
+          const refreshed = await pool.query(`SELECT * FROM support_tickets WHERE id = $1`, [
+            ticket.id,
+          ]);
+          if (refreshed.rows[0]) {
+            return res.status(201).json({
+              message: 'Заявка создана',
+              ticket: mapTicket(refreshed.rows[0]),
+            });
+          }
+        } catch {
+          console.error('Todoist sync on create failed');
+        }
+      }
+
       return res.status(201).json({
         message: 'Заявка создана',
         ticket: mapTicket(ticket),
@@ -581,6 +620,10 @@ const transitionHandler =
         subject: nextTicket.subject,
         status: toStatus,
       });
+
+      if (toStatus === 'done' && nextTicket.todoist_task_id) {
+        void closeTodoistTask(String(nextTicket.todoist_task_id));
+      }
 
       return res.json({
         message: 'Статус обновлён',

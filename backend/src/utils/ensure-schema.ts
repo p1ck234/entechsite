@@ -264,8 +264,18 @@ export const ensureSupportSchema = async (pool: Pool): Promise<void> => {
         ON support_tickets(queue, status, created_at DESC);
     `);
     await pool.query(`
+      ALTER TABLE support_tickets
+        ADD COLUMN IF NOT EXISTS todoist_task_id VARCHAR(64);
+    `);
+
+    await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_support_tickets_requester
         ON support_tickets(requester_user_id, created_at DESC);
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_support_tickets_todoist
+        ON support_tickets(todoist_task_id)
+        WHERE todoist_task_id IS NOT NULL;
     `);
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_support_ticket_events_ticket

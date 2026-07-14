@@ -1048,6 +1048,11 @@ export const supportAPI = {
     const response = await api.delete(`/support/agents/${userId}`);
     return response.data;
   },
+
+  syncTodoist: async (): Promise<{ message: string; checked: number; closed: number }> => {
+    const response = await api.post('/support/todoist-sync');
+    return response.data;
+  },
 };
 
 // Upload API

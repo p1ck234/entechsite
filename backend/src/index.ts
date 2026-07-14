@@ -23,7 +23,9 @@ import bookingTagsRoutes from './routes/booking-tags';
 import bookingsRoutes from './routes/bookings';
 import supportTicketsRoutes from './routes/support-tickets';
 import supportBotsRoutes from './routes/support-bots';
+import supportTodoistWebhookRoutes from './routes/support-todoist-webhook';
 import { initializeDatabase } from './utils/db-init';
+import { startTodoistPolling } from './utils/support-todoist';
 import { ensureUploadsDir, logUploadsStorageStatus, resolveUploadedFilePath } from './utils/uploads';
 import path from 'path';
 import type sharp from 'sharp';
@@ -249,6 +251,7 @@ app.use('/api/bookings', bookingsRoutes);
 app.use('/api/support', supportTicketsRoutes);
 app.use('/api/support-tickets', supportTicketsRoutes);
 app.use('/api/support-bots', supportBotsRoutes);
+app.use('/api/support/todoist', supportTodoistWebhookRoutes);
 
 const uploadsDir = ensureUploadsDir();
 logUploadsStorageStatus();
@@ -588,6 +591,7 @@ async function initializeDatabaseConnection() {
     // Инициализируем базу данных (создаем таблицы и админа, если нужно)
     await initializeDatabase(pool);
     console.log('✅ База данных инициализирована');
+    startTodoistPolling(pool);
   } catch (error: any) {
     console.error('❌ Ошибка при подключении к базе данных:', error.message);
     if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {

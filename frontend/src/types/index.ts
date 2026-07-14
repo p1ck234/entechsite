@@ -330,6 +330,7 @@ export interface SupportTicket {
   responseDueAt?: string | null;
   resolveDueAt?: string | null;
   updatedAt: string;
+  todoistTaskId?: string | null;
   responseSlaMet?: boolean | null;
   resolveSlaMet?: boolean | null;
   firstResponseMs?: number | null;

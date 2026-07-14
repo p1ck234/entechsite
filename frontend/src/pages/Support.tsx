@@ -93,7 +93,7 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
       { id: 'mine', label: 'Мои заявки', show: true },
       { id: 'queue', label: 'Очередь', show: canAgent },
       { id: 'kpi', label: 'KPI', show: canAgent },
-      { id: 'agents', label: 'Агенты', show: canManageAgents },
+      { id: 'agents', label: 'Кто обрабатывает', show: canManageAgents },
     ];
     return items.filter((item) => item.show);
   }, [canAgent, canManageAgents]);
@@ -385,9 +385,13 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
 
       {tab === 'agents' && (
         <div className="rounded-3xl border border-pastel-200 bg-white p-5 space-y-4">
+          <p className="text-sm text-pastel-600">
+            Эти сотрудники видят вкладку «Очередь» и могут подтверждать / брать в работу / закрывать
+            заявки. Роль ADMIN тоже может обрабатывать без назначения. Новые заявки уходят в Todoist.
+          </p>
           <div className="flex flex-wrap gap-2 items-end">
             <div className="flex-1 min-w-[200px]">
-              <label className="mb-1 block text-xs text-pastel-500">Пользователь</label>
+              <label className="mb-1 block text-xs text-pastel-500">Пользователь портала</label>
               <select
                 className="input-field"
                 value={agentUserId}
@@ -403,7 +407,27 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
             </div>
             <button type="button" className="btn-primary inline-flex items-center gap-2" onClick={() => void handleAddAgent()}>
               <UserPlus className="h-4 w-4" />
-              Назначить агента
+              Назначить обработчика
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() =>
+                void supportAPI
+                  .syncTodoist()
+                  .then((r) =>
+                    setActionError(
+                      r.closed > 0
+                        ? `Todoist: проверено ${r.checked}, закрыто на портале ${r.closed}`
+                        : `Todoist: проверено ${r.checked}, новых закрытий нет`
+                    )
+                  )
+                  .catch((err: any) =>
+                    setActionError(err.response?.data?.message || 'Ошибка синхронизации Todoist')
+                  )
+              }
+            >
+              Синхронизировать Todoist
             </button>
           </div>
           <ul className="divide-y divide-pastel-100">
