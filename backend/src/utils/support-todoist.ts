@@ -14,7 +14,9 @@ const DEFAULT_PROJECT_NAME = '💰 HQ/ЭГ/C';
 
 /** Колонки канбана → статусы портала (имена секций Todoist, без регистра) */
 const SECTION_STATUS_MAP: Record<string, SupportStatus> = {
-  backlog: 'new',
+  входящие: 'new',
+  inbox: 'new',
+  backlog: 'new', // старые задачи / fallback
   неделя: 'acknowledged',
   сегодня: 'in_progress',
   ждун: 'waiting',
@@ -140,12 +142,18 @@ const loadSections = async (projectId: string): Promise<void> => {
   }
 };
 
-const resolveBacklogSectionId = async (projectId?: string): Promise<string | undefined> => {
+/** Куда класть новые заявки: колонка «Входящие», иначе Backlog */
+const resolveInboxSectionId = async (projectId?: string): Promise<string | undefined> => {
   if (!projectId) {
     return undefined;
   }
   await loadSections(projectId);
-  return cachedSectionsByProject.get(projectId)?.get('backlog');
+  const byName = cachedSectionsByProject.get(projectId);
+  return (
+    byName?.get('входящие') ||
+    byName?.get('inbox') ||
+    byName?.get('backlog')
+  );
 };
 
 type TodoistTaskSnapshot = {
@@ -368,7 +376,7 @@ export const createTodoistTaskForTicket = async (
   const projectId = await resolveTodoistProjectId(ticket.queue);
   const content = formatTodoistTaskContent(ticket);
   const description = formatTodoistTaskDescription(ticket);
-  const backlogSectionId = await resolveBacklogSectionId(projectId);
+  const inboxSectionId = await resolveInboxSectionId(projectId);
 
   try {
     const response = await fetch(`${TODOIST_API}/tasks`, {
@@ -379,7 +387,7 @@ export const createTodoistTaskForTicket = async (
         description,
         priority: todoistPriority(ticket.priority as SupportPriority),
         ...(projectId ? { project_id: projectId } : {}),
-        ...(backlogSectionId ? { section_id: backlogSectionId } : {}),
+        ...(inboxSectionId ? { section_id: inboxSectionId } : {}),
       }),
     });
 
