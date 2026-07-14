@@ -507,19 +507,26 @@ app.use('*', (req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
+let httpServerListening = false;
+
 process.on('unhandledRejection', (reason) => {
   console.error('unhandledRejection:', reason);
 });
 
 process.on('uncaughtException', (error) => {
   console.error('uncaughtException:', error);
-  process.exit(1);
+  // До listen — падаем (деплой сломан). После listen — не убиваем процесс:
+  // иначе Railway шлёт «Deploy Crashed» на разовые ошибки (Drive/sharp/сеть).
+  if (!httpServerListening) {
+    process.exit(1);
+  }
 });
 
 // Запускаем сервер СРАЗУ, чтобы он мог обрабатывать запросы (включая OPTIONS)
 // Подключение к базе данных будет выполнено асинхронно
 // В Railway сервер ДОЛЖЕН слушать на 0.0.0.0 и порту из переменной PORT
 const server = app.listen(PORT, '0.0.0.0', () => {
+  httpServerListening = true;
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`📊 Railway PORT: ${process.env.PORT || 'NOT SET'}`);
@@ -535,7 +542,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   }
   
   // Health check endpoint для Railway
-  console.log(`✅ Health check available at: http://0.0.0.0:${PORT}/api/health`);
+  console.log(`✅ Health check available at: http://0.0.0.0:${PORT}/health`);
 }).on('error', (err: any) => {
   console.error('❌ Server error:', err);
   console.error('❌ Error code:', err.code);
