@@ -322,12 +322,16 @@ export interface SupportTicket {
   priority: SupportPriority;
   status: SupportStatus;
   assigneeUserId?: string | null;
+  assigneeName?: string | null;
   attachmentUrl?: string | null;
   resolutionNote?: string | null;
   createdAt: string;
   acknowledgedAt?: string | null;
+  acknowledgedByName?: string | null;
   startedAt?: string | null;
   resolvedAt?: string | null;
+  resolvedBy?: string | null;
+  resolvedByName?: string | null;
   responseDueAt?: string | null;
   resolveDueAt?: string | null;
   updatedAt: string;
@@ -342,6 +346,7 @@ export interface SupportTicketEvent {
   id: string;
   ticketId: string;
   actorUserId?: string | null;
+  actorName?: string | null;
   eventType: string;
   fromStatus?: string | null;
   toStatus?: string | null;

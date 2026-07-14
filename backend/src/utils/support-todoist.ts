@@ -632,6 +632,10 @@ export const startTodoistPolling = (pool: Pool): void => {
     }
   };
 
-  void tick();
-  pollTimer = setInterval(() => void tick(), intervalMs);
+  // Не гоняем Todoist сразу при старте — иначе первые запросы портала тормозятся
+  const warmMs = Number(process.env.TODOIST_SYNC_WARMUP_MS || 45_000);
+  setTimeout(() => {
+    void tick();
+    pollTimer = setInterval(() => void tick(), intervalMs);
+  }, Math.max(5_000, warmMs)).unref?.();
 };

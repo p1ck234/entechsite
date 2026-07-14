@@ -47,6 +47,43 @@ const STATUS_LABEL: Record<SupportStatus, string> = {
   done: 'Готово',
 };
 
+const STATUS_BADGE: Record<SupportStatus, string> = {
+  new: 'bg-sky-100 text-sky-800',
+  acknowledged: 'bg-amber-100 text-amber-900',
+  in_progress: 'bg-violet-100 text-violet-900',
+  waiting: 'bg-orange-100 text-orange-900',
+  done: 'bg-emerald-100 text-emerald-900',
+};
+
+const EVENT_LABEL: Record<string, string> = {
+  created: 'Создана',
+  status_acknowledged: 'Подтверждена',
+  status_in_progress: 'В работе',
+  status_waiting: 'Ожидание',
+  status_done: 'Закрыта',
+  category_changed: 'Тема изменена',
+};
+
+const formatEventLine = (event: SupportTicketEvent): string => {
+  const when = new Date(event.createdAt).toLocaleString('ru-RU');
+  const action = EVENT_LABEL[event.eventType] || event.eventType;
+  const status =
+    event.toStatus && event.toStatus !== event.fromStatus
+      ? STATUS_LABEL[event.toStatus as SupportStatus] || event.toStatus
+      : null;
+  const who =
+    event.actorName ||
+    (event.note === 'todoist' || event.note === 'todoist-board' ? 'Todoist' : null);
+  const noteExtra =
+    event.note && event.note !== 'todoist' && event.note !== 'todoist-board' && event.note !== 'telegram'
+      ? event.note
+      : null;
+
+  return [when, action, status ? `→ ${status}` : null, who ? `· ${who}` : null, noteExtra ? `(${noteExtra})` : null]
+    .filter(Boolean)
+    .join(' ');
+};
+
 const formatDuration = (ms: number | null | undefined): string => {
   if (ms == null || Number.isNaN(ms)) {
     return '—';
@@ -471,8 +508,14 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
                           {getPriorityLabel(ticket.priority)}
                         </span>
                       </div>
-                      <div className="mt-1 flex flex-wrap gap-2 text-xs text-pastel-500">
-                        <span>{STATUS_LABEL[ticket.status]}</span>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-pastel-500">
+                        <span
+                          className={`rounded-full px-2 py-0.5 font-medium ${
+                            STATUS_BADGE[ticket.status] || STATUS_BADGE.new
+                          }`}
+                        >
+                          {STATUS_LABEL[ticket.status]}
+                        </span>
                         <span>{getThemeLabel(ticket.category)}</span>
                         <span>{ticket.requesterName}</span>
                         <span>{new Date(ticket.createdAt).toLocaleString('ru-RU')}</span>
@@ -544,10 +587,34 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
                       </span>
                     </dd>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
                     <dt className="shrink-0 text-pastel-500">📌 Статус</dt>
-                    <dd>{STATUS_LABEL[detail.ticket.status]}</dd>
+                    <dd>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          STATUS_BADGE[detail.ticket.status] || STATUS_BADGE.new
+                        }`}
+                      >
+                        {STATUS_LABEL[detail.ticket.status]}
+                      </span>
+                    </dd>
                   </div>
+                  {detail.ticket.assigneeName && (
+                    <div className="flex gap-2">
+                      <dt className="shrink-0 text-pastel-500">🛠 Исполнитель</dt>
+                      <dd className="font-medium">{detail.ticket.assigneeName}</dd>
+                    </div>
+                  )}
+                  {detail.ticket.status === 'done' && (
+                    <div className="flex gap-2">
+                      <dt className="shrink-0 text-pastel-500">✅ Закрыл</dt>
+                      <dd className="font-medium">
+                        {detail.ticket.resolvedByName ||
+                          detail.events.find((e) => e.eventType === 'status_done')?.actorName ||
+                          (detail.ticket.resolutionNote?.includes('Todoist') ? 'Todoist' : '—')}
+                      </dd>
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <dt className="shrink-0 text-pastel-500">🕒 Создано</dt>
                     <dd>{new Date(detail.ticket.createdAt).toLocaleString('ru-RU')}</dd>
@@ -716,12 +783,9 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
                   <div className="text-xs font-semibold uppercase tracking-wide text-pastel-400 mb-2">
                     История
                   </div>
-                  <ul className="space-y-1 text-xs text-pastel-600">
+                  <ul className="space-y-1.5 text-xs text-pastel-700">
                     {detail.events.map((event) => (
-                      <li key={event.id}>
-                        {new Date(event.createdAt).toLocaleString('ru-RU')} — {event.eventType}
-                        {event.toStatus ? ` → ${event.toStatus}` : ''}
-                      </li>
+                      <li key={event.id}>{formatEventLine(event)}</li>
                     ))}
                   </ul>
                 </div>

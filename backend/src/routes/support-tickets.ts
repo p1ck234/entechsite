@@ -79,6 +79,9 @@ const mapTicket = (row: any, extras?: { department?: string | null }) => ({
   startedAt: row.started_at,
   resolvedAt: row.resolved_at,
   resolvedBy: row.resolved_by ? String(row.resolved_by) : null,
+  resolvedByName: row.resolved_by_name || null,
+  assigneeName: row.assignee_name || null,
+  acknowledgedByName: row.acknowledged_by_name || null,
   responseDueAt: row.response_due_at,
   resolveDueAt: row.resolve_due_at,
   updatedAt: row.updated_at,
@@ -114,12 +117,20 @@ const mapEvent = (row: any) => ({
   id: String(row.id),
   ticketId: String(row.ticket_id),
   actorUserId: row.actor_user_id ? String(row.actor_user_id) : null,
+  actorName: row.actor_name || null,
   eventType: row.event_type,
   fromStatus: row.from_status,
   toStatus: row.to_status,
   note: row.note,
   createdAt: row.created_at,
 });
+
+const employeeFullNameSql = (alias: string) =>
+  `NULLIF(TRIM(CONCAT_WS(' ',
+     NULLIF(${alias}.last_name, ''),
+     NULLIF(${alias}.first_name, ''),
+     NULLIF(${alias}.middle_name, '')
+   )), '')`;
 
 const mapReply = (row: any) => ({
   id: String(row.id),
@@ -466,9 +477,21 @@ router.get(
   param('id').isInt(),
   async (req: AuthRequest, res: Response) => {
     try {
-      const result = await pool.query(`SELECT * FROM support_tickets WHERE id = $1`, [
-        Number(req.params.id),
-      ]);
+      const result = await pool.query(
+        `SELECT t.*,
+                COALESCE(${employeeFullNameSql('re')}, ru.email) AS resolved_by_name,
+                COALESCE(${employeeFullNameSql('ae')}, au.email) AS assignee_name,
+                COALESCE(${employeeFullNameSql('ack')}, aku.email) AS acknowledged_by_name
+         FROM support_tickets t
+         LEFT JOIN users ru ON ru.id = t.resolved_by
+         LEFT JOIN employees re ON LOWER(re.email) = LOWER(ru.email)
+         LEFT JOIN users au ON au.id = t.assignee_user_id
+         LEFT JOIN employees ae ON LOWER(ae.email) = LOWER(au.email)
+         LEFT JOIN users aku ON aku.id = t.acknowledged_by
+         LEFT JOIN employees ack ON LOWER(ack.email) = LOWER(aku.email)
+         WHERE t.id = $1`,
+        [Number(req.params.id)]
+      );
 
       if (result.rows.length === 0) {
         return res.status(404).json({ message: 'Заявка не найдена' });
@@ -484,7 +507,13 @@ router.get(
 
       const [events, replies] = await Promise.all([
         pool.query(
-          `SELECT * FROM support_ticket_events WHERE ticket_id = $1 ORDER BY created_at ASC`,
+          `SELECT ev.*,
+                  COALESCE(${employeeFullNameSql('e')}, u.email) AS actor_name
+           FROM support_ticket_events ev
+           LEFT JOIN users u ON u.id = ev.actor_user_id
+           LEFT JOIN employees e ON LOWER(e.email) = LOWER(u.email)
+           WHERE ev.ticket_id = $1
+           ORDER BY ev.created_at ASC`,
           [ticket.id]
         ),
         pool.query(

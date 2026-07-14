@@ -284,21 +284,34 @@ export const ensureSupportSchema = async (pool: Pool): Promise<void> => {
         ADD COLUMN IF NOT EXISTS todoist_task_id VARCHAR(64);
     `);
 
-    // Статус «waiting» (Ожидание / колонка Ждун в Todoist)
+    // Обновить CHECK только если в нём ещё нет waiting (без DROP на каждом старте)
     await pool.query(`
       DO $$
+      DECLARE
+        def text;
       BEGIN
-        IF EXISTS (
-          SELECT 1 FROM pg_constraint
-          WHERE conname = 'support_tickets_status_check'
-        ) THEN
+        SELECT pg_get_constraintdef(c.oid) INTO def
+        FROM pg_constraint c
+        JOIN pg_class t ON c.conrelid = t.oid
+        JOIN pg_namespace n ON t.relnamespace = n.oid
+        WHERE t.relname = 'support_tickets'
+          AND n.nspname = 'public'
+          AND c.contype = 'c'
+          AND c.conname = 'support_tickets_status_check';
+
+        IF def IS NULL THEN
+          ALTER TABLE support_tickets
+            ADD CONSTRAINT support_tickets_status_check
+            CHECK (status IN ('new', 'acknowledged', 'in_progress', 'waiting', 'done'));
+        ELSIF position('waiting' in def) = 0 THEN
           ALTER TABLE support_tickets DROP CONSTRAINT support_tickets_status_check;
+          ALTER TABLE support_tickets
+            ADD CONSTRAINT support_tickets_status_check
+            CHECK (status IN ('new', 'acknowledged', 'in_progress', 'waiting', 'done'));
         END IF;
-        ALTER TABLE support_tickets
-          ADD CONSTRAINT support_tickets_status_check
-          CHECK (status IN ('new', 'acknowledged', 'in_progress', 'waiting', 'done'));
       EXCEPTION
         WHEN duplicate_object THEN NULL;
+        WHEN undefined_table THEN NULL;
       END $$;
     `);
 
