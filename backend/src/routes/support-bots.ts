@@ -156,11 +156,18 @@ const createTicketFromBot = async (params: {
     result.rows[0].id,
   ]);
   const ticket = created.rows[0];
-  if (ticket?.queue === 'public') {
-    await syncTicketToTodoist(pool, ticket);
-    void buildTicketFormatContext(pool, ticket).then((ctx) =>
-      notifySupportAgents(pool, 'public', formatTelegramNewTicketHtml(ctx), 'HTML')
-    );
+  if (ticket) {
+    try {
+      await syncTicketToTodoist(pool, ticket);
+    } catch {
+      console.error('Todoist sync on bot create failed');
+    }
+
+    if (ticket.queue === 'public') {
+      void buildTicketFormatContext(pool, ticket).then((ctx) =>
+        notifySupportAgents(pool, 'public', formatTelegramNewTicketHtml(ctx), 'HTML')
+      );
+    }
   }
 
   return ticket || result.rows[0];

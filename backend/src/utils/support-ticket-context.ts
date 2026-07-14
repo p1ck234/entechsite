@@ -11,6 +11,7 @@ export const buildTicketFormatContext = async (
     priority: string;
     category?: string | null;
     status?: string;
+    queue?: string | null;
     requester_name?: string | null;
     requester_email?: string | null;
     requester_user_id?: number | string;
@@ -60,6 +61,7 @@ export const buildTicketFormatContext = async (
     priority: ticket.priority,
     category: ticket.category,
     status: ticket.status,
+    queue: ticket.queue || null,
     requesterName: ticket.requester_name,
     requesterEmail: ticket.requester_email,
     department,

@@ -228,8 +228,9 @@ const AdminSettings: React.FC = () => {
           Todoist
         </div>
         <p className="text-sm text-pastel-600">
-          Новые публичные заявки создаются в проекте Todoist «💰 HQ/ЭГ/C». Закрытие задачи в Todoist
-          закрывает заявку на портале.
+          Новые заявки (публичные и служебные) создаются в проекте Todoist «💰 HQ/ЭГ/C». Служебные
+          с пометкой «🛡» в названии. Закрытие задачи в Todoist закрывает заявку на портале.
+          Назначение ответственного и перенос по колонкам канбана портал пока не читает.
         </p>
         <button type="button" className="btn-secondary" onClick={() => void handleSyncTodoist()}>
           Синхронизировать Todoist сейчас

@@ -30,7 +30,16 @@ const authHeaders = (token: string) => ({
   'Content-Type': 'application/json',
 });
 
-export const resolveTodoistProjectId = async (): Promise<string | undefined> => {
+export const resolveTodoistProjectId = async (
+  queue?: string | null
+): Promise<string | undefined> => {
+  if (queue === 'shadow') {
+    const shadowProject = (process.env.TODOIST_SHADOW_PROJECT_ID || '').trim();
+    if (shadowProject) {
+      return shadowProject;
+    }
+  }
+
   const fromEnv = (process.env.TODOIST_PROJECT_ID || '').trim();
   if (fromEnv) {
     return fromEnv;
@@ -80,7 +89,7 @@ export const createTodoistTaskForTicket = async (
     return null;
   }
 
-  const projectId = await resolveTodoistProjectId();
+  const projectId = await resolveTodoistProjectId(ticket.queue);
   const content = formatTodoistTaskContent(ticket);
   const description = formatTodoistTaskDescription(ticket);
 

@@ -10,6 +10,7 @@ export type TicketFormatInput = {
   priority: SupportPriority | string;
   category?: string | null;
   status?: SupportStatus | string;
+  queue?: string | null;
   requesterName?: string | null;
   requesterEmail?: string | null;
   department?: string | null;
@@ -65,16 +66,20 @@ export const formatTodoistTaskContent = (ticket: TicketFormatInput): string => {
   const dept = ticket.department?.trim() || '—';
   const urgency = getPriorityLabel(ticket.priority);
   const title = shortSubject(ticket.subject, ticket.category);
-  return `${code} | ${dept} | ${urgency} | ${title}`.slice(0, 300);
+  const prefix = ticket.queue === 'shadow' ? '🛡 ' : '';
+  return `${prefix}${code} | ${dept} | ${urgency} | ${title}`.slice(0, 300);
 };
 
 export const formatTodoistTaskDescription = (ticket: TicketFormatInput): string => {
   const code = formatTicketCode(ticket.id);
   const telegram = normalizeTelegram(ticket.telegram);
+  const queueLabel = ticket.queue === 'shadow' ? 'Служебная' : 'Публичная';
   const lines = [
     `entech-ticket:${ticket.id}`,
+    ticket.queue === 'shadow' ? 'entech-queue:shadow' : 'entech-queue:public',
     '',
     `🎫 Заявка: ${code}`,
+    `🔐 Очередь: ${queueLabel}`,
     `👤 Заявитель: ${ticket.requesterName || '—'}`,
     ticket.position ? `💼 Должность: ${ticket.position}` : null,
     telegram ? `📱 Telegram: ${telegram}` : null,

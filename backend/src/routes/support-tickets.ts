@@ -632,27 +632,27 @@ router.post(
       const ticket = result.rows[0];
       await insertEvent(ticket.id, req.user!.id, 'created', null, 'new', null);
 
-      // Публичные заявки → Todoist + TG обработчикам
-      if (ticket.queue === 'public') {
-        try {
-          await syncTicketToTodoist(pool, ticket);
-        } catch {
-          console.error('Todoist sync on create failed');
-        }
+      // Публичные и служебные заявки → Todoist; TG-агентам только публичная очередь
+      try {
+        await syncTicketToTodoist(pool, ticket);
+      } catch {
+        console.error('Todoist sync on create failed');
+      }
 
+      if (ticket.queue === 'public') {
         void buildTicketFormatContext(pool, ticket).then((ctx) =>
           notifySupportAgents(pool, 'public', formatTelegramNewTicketHtml(ctx), 'HTML')
         );
+      }
 
-        const refreshed = await pool.query(`SELECT * FROM support_tickets WHERE id = $1`, [
-          ticket.id,
-        ]);
-        if (refreshed.rows[0]) {
-          return res.status(201).json({
-            message: 'Заявка создана',
-            ticket: mapTicket(refreshed.rows[0]),
-          });
-        }
+      const refreshed = await pool.query(`SELECT * FROM support_tickets WHERE id = $1`, [
+        ticket.id,
+      ]);
+      if (refreshed.rows[0]) {
+        return res.status(201).json({
+          message: 'Заявка создана',
+          ticket: mapTicket(refreshed.rows[0]),
+        });
       }
 
       return res.status(201).json({
