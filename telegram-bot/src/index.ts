@@ -20,10 +20,38 @@ console.log('🤖 Telegram бот запущен и готов к работе')
 if (BACKEND_URL) {
   console.log(`🛟 Публичная техподдержка: forward → ${BACKEND_URL}/api/support-bots/webhook/public`);
 } else {
-  console.warn('⚠️ BACKEND_URL не задан — команды поддержки (/new, /my, /queue) недоступны');
+  console.warn('⚠️ BACKEND_URL не задан — кнопки поддержки недоступны');
 }
 
-const SUPPORT_COMMANDS = new Set(['/new', '/my', '/queue', '/cancel', '/help']);
+const BTN_NEW = '🆘 Новая заявка';
+const BTN_MY = '📋 Мои заявки';
+const BTN_CANCEL = '❌ Отмена';
+
+const BUTTON_TO_COMMAND: Record<string, string> = {
+  [BTN_NEW]: '/new',
+  [BTN_MY]: '/my',
+  [BTN_CANCEL]: '/cancel',
+  'Новая заявка': '/new',
+  'Мои заявки': '/my',
+  Отмена: '/cancel',
+};
+
+const supportKeyboard: TelegramBot.ReplyKeyboardMarkup = {
+  keyboard: [
+    [{ text: BTN_NEW }, { text: BTN_MY }],
+    [{ text: BTN_CANCEL }],
+  ],
+  resize_keyboard: true,
+  is_persistent: true,
+};
+
+const normalizeSupportText = (text: string): string => {
+  const trimmed = text.trim();
+  if (BUTTON_TO_COMMAND[trimmed]) {
+    return BUTTON_TO_COMMAND[trimmed];
+  }
+  return trimmed.split(/\s+/)[0]?.split('@')[0] || trimmed;
+};
 
 const forwardSupportUpdate = async (update: Record<string, unknown>): Promise<boolean> => {
   if (!BACKEND_URL) {
@@ -65,15 +93,17 @@ bot.onText(/\/start(?:@\w+)?(?:\s|$)/, async (msg) => {
 
 Мы рады вас видеть! 🎉
 
-Для доступа к приложению нажмите на синюю кнопку "Открыть портал" внизу.
+Для доступа к приложению нажмите на синюю кнопку «Открыть портал» внизу.
 
 💻 *С рабочего компьютера:*
 Перейдите по ссылке: [entech.p1ck23.ru/auth](https://entech.p1ck23.ru/auth)
 
-🛟 *Техподдержка в этом боте:*
-/new — создать заявку
-/my — мои заявки
-/queue — очередь (для агентов)
+🛟 *Техподдержка* — кнопки под полем ввода:
+• «Новая заявка» — описать проблему
+• «Мои заявки» — статус ваших обращений
+• «Отмена» — сбросить черновик
+
+Очередь заявок для сотрудников техподдержки — в разделе «Поддержка» на портале.
 
 Если у вас возникнут вопросы, обращайтесь к администратору.
 
@@ -84,6 +114,7 @@ bot.onText(/\/start(?:@\w+)?(?:\s|$)/, async (msg) => {
     await bot.sendMessage(chatId, welcomeMessage, {
       parse_mode: 'Markdown',
       disable_web_page_preview: false,
+      reply_markup: supportKeyboard,
     });
     console.log(`✅ Приветственное сообщение отправлено пользователю ${firstName} (ID: ${chatId})`);
   } catch (error) {
@@ -104,30 +135,28 @@ bot.on('callback_query', async (query) => {
 
 bot.on('message', async (msg) => {
   const text = (msg.text || '').trim();
-  const command = text.split(/\s+/)[0]?.split('@')[0] || '';
-
-  if (command === '/start') {
+  if (!text) {
     return;
   }
 
-  const isSupportCommand = SUPPORT_COMMANDS.has(command);
-  const isPlainText = Boolean(text) && !text.startsWith('/');
+  const command = normalizeSupportText(text);
 
-  if (!isSupportCommand && !isPlainText) {
+  if (command === '/start' || text.startsWith('/start')) {
+    return;
+  }
+
+  const isSupportAction = ['/new', '/my', '/cancel', '/help', '/queue'].includes(command);
+  const isButton = Boolean(BUTTON_TO_COMMAND[text]);
+  const isPlainText = !text.startsWith('/') && !isButton;
+
+  if (!isSupportAction && !isPlainText && !isButton) {
     if (text.startsWith('/')) {
-      const chatId = msg.chat.id;
-      const helpMessage = `🤖 Доступные команды:
-
-/start — доступ к порталу
-/new — новая заявка в техподдержку
-/my — мои заявки
-/queue — очередь агента
-/cancel — отменить черновик заявки
-
-Если у вас есть вопросы, обращайтесь к администратору.`;
-
       try {
-        await bot.sendMessage(chatId, helpMessage);
+        await bot.sendMessage(
+          msg.chat.id,
+          'Используйте кнопки под полем ввода: «Новая заявка», «Мои заявки», «Отмена».\nИли откройте раздел «Поддержка» на портале.',
+          { reply_markup: supportKeyboard }
+        );
       } catch (error) {
         console.error(`❌ Ошибка при отправке сообщения:`, error);
       }
@@ -135,12 +164,21 @@ bot.on('message', async (msg) => {
     return;
   }
 
-  const ok = await forwardSupportUpdate({ message: msg });
-  if (!ok && isSupportCommand) {
+  const messageToForward =
+    isSupportAction || isButton
+      ? {
+          ...msg,
+          text: command.startsWith('/') ? command : text,
+        }
+      : msg;
+
+  const ok = await forwardSupportUpdate({ message: messageToForward });
+  if (!ok && (isSupportAction || isButton)) {
     try {
       await bot.sendMessage(
         msg.chat.id,
-        'Техподдержка временно недоступна. Попробуйте позже или откройте раздел «Поддержка» на портале.'
+        'Техподдержка временно недоступна. Попробуйте позже или откройте раздел «Поддержка» на портале.',
+        { reply_markup: supportKeyboard }
       );
     } catch {
       // ignore

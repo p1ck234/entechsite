@@ -294,23 +294,35 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
 
     const draftKey = `${queue}:${chatId}`;
 
-    if (text === '/start' || text === '/help') {
+    const BUTTON_ALIASES: Record<string, string> = {
+      '🆘 Новая заявка': '/new',
+      '📋 Мои заявки': '/my',
+      '❌ Отмена': '/cancel',
+      'Новая заявка': '/new',
+      'Мои заявки': '/my',
+      Отмена: '/cancel',
+      '📥 Очередь': '/queue',
+      Очередь: '/queue',
+    };
+    const action = BUTTON_ALIASES[text] || text.split(/\s+/)[0]?.split('@')[0] || text;
+
+    if (action === '/start' || action === '/help') {
       draftByChat.delete(draftKey);
       await sendTelegramMessage(
         queue,
         chatId,
-        'Команды:\n/new — новая заявка\n/my — мои заявки\n/cancel — отменить черновик'
+        'Техподдержка:\n«Новая заявка» — создать обращение\n«Мои заявки» — ваши обращения\n«Отмена» — сбросить черновик\n\nОчередь для агентов — на портале в разделе «Поддержка».'
       );
       return res.json({ ok: true });
     }
 
-    if (text === '/cancel') {
+    if (action === '/cancel') {
       draftByChat.delete(draftKey);
       await sendTelegramMessage(queue, chatId, 'Черновик отменён');
       return res.json({ ok: true });
     }
 
-    if (text === '/my') {
+    if (action === '/my') {
       const tickets = await pool.query(
         `SELECT id, subject, status, priority, created_at
          FROM support_tickets
@@ -332,14 +344,15 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
       return res.json({ ok: true });
     }
 
-    if (text === '/new') {
+    if (action === '/new') {
       draftByChat.set(draftKey, { step: 'subject' });
       await sendTelegramMessage(queue, chatId, 'Кратко опишите тему заявки:');
       return res.json({ ok: true });
     }
 
-    // Agent queue peek for shadow operator / public agents
-    if (text === '/queue') {
+    // Очередь агента: незакрытые заявки всех сотрудников (не «мои»).
+    // Для обычных пользователей скрыта в UI бота; доступна агентам/ADMIN на портале или по /queue.
+    if (action === '/queue') {
       let allowed = false;
       if (queue === 'shadow') {
         allowed = await canAccessShadowQueue(pool, {
@@ -450,7 +463,7 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
     await sendTelegramMessage(
       queue,
       chatId,
-      'Нажмите /new чтобы создать заявку или /my чтобы посмотреть свои.'
+      'Используйте кнопки: «Новая заявка» или «Мои заявки». Либо раздел «Поддержка» на портале.'
     );
     return res.json({ ok: true });
   } catch (error) {
