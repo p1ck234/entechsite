@@ -591,7 +591,11 @@ async function initializeDatabaseConnection() {
     // Инициализируем базу данных (создаем таблицы и админа, если нужно)
     await initializeDatabase(pool);
     console.log('✅ База данных инициализирована');
-    startTodoistPolling(pool);
+    try {
+      startTodoistPolling(pool);
+    } catch (pollError: any) {
+      console.error('Todoist polling start failed:', pollError?.message || pollError);
+    }
   } catch (error: any) {
     console.error('❌ Ошибка при подключении к базе данных:', error.message);
     if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {

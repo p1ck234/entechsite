@@ -49,9 +49,9 @@ const themeKeyboard = () => ({
 
 const priorityKeyboard = () => ({
   inline_keyboard: [
-    [{ text: '🔴 Критично — работа встала', callback_data: 'priority:P1' }],
-    [{ text: '🟡 Важно — сильно мешает', callback_data: 'priority:P2' }],
-    [{ text: '🟢 Обычная — можно подождать', callback_data: 'priority:P3' }],
+    [{ text: '🔴 Критично', callback_data: 'priority:P1' }],
+    [{ text: '🟡 Важно', callback_data: 'priority:P2' }],
+    [{ text: '🟢 Обычная', callback_data: 'priority:P3' }],
   ],
 });
 

@@ -106,16 +106,16 @@ const Home: React.FC = () => {
   return (
     <div
       className={`${
-        isInsideLayout ? 'h-full w-full absolute inset-0' : 'min-h-screen'
-      } bg-[#f4ece6] flex items-center justify-center ${isInsideLayout ? 'p-0' : 'p-2 sm:p-4'}`}
+        isInsideLayout ? 'h-full w-full min-h-0' : 'min-h-screen'
+      } bg-[#f4ece6] flex items-stretch justify-center ${isInsideLayout ? 'p-0' : 'p-2 sm:p-4'}`}
     >
-      <div className={`w-full ${isInsideLayout ? 'h-full' : 'max-w-7xl'} flex items-center justify-center`}>
+      <div className={`w-full ${isInsideLayout ? 'h-full min-h-0' : 'max-w-7xl'} flex items-stretch justify-center`}>
         <div
           className={`${
             isInsideLayout ? 'w-full h-full rounded-none' : 'w-full max-w-6xl rounded-[28px]'
           } bg-[#f4ece6] ${isInsideLayout ? '' : 'shadow-xl border border-[#e4d7cf]'} overflow-y-auto`}
         >
-          <div className="mx-auto w-full max-w-6xl px-4 sm:px-8 lg:px-14 py-8 sm:py-12 lg:py-16">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-8 lg:px-14 py-8 sm:py-12 lg:py-16 pt-14 lg:pt-12">
             <div className="flex justify-center">
               <Logo size="lg" showText={true} />
             </div>

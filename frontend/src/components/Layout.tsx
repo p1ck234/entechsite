@@ -216,10 +216,11 @@ const Layout: React.FC = () => {
   const isActive = (path: string) => location.pathname === path;
   const pageTitle =
     visibleNavigation.find((item) => isActive(item.href))?.name || SITE_CONFIG.name;
-  const isHomeFullscreen = isTelegram && location.pathname === '/home';
+  /** Главная с ДНК — на весь экран, без шапки «Главная»; бургер поверх */
+  const isHomePage = location.pathname === '/home';
 
   return (
-    <div className="min-h-screen flex">
+    <div className={`min-h-screen flex ${isHomePage ? 'h-[100dvh] overflow-hidden' : ''}`}>
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setSidebarOpen(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
@@ -288,25 +289,36 @@ const Layout: React.FC = () => {
         </div>
       </div>
 
-      <div className={`flex-1 flex flex-col lg:ml-0 ${isHomeFullscreen ? 'relative h-full' : ''}`}>
-        <header className="bg-white/30 backdrop-blur-sm border-b border-white/20 px-4 py-3 lg:px-6 lg:py-4">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-lg hover:bg-white/20 transition-colors"
-              aria-label="Открыть меню"
-            >
-              <Menu className="w-6 h-6 text-pastel-700" />
-            </button>
+      <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${isHomePage ? 'relative' : ''}`}>
+        {isHomePage ? (
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            className="lg:hidden fixed top-3 left-3 z-[45] rounded-xl bg-white/90 p-2.5 shadow-md border border-[#e4d7cf] text-pastel-800"
+            aria-label="Открыть меню"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+        ) : (
+          <header className="bg-white/30 backdrop-blur-sm border-b border-white/20 px-4 py-3 lg:px-6 lg:py-4 shrink-0">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden p-2 rounded-lg hover:bg-white/20 transition-colors"
+                aria-label="Открыть меню"
+              >
+                <Menu className="w-6 h-6 text-pastel-700" />
+              </button>
 
-            <h1 className="text-xl lg:text-2xl font-bold text-pastel-800 truncate">{pageTitle}</h1>
-          </div>
-        </header>
+              <h1 className="text-xl lg:text-2xl font-bold text-pastel-800 truncate">{pageTitle}</h1>
+            </div>
+          </header>
+        )}
 
         <main
-          className={`flex-1 ${
-            isHomeFullscreen ? 'p-0 relative h-full overflow-hidden' : 'p-4 lg:p-6'
+          className={`flex-1 min-h-0 ${
+            isHomePage ? 'p-0 relative overflow-hidden' : 'p-4 lg:p-6'
           }`}
         >
           <Outlet />
