@@ -2,8 +2,8 @@ import express, { Request, Response } from 'express';
 import { pool } from '../db/pool';
 import { ensureSupportSchema } from '../utils/ensure-schema';
 import { canAccessShadowQueue } from '../utils/support-permissions';
-import { SupportQueue, SupportPriority, computeSlaDeadlines, isSupportPriority } from '../utils/support-sla';
-import { canTransitionStatus } from '../utils/support-ticket-rules';
+import { SupportQueue, SupportPriority, computeSlaDeadlines } from '../utils/support-sla';
+import { canTransitionStatus, statusLabelRu } from '../utils/support-ticket-rules';
 import {
   answerTelegramCallback,
   notifySupportAgents,
@@ -12,14 +12,34 @@ import {
 } from '../utils/support-notify';
 import { getSupportBotSecret, getSupportBotToken } from '../utils/support-bot-token';
 import { closeTodoistTask, syncTicketToTodoist } from '../utils/support-todoist';
+import {
+  SUPPORT_THEMES,
+  buildTicketSubject,
+  getPriorityLabel,
+  getThemeLabel,
+  isSupportThemeId,
+  parsePriorityFromHumanText,
+  type SupportThemeId,
+} from '../utils/support-labels';
 
 const router = express.Router();
 
 type DraftState = {
-  step: 'subject' | 'body' | 'priority';
-  subject?: string;
+  step: 'theme' | 'body' | 'priority';
+  themeId?: SupportThemeId;
   body?: string;
 };
+
+const themesHelpText = () =>
+  'Выберите тему — ответьте номером:\n' +
+  SUPPORT_THEMES.map((theme, index) => `${index + 1}. ${theme.label}`).join('\n');
+
+const priorityHelpText =
+  'Насколько срочно?\n' +
+  '1. Критично — работа полностью встала\n' +
+  '2. Важно — сильно мешает работе\n' +
+  '3. Обычная — можно подождать\n' +
+  'Или напишите «пропустить»';
 
 const draftByChat = new Map<string, DraftState>();
 
@@ -64,12 +84,13 @@ const createTicketFromBot = async (params: {
   queue: SupportQueue;
   user: any;
   chatId: number;
-  subject: string;
+  themeId: SupportThemeId;
   body: string;
   priority: SupportPriority;
 }) => {
   const createdAt = new Date();
   const deadlines = computeSlaDeadlines(params.priority, createdAt);
+  const subject = buildTicketSubject(params.themeId);
   const result = await pool.query(
     `INSERT INTO support_tickets (
        queue, requester_user_id, requester_name, requester_email,
@@ -77,16 +98,17 @@ const createTicketFromBot = async (params: {
        telegram_chat_id, created_at, response_due_at, resolve_due_at, updated_at
      ) VALUES (
        $1, $2, $3, $4,
-       $5, $6, 'telegram', $7, 'new',
-       $8, $9, $10, $11, $9
+       $5, $6, $7, $8, 'new',
+       $9, $10, $11, $12, $10
      ) RETURNING id, subject, status`,
     [
       params.queue,
       params.user.id,
       fullName(params.user),
       params.user.email,
-      params.subject,
+      subject,
       params.body,
+      params.themeId,
       params.priority,
       params.chatId,
       createdAt,
@@ -111,7 +133,8 @@ const createTicketFromBot = async (params: {
     void notifySupportAgents(
       pool,
       'public',
-      `Новая заявка #${ticket.id} [${ticket.priority}]\n` +
+      `Новая заявка #${ticket.id}\n` +
+        `${getThemeLabel(ticket.category)} · ${getPriorityLabel(ticket.priority)}\n` +
         `${ticket.subject}\n` +
         `От: ${ticket.requester_name}\n` +
         `${String(ticket.body).slice(0, 240)}`
@@ -359,15 +382,16 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
       }
 
       const lines = tickets.rows.map(
-        (t) => `#${t.id} [${t.priority}] ${t.status}: ${t.subject}`
+        (t) =>
+          `#${t.id} · ${getPriorityLabel(t.priority)} · ${statusLabelRu(t.status)}\n${t.subject}`
       );
-      await sendTelegramMessage(queue, chatId, lines.join('\n'));
+      await sendTelegramMessage(queue, chatId, lines.join('\n\n'));
       return res.json({ ok: true });
     }
 
     if (action === '/new') {
-      draftByChat.set(draftKey, { step: 'subject' });
-      await sendTelegramMessage(queue, chatId, 'Кратко опишите тему заявки:');
+      draftByChat.set(draftKey, { step: 'theme' });
+      await sendTelegramMessage(queue, chatId, themesHelpText());
       return res.json({ ok: true });
     }
 
@@ -421,7 +445,7 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
         await sendTelegramMessage(
           queue,
           chatId,
-          `#${t.id} [${t.priority}] ${t.status}\n${t.subject}`,
+          `#${t.id} · ${getPriorityLabel(t.priority)} · ${statusLabelRu(t.status)}\n${t.subject}`,
           buttons.length ? { inline_keyboard: buttons } : undefined
         );
       }
@@ -430,11 +454,33 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
 
     const draft = draftByChat.get(draftKey);
     if (draft) {
-      if (draft.step === 'subject') {
-        draft.subject = text.slice(0, 255);
+      if (draft.step === 'theme') {
+        const asNumber = Number(text.trim());
+        let themeId: SupportThemeId | null = null;
+        if (Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= SUPPORT_THEMES.length) {
+          themeId = SUPPORT_THEMES[asNumber - 1].id;
+        } else if (isSupportThemeId(text.trim().toLowerCase())) {
+          themeId = text.trim().toLowerCase() as SupportThemeId;
+        } else {
+          const byLabel = SUPPORT_THEMES.find(
+            (theme) => theme.label.toLowerCase() === text.trim().toLowerCase()
+          );
+          themeId = byLabel?.id || null;
+        }
+
+        if (!themeId) {
+          await sendTelegramMessage(queue, chatId, `Не понял тему.\n\n${themesHelpText()}`);
+          return res.json({ ok: true });
+        }
+
+        draft.themeId = themeId;
         draft.step = 'body';
         draftByChat.set(draftKey, draft);
-        await sendTelegramMessage(queue, chatId, 'Опишите проблему подробнее:');
+        await sendTelegramMessage(
+          queue,
+          chatId,
+          `Тема: ${getThemeLabel(themeId)}\n\nОпишите проблему: что случилось и что уже пробовали.`
+        );
         return res.json({ ok: true });
       }
 
@@ -442,21 +488,14 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
         draft.body = text.slice(0, 10000);
         draft.step = 'priority';
         draftByChat.set(draftKey, draft);
-        await sendTelegramMessage(
-          queue,
-          chatId,
-          'Приоритет? Ответьте: P1, P2 или P3 (или «пропустить»)'
-        );
+        await sendTelegramMessage(queue, chatId, priorityHelpText);
         return res.json({ ok: true });
       }
 
       if (draft.step === 'priority') {
-        let priority: SupportPriority = 'P3';
-        const normalized = text.toUpperCase();
-        if (isSupportPriority(normalized)) {
-          priority = normalized;
-        } else if (!['пропустить', 'skip', '-'].includes(text.toLowerCase())) {
-          await sendTelegramMessage(queue, chatId, 'Нужно P1, P2, P3 или «пропустить»');
+        const priority = parsePriorityFromHumanText(text) || null;
+        if (!priority) {
+          await sendTelegramMessage(queue, chatId, `Не понял срочность.\n\n${priorityHelpText}`);
           return res.json({ ok: true });
         }
 
@@ -464,7 +503,7 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
           queue,
           user,
           chatId,
-          subject: draft.subject || 'Без темы',
+          themeId: draft.themeId || 'other',
           body: draft.body || text,
           priority,
         });
@@ -472,7 +511,10 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
         await sendTelegramMessage(
           queue,
           chatId,
-          `Заявка #${ticket.id} создана. Статус: new`
+          `Заявка #${ticket.id} создана.\n` +
+            `${ticket.subject}\n` +
+            `Срочность: ${getPriorityLabel(priority)}\n` +
+            `Статус: ${statusLabelRu('new')}`
         );
         return res.json({ ok: true });
       }

@@ -550,7 +550,22 @@ router.post(
   authenticateToken,
   body('subject').trim().isLength({ min: 3, max: 255 }),
   body('body').trim().isLength({ min: 3, max: 10000 }),
-  body('category').optional().trim().isLength({ max: 100 }),
+  body('category')
+    .optional()
+    .trim()
+    .isIn([
+      'printer',
+      'computer',
+      'network',
+      'email',
+      'access',
+      'software',
+      '1c',
+      'phone',
+      'other',
+      'telegram',
+      'hardware',
+    ]),
   body('priority').optional().isIn(['P1', 'P2', 'P3']),
   body('queue').optional().isIn(['public', 'shadow']),
   body('attachmentUrl').optional().isString().isLength({ max: 500 }),
@@ -626,7 +641,7 @@ router.post(
         void notifySupportAgents(
           pool,
           'public',
-          `Новая заявка #${ticket.id} [${ticket.priority}]\n` +
+          `Новая заявка #${ticket.id}\n` +
             `${ticket.subject}\n` +
             `От: ${ticket.requester_name}\n` +
             `${String(ticket.body).slice(0, 240)}`

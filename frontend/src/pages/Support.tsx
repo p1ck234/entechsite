@@ -25,6 +25,14 @@ import type {
   SupportTicketReply,
 } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
+import {
+  SUPPORT_PRIORITY_OPTIONS,
+  SUPPORT_THEMES,
+  buildTicketSubject,
+  getPriorityLabel,
+  getThemeLabel,
+  type SupportThemeId,
+} from '../utils/supportLabels';
 
 type TabId = 'mine' | 'queue' | 'kpi' | 'settings';
 
@@ -84,9 +92,9 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
   const [replySending, setReplySending] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
-    subject: '',
+    themeId: 'other' as SupportThemeId,
+    detail: '',
     body: '',
-    category: 'other',
     priority: 'P3' as SupportPriority,
   });
   const [agentUserId, setAgentUserId] = useState('');
@@ -217,10 +225,13 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
       setActionError('');
       setCreating(true);
       await supportAPI.createTicket({
-        ...form,
+        subject: buildTicketSubject(form.themeId, form.detail),
+        body: form.body,
+        category: form.themeId,
+        priority: form.priority,
         queue,
       });
-      setForm({ subject: '', body: '', category: 'other', priority: 'P3' });
+      setForm({ themeId: 'other', detail: '', body: '', priority: 'P3' });
       setTab('mine');
       await loadTickets('mine');
     } catch (err: any) {
@@ -291,8 +302,8 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
           </h1>
           <p className="mt-1 text-sm text-pastel-500">
             {canAgent || canSettings
-              ? 'Заявка → подтверждение → в работе → готово. SLA по приоритету P1–P3.'
-              : 'Создайте обращение и следите за статусом в «Мои заявки».'}
+              ? 'Заявка → подтверждение → в работе → готово. Срочность: критично / важно / обычная.'
+              : 'Выберите тему, опишите проблему и следите за статусом в «Мои заявки».'}
           </p>
         </div>
         <button type="button" onClick={() => void refresh()} className="btn-secondary inline-flex items-center gap-2">
@@ -316,44 +327,60 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
           Новая заявка
         </div>
         <div className="grid gap-3 md:grid-cols-2">
-          <input
-            className="input-field md:col-span-2"
-            placeholder="Тема"
-            value={form.subject}
-            onChange={(e) => setForm((prev) => ({ ...prev, subject: e.target.value }))}
-            required
-            minLength={3}
-          />
-          <textarea
-            className="input-field md:col-span-2 min-h-[100px]"
-            placeholder="Описание проблемы"
-            value={form.body}
-            onChange={(e) => setForm((prev) => ({ ...prev, body: e.target.value }))}
-            required
-            minLength={3}
-          />
-          <select
-            className="input-field"
-            value={form.category}
-            onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
-          >
-            <option value="other">Другое</option>
-            <option value="access">Доступ / учётка</option>
-            <option value="hardware">Оборудование</option>
-            <option value="software">ПО / портал</option>
-            <option value="network">Сеть</option>
-          </select>
-          <select
-            className="input-field"
-            value={form.priority}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, priority: e.target.value as SupportPriority }))
-            }
-          >
-            <option value="P1">P1 — критично (1ч / 4ч)</option>
-            <option value="P2">P2 — важно (4ч / 1д)</option>
-            <option value="P3">P3 — обычно (1д / 3д)</option>
-          </select>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-xs text-pastel-500">Тема</label>
+            <select
+              className="input-field"
+              value={form.themeId}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, themeId: e.target.value as SupportThemeId }))
+              }
+              required
+            >
+              {SUPPORT_THEMES.map((theme) => (
+                <option key={theme.id} value={theme.id}>
+                  {theme.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-xs text-pastel-500">Кратко (необязательно)</label>
+            <input
+              className="input-field"
+              placeholder="Например: не печатает на 3 этаже"
+              value={form.detail}
+              onChange={(e) => setForm((prev) => ({ ...prev, detail: e.target.value }))}
+              maxLength={180}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-xs text-pastel-500">Описание</label>
+            <textarea
+              className="input-field min-h-[100px]"
+              placeholder="Что случилось, когда началось, что уже пробовали"
+              value={form.body}
+              onChange={(e) => setForm((prev) => ({ ...prev, body: e.target.value }))}
+              required
+              minLength={3}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-xs text-pastel-500">Срочность</label>
+            <select
+              className="input-field"
+              value={form.priority}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, priority: e.target.value as SupportPriority }))
+              }
+            >
+              {SUPPORT_PRIORITY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label} — {option.hint}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="mt-3">
           <button type="submit" className="btn-primary" disabled={creating}>
@@ -535,11 +562,12 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
                           #{ticket.id} · {ticket.subject}
                         </span>
                         <span className="text-xs rounded-full bg-pastel-100 px-2 py-0.5 text-pastel-700">
-                          {ticket.priority}
+                          {getPriorityLabel(ticket.priority)}
                         </span>
                       </div>
                       <div className="mt-1 flex flex-wrap gap-2 text-xs text-pastel-500">
                         <span>{STATUS_LABEL[ticket.status]}</span>
+                        <span>{getThemeLabel(ticket.category)}</span>
                         <span>{ticket.requesterName}</span>
                         <span>{new Date(ticket.createdAt).toLocaleString('ru-RU')}</span>
                       </div>
@@ -563,7 +591,8 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs text-pastel-600">
                   <div>Статус: {STATUS_LABEL[detail.ticket.status]}</div>
-                  <div>Приоритет: {detail.ticket.priority}</div>
+                  <div>Срочность: {getPriorityLabel(detail.ticket.priority)}</div>
+                  <div className="col-span-2">Тема: {getThemeLabel(detail.ticket.category)}</div>
                   <div>Первый ответ: {formatDuration(detail.ticket.firstResponseMs)}</div>
                   <div>Закрытие: {formatDuration(detail.ticket.resolveMs)}</div>
                   <div>
