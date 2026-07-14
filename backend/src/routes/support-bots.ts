@@ -195,8 +195,10 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
     if (secretEnv && secretEnv !== provided) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
+    // Без токена всё ещё принимаем update (forward от telegram-bot),
+    // но ответы в Telegram уйдут только если задан BOT_TOKEN / SUPPORT_BOT_*_TOKEN.
     if (!expected) {
-      return res.status(503).json({ message: 'Bot not configured' });
+      console.warn(`Support bot token missing for queue=${queue}; inbound accepted, replies may fail`);
     }
 
     const update = req.body || {};
