@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import type { SupportPriority } from './support-sla';
+import type { SupportPriority, SupportStatus } from './support-sla';
 import { notifyTelegramStatusChange } from './support-notify';
 import {
   formatTodoistTaskContent,
@@ -12,7 +12,18 @@ import { buildTicketFormatContext } from './support-ticket-context';
 const TODOIST_API = 'https://api.todoist.com/api/v1';
 const DEFAULT_PROJECT_NAME = '💰 HQ/ЭГ/C';
 
+/** Колонки канбана → статусы портала (имена секций Todoist, без регистра) */
+const SECTION_STATUS_MAP: Record<string, SupportStatus> = {
+  backlog: 'new',
+  неделя: 'acknowledged',
+  сегодня: 'in_progress',
+  ждун: 'acknowledged',
+};
+
 let cachedProjectId: string | null | undefined;
+let cachedSectionsByProject = new Map<string, Map<string, string>>(); // projectId → nameNorm → sectionId
+let cachedSectionIdToStatus = new Map<string, SupportStatus>(); // sectionId → status
+let cachedTodoistUsers = new Map<string, { id: string; email?: string; name?: string }>();
 
 export const getTodoistToken = (): string | null => {
   const token = (process.env.TODOIST_API_TOKEN || '').trim();
@@ -29,6 +40,9 @@ const authHeaders = (token: string) => ({
   Authorization: `Bearer ${token}`,
   'Content-Type': 'application/json',
 });
+
+const normalizeSectionName = (name: string): string =>
+  name.trim().toLowerCase().replace(/\s+/g, ' ');
 
 export const resolveTodoistProjectId = async (
   queue?: string | null
@@ -66,10 +80,14 @@ export const resolveTodoistProjectId = async (
       return undefined;
     }
 
-    const data = (await response.json()) as { results?: Array<{ id: string; name: string }> } | Array<{ id: string; name: string }>;
+    const data = (await response.json()) as
+      | { results?: Array<{ id: string; name: string }> }
+      | Array<{ id: string; name: string }>;
     const list = Array.isArray(data) ? data : data.results || [];
     const exact = list.find((p) => p.name === wanted);
-    const partial = list.find((p) => p.name.includes('HQ/ЭГ/C') && !p.name.includes('Операционная'));
+    const partial = list.find(
+      (p) => p.name.includes('HQ/ЭГ/C') && !p.name.includes('Операционная')
+    );
     cachedProjectId = (exact || partial)?.id || null;
     if (cachedProjectId) {
       console.log(`✅ Todoist project: ${wanted} → ${cachedProjectId}`);
@@ -79,6 +97,249 @@ export const resolveTodoistProjectId = async (
     cachedProjectId = null;
     return undefined;
   }
+};
+
+const loadSections = async (projectId: string): Promise<void> => {
+  if (cachedSectionsByProject.has(projectId)) {
+    return;
+  }
+
+  const token = getTodoistToken();
+  if (!token) {
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${TODOIST_API}/sections?project_id=${encodeURIComponent(projectId)}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!response.ok) {
+      return;
+    }
+    const data = (await response.json()) as
+      | { results?: Array<{ id: string; name: string }> }
+      | Array<{ id: string; name: string }>;
+    const list = Array.isArray(data) ? data : data.results || [];
+    const byName = new Map<string, string>();
+    for (const section of list) {
+      const norm = normalizeSectionName(section.name);
+      byName.set(norm, String(section.id));
+      const status = SECTION_STATUS_MAP[norm];
+      if (status) {
+        cachedSectionIdToStatus.set(String(section.id), status);
+      }
+    }
+    cachedSectionsByProject.set(projectId, byName);
+    console.log(
+      `✅ Todoist sections: ${list.map((s) => s.name).join(', ') || '(нет)'}`
+    );
+  } catch {
+    // ignore
+  }
+};
+
+const resolveBacklogSectionId = async (projectId?: string): Promise<string | undefined> => {
+  if (!projectId) {
+    return undefined;
+  }
+  await loadSections(projectId);
+  return cachedSectionsByProject.get(projectId)?.get('backlog');
+};
+
+type TodoistTaskSnapshot = {
+  id: string;
+  isCompleted: boolean;
+  sectionId: string | null;
+  assigneeId: string | null;
+  content?: string;
+  description?: string;
+};
+
+const fetchTodoistTask = async (taskId: string): Promise<TodoistTaskSnapshot | 'missing' | null> => {
+  const token = getTodoistToken();
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${TODOIST_API}/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (response.status === 404) {
+      return 'missing';
+    }
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = (await response.json()) as {
+      id?: string | number;
+      is_completed?: boolean;
+      checked?: boolean;
+      section_id?: string | number | null;
+      assignee_id?: string | number | null;
+      responsible_uid?: string | number | null;
+      content?: string;
+      description?: string;
+    };
+
+    return {
+      id: String(data.id ?? taskId),
+      isCompleted: Boolean(data.is_completed || data.checked),
+      sectionId: data.section_id != null ? String(data.section_id) : null,
+      assigneeId:
+        data.assignee_id != null
+          ? String(data.assignee_id)
+          : data.responsible_uid != null
+            ? String(data.responsible_uid)
+            : null,
+      content: data.content,
+      description: data.description,
+    };
+  } catch {
+    return null;
+  }
+};
+
+/** Ручной маппинг TODOIST_USER_MAP=todoistId:email,todoistId2:email2 */
+const parseManualUserMap = (): Map<string, string> => {
+  const raw = (process.env.TODOIST_USER_MAP || '').trim();
+  const map = new Map<string, string>();
+  if (!raw) {
+    return map;
+  }
+  for (const part of raw.split(',')) {
+    const [id, email] = part.split(':').map((s) => s.trim());
+    if (id && email) {
+      map.set(id, email.toLowerCase());
+    }
+  }
+  return map;
+};
+
+const resolvePortalUserIdByTodoist = async (
+  pool: Pool,
+  todoistUserId: string | null | undefined
+): Promise<string | null> => {
+  if (!todoistUserId) {
+    return null;
+  }
+
+  const manual = parseManualUserMap().get(todoistUserId);
+  if (manual) {
+    const byEmail = await pool.query(
+      `SELECT u.id FROM users u WHERE LOWER(u.email) = LOWER($1) LIMIT 1`,
+      [manual]
+    );
+    if (byEmail.rows[0]) {
+      return String(byEmail.rows[0].id);
+    }
+  }
+
+  // Кэш/collaborators обычно без email в REST — пробуем совпадение по employees.telegram/email позже через map
+  const cached = cachedTodoistUsers.get(todoistUserId);
+  if (cached?.email) {
+    const byEmail = await pool.query(
+      `SELECT u.id FROM users u WHERE LOWER(u.email) = LOWER($1) LIMIT 1`,
+      [cached.email]
+    );
+    if (byEmail.rows[0]) {
+      return String(byEmail.rows[0].id);
+    }
+  }
+
+  return null;
+};
+
+const applyTicketStatusFromTodoist = async (
+  pool: Pool,
+  ticket: any,
+  toStatus: SupportStatus,
+  actorUserId: string | null
+): Promise<boolean> => {
+  if (ticket.status === toStatus) {
+    if (actorUserId && toStatus !== 'done') {
+      await pool.query(
+        `UPDATE support_tickets SET
+           assignee_user_id = COALESCE($2::int, assignee_user_id),
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [ticket.id, actorUserId]
+      );
+    }
+    return false;
+  }
+
+  const now = new Date();
+  const fromStatus = ticket.status as SupportStatus;
+
+  let sql = '';
+  const params: any[] = [ticket.id, now, actorUserId];
+
+  if (toStatus === 'new') {
+    sql = `UPDATE support_tickets SET
+      status = 'new',
+      acknowledged_at = NULL, acknowledged_by = NULL,
+      started_at = NULL, resolved_at = NULL, resolved_by = NULL,
+      assignee_user_id = COALESCE($3::int, assignee_user_id),
+      updated_at = $2
+     WHERE id = $1 AND status <> 'done'
+     RETURNING *`;
+  } else if (toStatus === 'acknowledged') {
+    sql = `UPDATE support_tickets SET
+      status = 'acknowledged',
+      acknowledged_at = COALESCE(acknowledged_at, $2),
+      acknowledged_by = COALESCE($3::int, acknowledged_by),
+      assignee_user_id = COALESCE($3::int, assignee_user_id),
+      started_at = NULL, resolved_at = NULL, resolved_by = NULL,
+      updated_at = $2
+     WHERE id = $1 AND status <> 'done'
+     RETURNING *`;
+  } else if (toStatus === 'in_progress') {
+    sql = `UPDATE support_tickets SET
+      status = 'in_progress',
+      acknowledged_at = COALESCE(acknowledged_at, $2),
+      acknowledged_by = COALESCE(acknowledged_by, $3::int),
+      started_at = COALESCE(started_at, $2),
+      assignee_user_id = COALESCE($3::int, assignee_user_id),
+      resolved_at = NULL, resolved_by = NULL,
+      updated_at = $2
+     WHERE id = $1 AND status <> 'done'
+     RETURNING *`;
+  } else {
+    return false;
+  }
+
+  const updated = await pool.query(sql, params);
+  if (updated.rows.length === 0) {
+    return false;
+  }
+
+  await pool.query(
+    `INSERT INTO support_ticket_events
+      (ticket_id, actor_user_id, event_type, from_status, to_status, note)
+     VALUES ($1, $2, $3, $4, $5, 'todoist-board')`,
+    [
+      ticket.id,
+      actorUserId,
+      `status_${toStatus}`,
+      fromStatus,
+      toStatus,
+    ]
+  );
+
+  const next = updated.rows[0];
+  void notifyTelegramStatusChange({
+    queue: next.queue,
+    chatId: next.telegram_chat_id,
+    ticketId: next.id,
+    subject: next.subject,
+    status: toStatus,
+  });
+
+  return true;
 };
 
 export const createTodoistTaskForTicket = async (
@@ -92,6 +353,7 @@ export const createTodoistTaskForTicket = async (
   const projectId = await resolveTodoistProjectId(ticket.queue);
   const content = formatTodoistTaskContent(ticket);
   const description = formatTodoistTaskDescription(ticket);
+  const backlogSectionId = await resolveBacklogSectionId(projectId);
 
   try {
     const response = await fetch(`${TODOIST_API}/tasks`, {
@@ -102,6 +364,7 @@ export const createTodoistTaskForTicket = async (
         description,
         priority: todoistPriority(ticket.priority as SupportPriority),
         ...(projectId ? { project_id: projectId } : {}),
+        ...(backlogSectionId ? { section_id: backlogSectionId } : {}),
       }),
     });
 
@@ -138,28 +401,14 @@ export const closeTodoistTask = async (taskId: string | null | undefined): Promi
 };
 
 export const isTodoistTaskCompleted = async (taskId: string): Promise<boolean | null> => {
-  const token = getTodoistToken();
-  if (!token) {
+  const snap = await fetchTodoistTask(taskId);
+  if (snap === 'missing') {
+    return true;
+  }
+  if (!snap) {
     return null;
   }
-
-  try {
-    const response = await fetch(`${TODOIST_API}/tasks/${taskId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (response.status === 404) {
-      return true;
-    }
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = (await response.json()) as { is_completed?: boolean; checked?: boolean };
-    return Boolean(data.is_completed || data.checked);
-  } catch {
-    return null;
-  }
+  return snap.isCompleted;
 };
 
 export const attachTodoistTaskId = async (
@@ -202,7 +451,8 @@ export const syncTicketToTodoist = async (
 
 export const resolveTicketFromTodoist = async (
   pool: Pool,
-  ticketId: number
+  ticketId: number,
+  actorUserId?: string | null
 ): Promise<boolean> => {
   const result = await pool.query(`SELECT * FROM support_tickets WHERE id = $1`, [ticketId]);
   if (result.rows.length === 0) {
@@ -215,17 +465,20 @@ export const resolveTicketFromTodoist = async (
   }
 
   const now = new Date();
+  const resolver = actorUserId || ticket.assignee_user_id || null;
   const updated = await pool.query(
     `UPDATE support_tickets SET
        status = 'done',
        acknowledged_at = COALESCE(acknowledged_at, $2),
        started_at = COALESCE(started_at, $2),
        resolved_at = $2,
+       resolved_by = COALESCE($3::int, resolved_by),
+       assignee_user_id = COALESCE(assignee_user_id, $3::int),
        resolution_note = COALESCE(resolution_note, 'Закрыто в Todoist'),
        updated_at = $2
      WHERE id = $1 AND status <> 'done'
      RETURNING *`,
-    [ticketId, now]
+    [ticketId, now, resolver]
   );
 
   if (updated.rows.length === 0) {
@@ -235,8 +488,8 @@ export const resolveTicketFromTodoist = async (
   await pool.query(
     `INSERT INTO support_ticket_events
       (ticket_id, actor_user_id, event_type, from_status, to_status, note)
-     VALUES ($1, NULL, 'status_done', $2, 'done', 'todoist')`,
-    [ticketId, ticket.status]
+     VALUES ($1, $2, 'status_done', $3, 'done', 'todoist')`,
+    [ticketId, resolver, ticket.status]
   );
 
   const next = updated.rows[0];
@@ -262,30 +515,83 @@ export const parseTicketIdFromTodoist = (payload: {
 
 export const syncCompletedTicketsFromTodoist = async (
   pool: Pool
-): Promise<{ checked: number; closed: number }> => {
+): Promise<{ checked: number; closed: number; moved: number }> => {
   if (!getTodoistToken()) {
-    return { checked: 0, closed: 0 };
+    return { checked: 0, closed: 0, moved: 0 };
+  }
+
+  const projectId = await resolveTodoistProjectId('public');
+  if (projectId) {
+    await loadSections(projectId);
+  }
+  const shadowProject = await resolveTodoistProjectId('shadow');
+  if (shadowProject && shadowProject !== projectId) {
+    await loadSections(shadowProject);
   }
 
   const open = await pool.query(
-    `SELECT id, todoist_task_id FROM support_tickets
+    `SELECT * FROM support_tickets
      WHERE status <> 'done' AND todoist_task_id IS NOT NULL
      ORDER BY updated_at ASC
      LIMIT 40`
   );
 
   let closed = 0;
+  let moved = 0;
+
   for (const row of open.rows) {
-    const completed = await isTodoistTaskCompleted(String(row.todoist_task_id));
-    if (completed === true) {
-      const ok = await resolveTicketFromTodoist(pool, Number(row.id));
+    const snap = await fetchTodoistTask(String(row.todoist_task_id));
+    if (snap === null) {
+      continue;
+    }
+
+    if (snap === 'missing' || snap.isCompleted) {
+      let actor: string | null = null;
+      if (snap !== 'missing' && snap.assigneeId) {
+        actor = await resolvePortalUserIdByTodoist(pool, snap.assigneeId);
+      }
+      actor = actor || (row.assignee_user_id ? String(row.assignee_user_id) : null);
+      const ok = await resolveTicketFromTodoist(pool, Number(row.id), actor);
       if (ok) {
         closed += 1;
+      }
+      continue;
+    }
+
+    const actor = await resolvePortalUserIdByTodoist(pool, snap.assigneeId);
+
+    if (actor && String(row.assignee_user_id || '') !== actor) {
+      await pool.query(
+        `UPDATE support_tickets SET assignee_user_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        [row.id, actor]
+      );
+    }
+
+    if (snap.sectionId) {
+      let target = cachedSectionIdToStatus.get(snap.sectionId);
+      if (!target) {
+        // секции могли появиться позже — обновим кэш по известным проектам
+        if (projectId) {
+          cachedSectionsByProject.delete(projectId);
+          await loadSections(projectId);
+        }
+        if (shadowProject) {
+          cachedSectionsByProject.delete(shadowProject);
+          await loadSections(shadowProject);
+        }
+        target = cachedSectionIdToStatus.get(snap.sectionId);
+      }
+
+      if (target && target !== 'done') {
+        const changed = await applyTicketStatusFromTodoist(pool, row, target, actor);
+        if (changed) {
+          moved += 1;
+        }
       }
     }
   }
 
-  return { checked: open.rows.length, closed };
+  return { checked: open.rows.length, closed, moved };
 };
 
 let pollTimer: NodeJS.Timeout | null = null;
@@ -296,13 +602,15 @@ export const startTodoistPolling = (pool: Pool): void => {
   }
 
   const intervalMs = Number(process.env.TODOIST_SYNC_INTERVAL_MS || 60_000);
-  console.log(`✅ Todoist sync: опрос каждые ${Math.round(intervalMs / 1000)}с`);
+  console.log(`✅ Todoist sync: опрос каждые ${Math.round(intervalMs / 1000)}с (доска + закрытие)`);
 
   const tick = async () => {
     try {
       const result = await syncCompletedTicketsFromTodoist(pool);
-      if (result.closed > 0) {
-        console.log(`Todoist sync: закрыто заявок ${result.closed}`);
+      if (result.closed > 0 || result.moved > 0) {
+        console.log(
+          `Todoist sync: checked=${result.checked}, closed=${result.closed}, moved=${result.moved}`
+        );
       }
     } catch {
       console.error('Todoist sync poll failed');

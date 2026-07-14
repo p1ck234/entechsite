@@ -1077,7 +1077,12 @@ export const supportAPI = {
     return response.data;
   },
 
-  syncTodoist: async (): Promise<{ message: string; checked: number; closed: number }> => {
+  syncTodoist: async (): Promise<{
+    message: string;
+    checked: number;
+    closed: number;
+    moved?: number;
+  }> => {
     const response = await api.post('/support/todoist-sync');
     return response.data;
   },

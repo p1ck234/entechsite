@@ -59,10 +59,19 @@ npm start
 
 ## Деплой на Railway
 
-1. Создайте новый сервис в Railway
-2. Подключите репозиторий или загрузите код
-3. Установите переменную окружения `BOT_TOKEN` в настройках сервиса
-4. Railway автоматически определит проект и задеплоит его
+Отдельный сервис для служебного бота **не нужен**. Один сервис `entechsite telegram-bot`
+слушает оба токена.
+
+1. Root Directory: `telegram-bot`
+2. Variables:
+   - `BOT_TOKEN` — портальный бот (вход / публичная поддержка)
+   - `SUPPORT_BOT_SHADOW_TOKEN` — бот `@etgsupportbot` (Служебная)
+   - `BACKEND_URL` — URL backend (например `https://entechsite-backend-production.up.railway.app`)
+3. После деплоя в логах должно быть:
+   - `[public] polling: @...`
+   - `[shadow] polling: @etgsupportbot`
+4. Если строки `[shadow]` нет — переменная `SUPPORT_BOT_SHADOW_TOKEN` не задана **на сервисе telegram-bot**
+   (только на backend недостаточно).
 
 ## Структура проекта
 

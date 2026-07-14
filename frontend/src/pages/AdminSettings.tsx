@@ -73,9 +73,7 @@ const AdminSettings: React.FC = () => {
       setError('');
       const result = await supportAPI.syncTodoist();
       setMessage(
-        result.closed > 0
-          ? `Todoist: проверено ${result.checked}, закрыто на портале ${result.closed}`
-          : `Todoist: проверено ${result.checked}, новых закрытий нет`
+        `Todoist: проверено ${result.checked}, закрыто ${result.closed || 0}, сдвинуто по доске ${result.moved || 0}`
       );
     } catch (err: any) {
       setError(err.response?.data?.message || 'Ошибка синхронизации Todoist');
@@ -228,9 +226,10 @@ const AdminSettings: React.FC = () => {
           Todoist
         </div>
         <p className="text-sm text-pastel-600">
-          Новые заявки (публичные и служебные) создаются в проекте Todoist «💰 HQ/ЭГ/C». Служебные
-          с пометкой «🛡» в названии. Закрытие задачи в Todoist закрывает заявку на портале.
-          Назначение ответственного и перенос по колонкам канбана портал пока не читает.
+          Новые заявки (публичные и служебные) → проект «💰 HQ/ЭГ/C», служебные с «🛡». Колонки:
+          BackLog→новая, Неделя/Ждун→подтверждена, Сегодня→в работе; закрытие задачи→готово.
+          Ответственный в Todoist пишется в заявку, если задан TODOIST_USER_MAP
+          (todoistUserId:email) на backend.
         </p>
         <button type="button" className="btn-secondary" onClick={() => void handleSyncTodoist()}>
           Синхронизировать Todoist сейчас

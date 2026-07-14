@@ -155,7 +155,12 @@ router.post(
   async (_req: AuthRequest, res: Response) => {
     try {
       const result = await syncCompletedTicketsFromTodoist(pool);
-      return res.json({ message: 'Синхронизация Todoist выполнена', ...result });
+      return res.json({
+        message: 'Синхронизация Todoist выполнена',
+        checked: result.checked,
+        closed: result.closed,
+        moved: result.moved,
+      });
     } catch (error) {
       console.error('Todoist sync endpoint error:', error);
       return res.status(500).json({ message: 'Не удалось синхронизировать Todoist' });

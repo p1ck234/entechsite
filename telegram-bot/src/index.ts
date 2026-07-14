@@ -92,8 +92,11 @@ const startPollingSafely = async (bot: TelegramBot, label: string) => {
   await sleep(2500);
 
   try {
+    const me = await bot.getMe();
     await bot.startPolling();
-    console.log(`🤖 [${label}] polling запущен`);
+    console.log(
+      `🤖 [${label}] polling: @${me.username || '?'} (id=${me.id})`
+    );
   } catch (error) {
     console.error(`❌ [${label}] не удалось стартовать polling:`, error);
   }
