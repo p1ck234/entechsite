@@ -142,20 +142,6 @@ const loadSections = async (projectId: string): Promise<void> => {
   }
 };
 
-/** Куда класть новые заявки: колонка «Входящие», иначе Backlog */
-const resolveInboxSectionId = async (projectId?: string): Promise<string | undefined> => {
-  if (!projectId) {
-    return undefined;
-  }
-  await loadSections(projectId);
-  const byName = cachedSectionsByProject.get(projectId);
-  return (
-    byName?.get('входящие') ||
-    byName?.get('inbox') ||
-    byName?.get('backlog')
-  );
-};
-
 type TodoistTaskSnapshot = {
   id: string;
   isCompleted: boolean;
@@ -376,9 +362,8 @@ export const createTodoistTaskForTicket = async (
   const projectId = await resolveTodoistProjectId(ticket.queue);
   const content = formatTodoistTaskContent(ticket);
   const description = formatTodoistTaskDescription(ticket);
-  const inboxSectionId = await resolveInboxSectionId(projectId);
-
   try {
+    // Без section_id — задача в проекте «как есть», без колонки Backlog/Входящие
     const response = await fetch(`${TODOIST_API}/tasks`, {
       method: 'POST',
       headers: authHeaders(token),
@@ -387,7 +372,6 @@ export const createTodoistTaskForTicket = async (
         description,
         priority: todoistPriority(ticket.priority as SupportPriority),
         ...(projectId ? { project_id: projectId } : {}),
-        ...(inboxSectionId ? { section_id: inboxSectionId } : {}),
       }),
     });
 
