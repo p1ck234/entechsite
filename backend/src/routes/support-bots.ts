@@ -35,18 +35,41 @@ type DraftState = {
   body?: string;
 };
 
-const themesHelpText = () =>
-  'Выберите тему — ответьте номером:\n' +
-  SUPPORT_THEMES.map((theme, index) => `${index + 1}. ${theme.label}`).join('\n');
+const themesHelpText = () => 'Выберите тему кнопкой ниже:';
 
 const priorityHelpText =
-  'Насколько срочно?\n' +
-  '1. Критично — работа полностью встала\n' +
-  '2. Важно — сильно мешает работе\n' +
-  '3. Обычная — можно подождать\n' +
-  'Или напишите «пропустить»';
+  'Насколько срочно? Нажмите кнопку ниже\n' +
+  '(или напишите: критично / важно / обычная)';
+
+const themeKeyboard = () => ({
+  inline_keyboard: SUPPORT_THEMES.map((theme) => [
+    { text: theme.label, callback_data: `theme:${theme.id}` },
+  ]),
+});
+
+const priorityKeyboard = () => ({
+  inline_keyboard: [
+    [{ text: '🔴 Критично — работа встала', callback_data: 'priority:P1' }],
+    [{ text: '🟡 Важно — сильно мешает', callback_data: 'priority:P2' }],
+    [{ text: '🟢 Обычная — можно подождать', callback_data: 'priority:P3' }],
+  ],
+});
 
 const draftByChat = new Map<string, DraftState>();
+
+const resolveThemeFromText = (text: string): SupportThemeId | null => {
+  const asNumber = Number(text.trim());
+  if (Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= SUPPORT_THEMES.length) {
+    return SUPPORT_THEMES[asNumber - 1].id;
+  }
+  if (isSupportThemeId(text.trim().toLowerCase())) {
+    return text.trim().toLowerCase() as SupportThemeId;
+  }
+  const byLabel = SUPPORT_THEMES.find(
+    (theme) => theme.label.toLowerCase() === text.trim().toLowerCase()
+  );
+  return byLabel?.id || null;
+};
 
 const getExpectedToken = (queue: SupportQueue): string | null => getSupportBotToken(queue);
 
@@ -239,7 +262,7 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
     if (callback) {
       const from = callback.from;
       const data = String(callback.data || '');
-      const chatId = callback.message?.chat?.id;
+      const chatId = callback.message?.chat?.id as number | undefined;
       const user = await findUserByTelegram(from.id, from.username);
       if (!user) {
         await answerTelegramCallback(queue, callback.id, 'Нет доступа');
@@ -256,6 +279,63 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
           await answerTelegramCallback(queue, callback.id, 'Нет доступа');
           return res.json({ ok: true });
         }
+      }
+
+      // Выбор темы при создании заявки
+      const themeMatch = data.match(/^theme:([a-z0-9]+)$/i);
+      if (themeMatch && chatId != null) {
+        const themeId = themeMatch[1].toLowerCase();
+        if (!isSupportThemeId(themeId)) {
+          await answerTelegramCallback(queue, callback.id, 'Неизвестная тема');
+          return res.json({ ok: true });
+        }
+        const draftKey = `${queue}:${chatId}`;
+        const draft = draftByChat.get(draftKey);
+        if (!draft || draft.step !== 'theme') {
+          await answerTelegramCallback(queue, callback.id, 'Сначала нажмите «Новая заявка»');
+          return res.json({ ok: true });
+        }
+        draft.themeId = themeId;
+        draft.step = 'body';
+        draftByChat.set(draftKey, draft);
+        await answerTelegramCallback(queue, callback.id, getThemeLabel(themeId));
+        await sendTelegramMessage(
+          queue,
+          chatId,
+          `Тема: ${getThemeLabel(themeId)}\n\nОпишите проблему: что случилось и что уже пробовали.`
+        );
+        return res.json({ ok: true });
+      }
+
+      // Выбор срочности при создании заявки
+      const priorityMatch = data.match(/^priority:(P[123])$/i);
+      if (priorityMatch && chatId != null) {
+        const priority = priorityMatch[1].toUpperCase() as SupportPriority;
+        const draftKey = `${queue}:${chatId}`;
+        const draft = draftByChat.get(draftKey);
+        if (!draft || draft.step !== 'priority') {
+          await answerTelegramCallback(queue, callback.id, 'Сначала опишите проблему');
+          return res.json({ ok: true });
+        }
+        const ticket = await createTicketFromBot({
+          queue,
+          user,
+          chatId,
+          themeId: draft.themeId || 'other',
+          body: draft.body || '—',
+          priority,
+        });
+        draftByChat.delete(draftKey);
+        await answerTelegramCallback(queue, callback.id, getPriorityLabel(priority));
+        await sendTelegramMessage(
+          queue,
+          chatId,
+          `✅ Заявка ${formatTicketCode(ticket.id)} создана\n` +
+            `${ticket.subject}\n` +
+            `Срочность: ${getPriorityLabel(priority)}\n` +
+            `Статус: ${statusLabelRu('new')}`
+        );
+        return res.json({ ok: true });
       }
 
       const match = data.match(/^(ack|start|done):(\d+)$/);
@@ -294,7 +374,11 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
         result.error || 'Обновлено'
       );
       if (chatId && !result.error) {
-        await sendTelegramMessage(queue, chatId, `Заявка #${ticketId}: ${toStatus}`);
+        await sendTelegramMessage(
+          queue,
+          chatId,
+          `Заявка ${formatTicketCode(ticketId)}: ${statusLabelRu(toStatus as any)}`
+        );
       }
       return res.json({ ok: true });
     }
@@ -390,7 +474,7 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
 
     if (action === '/new') {
       draftByChat.set(draftKey, { step: 'theme' });
-      await sendTelegramMessage(queue, chatId, themesHelpText());
+      await sendTelegramMessage(queue, chatId, themesHelpText(), themeKeyboard());
       return res.json({ ok: true });
     }
 
@@ -454,21 +538,14 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
     const draft = draftByChat.get(draftKey);
     if (draft) {
       if (draft.step === 'theme') {
-        const asNumber = Number(text.trim());
-        let themeId: SupportThemeId | null = null;
-        if (Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= SUPPORT_THEMES.length) {
-          themeId = SUPPORT_THEMES[asNumber - 1].id;
-        } else if (isSupportThemeId(text.trim().toLowerCase())) {
-          themeId = text.trim().toLowerCase() as SupportThemeId;
-        } else {
-          const byLabel = SUPPORT_THEMES.find(
-            (theme) => theme.label.toLowerCase() === text.trim().toLowerCase()
-          );
-          themeId = byLabel?.id || null;
-        }
-
+        const themeId = resolveThemeFromText(text);
         if (!themeId) {
-          await sendTelegramMessage(queue, chatId, `Не понял тему.\n\n${themesHelpText()}`);
+          await sendTelegramMessage(
+            queue,
+            chatId,
+            `Не понял тему — нажмите кнопку.\n\n${themesHelpText()}`,
+            themeKeyboard()
+          );
           return res.json({ ok: true });
         }
 
@@ -487,14 +564,19 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
         draft.body = text.slice(0, 10000);
         draft.step = 'priority';
         draftByChat.set(draftKey, draft);
-        await sendTelegramMessage(queue, chatId, priorityHelpText);
+        await sendTelegramMessage(queue, chatId, priorityHelpText, priorityKeyboard());
         return res.json({ ok: true });
       }
 
       if (draft.step === 'priority') {
         const priority = parsePriorityFromHumanText(text) || null;
         if (!priority) {
-          await sendTelegramMessage(queue, chatId, `Не понял срочность.\n\n${priorityHelpText}`);
+          await sendTelegramMessage(
+            queue,
+            chatId,
+            `Не понял срочность — нажмите кнопку.\n\n${priorityHelpText}`,
+            priorityKeyboard()
+          );
           return res.json({ ok: true });
         }
 
