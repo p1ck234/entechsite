@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AuthResponse, User, Employee, Course, Lesson, LessonMaterialsResponse, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, BookingResource, Booking, BookingRecurrenceInput, BookingTag, PaginationInfo, OrgStructureResponse, OrgEmployee } from '../types';
+import { AuthResponse, User, Employee, Course, Lesson, LessonMaterialsResponse, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, BookingResource, Booking, BookingRecurrenceInput, BookingTag, PaginationInfo, OrgStructureResponse, OrgEmployee, SupportMeFlags, SupportTicket, SupportTicketEvent, SupportKpi, SupportAgent, SupportQueue, SupportPriority, SupportStatus } from '../types';
 
 import { API_BASE_URL } from '../config/api';
 import { clearEventPhotosCache, getCachedEventPhotos, rememberEventPhotos } from '../utils/eventPhotosCache';
@@ -556,6 +556,19 @@ export const lessonsAPI = {
 
 // Users API (Admin only)
 export const usersAPI = {
+  getUsers: async (): Promise<{ users: User[] }> => {
+    const response = await api.get('/users');
+    const raw = response.data.users || response.data || [];
+    return {
+      users: (Array.isArray(raw) ? raw : []).map((u: any) => ({
+        id: String(u.id),
+        email: u.email,
+        role: u.role,
+        createdAt: u.created_at || u.createdAt || '',
+      })),
+    };
+  },
+
   createUser: async (userData: {
     email: string;
     password: string;
@@ -960,6 +973,79 @@ export const botsAPI = {
 
   deleteBot: async (id: string): Promise<{ message: string }> => {
     const response = await api.delete(`/bots/${id}`);
+    return response.data;
+  },
+};
+
+export const supportAPI = {
+  getMe: async (): Promise<SupportMeFlags> => {
+    const response = await api.get('/support/me');
+    return response.data;
+  },
+
+  listTickets: async (params?: {
+    scope?: 'mine' | 'queue';
+    queue?: SupportQueue;
+    status?: SupportStatus;
+  }): Promise<{ tickets: SupportTicket[] }> => {
+    const response = await api.get('/support', { params });
+    return response.data;
+  },
+
+  getTicket: async (
+    id: string
+  ): Promise<{ ticket: SupportTicket; events: SupportTicketEvent[] }> => {
+    const response = await api.get(`/support/${id}`);
+    return response.data;
+  },
+
+  createTicket: async (payload: {
+    subject: string;
+    body: string;
+    category?: string;
+    priority?: SupportPriority;
+    queue?: SupportQueue;
+    attachmentUrl?: string;
+  }): Promise<{ message: string; ticket: SupportTicket }> => {
+    const response = await api.post('/support', payload);
+    return response.data;
+  },
+
+  acknowledge: async (id: string): Promise<{ message: string; ticket: SupportTicket }> => {
+    const response = await api.post(`/support/${id}/acknowledge`);
+    return response.data;
+  },
+
+  start: async (id: string): Promise<{ message: string; ticket: SupportTicket }> => {
+    const response = await api.post(`/support/${id}/start`);
+    return response.data;
+  },
+
+  resolve: async (
+    id: string,
+    note?: string
+  ): Promise<{ message: string; ticket: SupportTicket }> => {
+    const response = await api.post(`/support/${id}/resolve`, { note });
+    return response.data;
+  },
+
+  getKpi: async (queue: SupportQueue = 'public'): Promise<SupportKpi> => {
+    const response = await api.get('/support/kpi', { params: { queue } });
+    return response.data;
+  },
+
+  listAgents: async (): Promise<{ agents: SupportAgent[] }> => {
+    const response = await api.get('/support/agents');
+    return response.data;
+  },
+
+  addAgent: async (userId: string): Promise<{ message: string; agent: SupportAgent }> => {
+    const response = await api.post('/support/agents', { userId });
+    return response.data;
+  },
+
+  removeAgent: async (userId: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/support/agents/${userId}`);
     return response.data;
   },
 };

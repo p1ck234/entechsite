@@ -3,8 +3,9 @@ import { body, validationResult } from 'express-validator';
 import { pool } from '../db/pool';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
 import { buildOrgTree, mapOrgEmployee, ORG_EMPLOYEE_SELECT } from '../utils/org-structure';
-import { ensureEmployeesOrgSchema } from '../utils/ensure-schema';
+import { ensureEmployeesOrgSchema, ensureSupportSchema } from '../utils/ensure-schema';
 import { EmployeeManagerError, updateEmployeeManager } from '../utils/employee-manager';
+import { canAccessShadowQueue } from '../utils/support-permissions';
 
 const router = express.Router();
 
@@ -29,14 +30,17 @@ const parseManagerId = (value: unknown): string | null => {
   return String(value);
 };
 
-const loadOrgTree = async () => {
+const loadOrgTree = async (includeHidden: boolean) => {
   await ensureEmployeesOrgSchema(pool);
+  await ensureSupportSchema(pool);
 
   const result = await pool.query(
     `SELECT ${ORG_EMPLOYEE_SELECT}
      FROM employees e
      WHERE e.is_active = true AND e.status = 'APPROVED'
-     ORDER BY e.last_name ASC, e.first_name ASC`
+       AND ($1::boolean OR COALESCE(e.is_hidden, false) = false)
+     ORDER BY e.last_name ASC, e.first_name ASC`,
+    [includeHidden]
   );
 
   const employees = result.rows.map(mapOrgEmployee);
@@ -50,9 +54,10 @@ const loadOrgTree = async () => {
   };
 };
 
-router.get('/tree', authenticateToken, async (_req: AuthRequest, res) => {
+router.get('/tree', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    res.json(await loadOrgTree());
+    const includeHidden = await canAccessShadowQueue(pool, req.user);
+    res.json(await loadOrgTree(includeHidden));
   } catch (error) {
     console.error('Get org tree error:', error);
     res.status(500).json({ message: 'Internal server error' });

@@ -12,6 +12,8 @@ import Calendar from './pages/Calendar';
 import Bookings from './pages/Bookings';
 import Bots from './pages/Bots';
 import OrgStructure from './pages/OrgStructure';
+import Support from './pages/Support';
+import SupportShadow from './pages/SupportShadow';
 import LoadingSpinner from './components/LoadingSpinner';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -72,6 +74,8 @@ const AppRoutes: React.FC = () => {
         <Route path="/events" element={<Calendar />} />
         <Route path="/bookings" element={<AdminRoute><Bookings /></AdminRoute>} />
         <Route path="/bots" element={<Bots />} />
+        <Route path="/support" element={<Support />} />
+        <Route path="/support-shadow" element={<SupportShadow />} />
         <Route path="/dashboard" element={<DefaultAppRedirect />} />
         <Route path="/profile" element={<DefaultAppRedirect />} />
       </Route>

@@ -3,6 +3,7 @@ import { Pool } from 'pg';
 let managerIdColumnEnsured = false;
 let employeesOrgSchemaEnsured = false;
 let bookingsModuleSchemaEnsured = false;
+let supportModuleSchemaEnsured = false;
 
 export const ensureBookingsModuleSchema = async (pool: Pool): Promise<void> => {
   if (bookingsModuleSchemaEnsured) {
@@ -149,4 +150,136 @@ export const ensureEmployeesOrgSchema = async (pool: Pool): Promise<void> => {
 
 export const ensureManagerIdColumn = async (pool: Pool): Promise<void> => {
   await ensureEmployeesOrgSchema(pool);
+};
+
+export const ensureSupportSchema = async (pool: Pool): Promise<void> => {
+  if (supportModuleSchemaEnsured) {
+    return;
+  }
+
+  try {
+    await pool.query(`
+      ALTER TABLE employees
+        ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT false;
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS support_queues (
+        id VARCHAR(20) PRIMARY KEY CHECK (id IN ('public', 'shadow')),
+        name VARCHAR(100) NOT NULL,
+        bot_token_env VARCHAR(100),
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      INSERT INTO support_queues (id, name, bot_token_env)
+      VALUES
+        ('public', 'Техподдержка', 'BOT_TOKEN'),
+        ('shadow', 'Служебная очередь', 'SUPPORT_BOT_SHADOW_TOKEN')
+      ON CONFLICT (id) DO NOTHING;
+    `);
+
+    await pool.query(`
+      UPDATE support_queues
+      SET bot_token_env = 'BOT_TOKEN'
+      WHERE id = 'public'
+        AND (bot_token_env IS NULL OR bot_token_env = 'SUPPORT_BOT_PUBLIC_TOKEN');
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS support_agents (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (user_id)
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS support_shadow_operators (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    const shadowEmail = (process.env.SUPPORT_SHADOW_OPERATOR_EMAIL || '').trim().toLowerCase();
+    if (shadowEmail) {
+      await pool.query(
+        `INSERT INTO support_shadow_operators (email, is_active)
+         VALUES ($1, true)
+         ON CONFLICT (email) DO UPDATE SET is_active = true`,
+        [shadowEmail]
+      );
+    }
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS support_tickets (
+        id SERIAL PRIMARY KEY,
+        queue VARCHAR(20) NOT NULL REFERENCES support_queues(id),
+        requester_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        requester_name VARCHAR(255) NOT NULL,
+        requester_email VARCHAR(255),
+        subject VARCHAR(255) NOT NULL,
+        body TEXT NOT NULL,
+        category VARCHAR(100) DEFAULT 'other',
+        priority VARCHAR(5) NOT NULL DEFAULT 'P3' CHECK (priority IN ('P1', 'P2', 'P3')),
+        status VARCHAR(20) NOT NULL DEFAULT 'new'
+          CHECK (status IN ('new', 'acknowledged', 'in_progress', 'done')),
+        assignee_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        telegram_chat_id BIGINT,
+        attachment_url VARCHAR(500),
+        resolution_note TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        acknowledged_at TIMESTAMP,
+        acknowledged_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        started_at TIMESTAMP,
+        resolved_at TIMESTAMP,
+        resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        response_due_at TIMESTAMP,
+        resolve_due_at TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS support_ticket_events (
+        id SERIAL PRIMARY KEY,
+        ticket_id INTEGER NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+        actor_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        event_type VARCHAR(50) NOT NULL,
+        from_status VARCHAR(20),
+        to_status VARCHAR(20),
+        note TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_support_tickets_queue_status
+        ON support_tickets(queue, status, created_at DESC);
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_support_tickets_requester
+        ON support_tickets(requester_user_id, created_at DESC);
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_support_ticket_events_ticket
+        ON support_ticket_events(ticket_id, created_at);
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_employees_is_hidden
+        ON employees(is_hidden)
+        WHERE is_hidden = true;
+    `);
+
+    supportModuleSchemaEnsured = true;
+  } catch (error) {
+    supportModuleSchemaEnsured = false;
+    throw error;
+  }
 };

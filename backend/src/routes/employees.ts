@@ -4,8 +4,9 @@ import { pool } from '../db/pool';
 import bcrypt from 'bcryptjs';
 import { authenticateToken, requireAdmin } from '../middleware/auth';
 import { buildOrgTree, mapOrgEmployee, ORG_CHART_ROLE_SQL_FILTER, ORG_EMPLOYEE_SELECT, wouldCreateManagerCycle } from '../utils/org-structure';
-import { ensureEmployeesOrgSchema } from '../utils/ensure-schema';
+import { ensureEmployeesOrgSchema, ensureSupportSchema } from '../utils/ensure-schema';
 import { EmployeeManagerError, updateEmployeeManager } from '../utils/employee-manager';
+import { canAccessShadowQueue } from '../utils/support-permissions';
 
 const router = express.Router();
 
@@ -33,6 +34,8 @@ router.get('/', authenticateToken, [
       return res.status(400).json({ errors: errors.array() });
     }
 
+    await ensureSupportSchema(pool);
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const search = req.query.search as string;
@@ -40,6 +43,7 @@ router.get('/', authenticateToken, [
     const showInactive = req.query.showInactive === 'true' && req.user?.role === 'ADMIN';
     const statusFilter = req.query.status as string; // 'APPROVED', 'PENDING', 'REJECTED'
     const skip = (page - 1) * limit;
+    const canSeeHidden = await canAccessShadowQueue(pool, req.user);
 
     // Строим WHERE clause на основе фильтра статуса
     let whereClause = '';
@@ -61,6 +65,10 @@ router.get('/', authenticateToken, [
       paramCount++;
       whereClause = `WHERE e.is_active = true AND e.status = $${paramCount} AND ${ORG_CHART_ROLE_SQL_FILTER}`;
       params.push('APPROVED');
+    }
+
+    if (!canSeeHidden) {
+      whereClause += ` AND COALESCE(e.is_hidden, false) = false`;
     }
 
     if (search) {
@@ -157,15 +165,19 @@ router.get('/me', authenticateToken, async (req: any, res: any) => {
 });
 
 // Org tree (дублирует /api/org-structure/tree для совместимости)
-router.get('/org-tree', authenticateToken, async (_req: any, res: any) => {
+router.get('/org-tree', authenticateToken, async (req: any, res: any) => {
   try {
     await ensureEmployeesOrgSchema(pool);
+    await ensureSupportSchema(pool);
 
+    const includeHidden = await canAccessShadowQueue(pool, req.user);
     const result = await pool.query(
       `SELECT ${ORG_EMPLOYEE_SELECT}
        FROM employees e
        WHERE e.is_active = true AND e.status = 'APPROVED'
-       ORDER BY e.last_name ASC, e.first_name ASC`
+         AND ($1::boolean OR COALESCE(e.is_hidden, false) = false)
+       ORDER BY e.last_name ASC, e.first_name ASC`,
+      [includeHidden]
     );
 
     const employees = result.rows.map(mapOrgEmployee);
@@ -237,6 +249,7 @@ router.patch(
 // Get employee by ID
 router.get('/:id', authenticateToken, async (req: any, res: any) => {
   try {
+    await ensureSupportSchema(pool);
     const { id } = req.params;
 
     const result = await pool.query(
@@ -249,6 +262,13 @@ router.get('/:id', authenticateToken, async (req: any, res: any) => {
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    if (result.rows[0].is_hidden) {
+      const canSee = await canAccessShadowQueue(pool, req.user);
+      if (!canSee) {
+        return res.status(404).json({ message: 'Employee not found' });
+      }
     }
 
     res.json(result.rows[0]);
@@ -339,6 +359,7 @@ router.put('/:id', authenticateToken, [
   body('telegram').optional().isString(),
   body('photo').optional().isString(),
   body('isActive').optional().isBoolean(),
+  body('isHidden').optional().isBoolean(),
   body('managerId').optional({ nullable: true, values: 'falsy' }).custom((value) => {
     if (value === null || value === undefined || value === '') {
       return true;
@@ -368,6 +389,14 @@ router.put('/:id', authenticateToken, [
 
     const { id } = req.params;
     const updateData = req.body;
+
+    if (Object.prototype.hasOwnProperty.call(updateData, 'isHidden')) {
+      await ensureSupportSchema(pool);
+      const canHide = await canAccessShadowQueue(pool, req.user);
+      if (!canHide) {
+        delete updateData.isHidden;
+      }
+    }
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'telegram')) {
       updateData.telegram = normalizeTelegramUsername(updateData.telegram);
@@ -444,6 +473,7 @@ router.put('/:id', authenticateToken, [
                      key === 'lastName' ? 'last_name' : 
                      key === 'middleName' ? 'middle_name' : 
                      key === 'isActive' ? 'is_active' :
+                     key === 'isHidden' ? 'is_hidden' :
                      key === 'managerId' ? 'manager_id' : key;
         updateFields.push(`${dbKey} = $${paramCount}`);
         values.push(updateData[key]);

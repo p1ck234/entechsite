@@ -298,3 +298,81 @@ export interface Booking {
   createdAt: string;
   updatedAt: string;
 }
+
+export type SupportQueue = 'public' | 'shadow';
+export type SupportPriority = 'P1' | 'P2' | 'P3';
+export type SupportStatus = 'new' | 'acknowledged' | 'in_progress' | 'done';
+
+export interface SupportMeFlags {
+  canAgentPublic: boolean;
+  canShadow: boolean;
+  canManageAgents: boolean;
+}
+
+export interface SupportTicket {
+  id: string;
+  queue: SupportQueue;
+  requesterUserId: string;
+  requesterName: string;
+  requesterEmail?: string;
+  subject: string;
+  body: string;
+  category: string;
+  priority: SupportPriority;
+  status: SupportStatus;
+  assigneeUserId?: string | null;
+  attachmentUrl?: string | null;
+  resolutionNote?: string | null;
+  createdAt: string;
+  acknowledgedAt?: string | null;
+  startedAt?: string | null;
+  resolvedAt?: string | null;
+  responseDueAt?: string | null;
+  resolveDueAt?: string | null;
+  updatedAt: string;
+  responseSlaMet?: boolean | null;
+  resolveSlaMet?: boolean | null;
+  firstResponseMs?: number | null;
+  resolveMs?: number | null;
+}
+
+export interface SupportTicketEvent {
+  id: string;
+  ticketId: string;
+  actorUserId?: string | null;
+  eventType: string;
+  fromStatus?: string | null;
+  toStatus?: string | null;
+  note?: string | null;
+  createdAt: string;
+}
+
+export interface SupportKpi {
+  queue: SupportQueue;
+  total: number;
+  byStatus: {
+    new: number;
+    acknowledged: number;
+    inProgress: number;
+    done: number;
+  };
+  avgFirstResponseMs: number | null;
+  avgResolveMs: number | null;
+  responseSlaCompliance: number | null;
+  resolveSlaCompliance: number | null;
+  byPriority: Array<{
+    priority: SupportPriority;
+    total: number;
+    doneCount: number;
+    avgResolveMs: number | null;
+  }>;
+}
+
+export interface SupportAgent {
+  id: string;
+  userId: string;
+  email: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+}

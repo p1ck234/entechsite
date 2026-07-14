@@ -21,6 +21,8 @@ import driveRoutes from './routes/drive';
 import bookingResourcesRoutes from './routes/booking-resources';
 import bookingTagsRoutes from './routes/booking-tags';
 import bookingsRoutes from './routes/bookings';
+import supportTicketsRoutes from './routes/support-tickets';
+import supportBotsRoutes from './routes/support-bots';
 import { initializeDatabase } from './utils/db-init';
 import { ensureUploadsDir, logUploadsStorageStatus, resolveUploadedFilePath } from './utils/uploads';
 import path from 'path';
@@ -36,6 +38,7 @@ const API_FEATURES = [
   'employees-manager-patch',
   'org-structure-tree',
   'bookings-module',
+  'support-tickets',
 ];
 
 const healthPayload = () => ({
@@ -243,6 +246,9 @@ app.use('/api/drive', driveRoutes);
 app.use('/api/booking-resources', bookingResourcesRoutes);
 app.use('/api/booking-tags', bookingTagsRoutes);
 app.use('/api/bookings', bookingsRoutes);
+app.use('/api/support', supportTicketsRoutes);
+app.use('/api/support-tickets', supportTicketsRoutes);
+app.use('/api/support-bots', supportBotsRoutes);
 
 const uploadsDir = ensureUploadsDir();
 logUploadsStorageStatus();

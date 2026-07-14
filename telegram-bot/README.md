@@ -14,10 +14,15 @@ Telegram бот для приветствия пользователей и пр
 npm install
 ```
 
-2. Создайте файл `.env` и добавьте токен бота:
+2. Создайте файл `.env` и добавьте токен бота (тот же бот, что Mini App / вход в портал):
 ```
 BOT_TOKEN=your_bot_token_here
+BACKEND_URL=https://your-backend.example.com
 ```
+
+`BACKEND_URL` нужен для команд техподдержки (`/new`, `/my`, `/queue`) — бот пересылает update на
+`POST {BACKEND_URL}/api/support-bots/webhook/public`. На backend тот же `BOT_TOKEN` используется
+для ответа пользователю (отдельный `SUPPORT_BOT_PUBLIC_TOKEN` не обязателен).
 
 ## Получение токена бота
 

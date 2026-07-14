@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTelegram } from '../contexts/TelegramContext';
 import { SITE_CONFIG } from '../config/site';
-import { employeesAPI } from '../api/client';
+import { employeesAPI, supportAPI } from '../api/client';
 import type { Employee } from '../types';
 import { 
   Users, 
@@ -17,7 +17,9 @@ import {
   DoorOpen,
   Network,
   MoreHorizontal,
-  X
+  X,
+  Headphones,
+  Shield
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Logo from './Logo';
@@ -30,6 +32,7 @@ interface NavigationItem {
   icon: LucideIcon;
   telegram: TelegramNavPlacement;
   adminOnly?: boolean;
+  shadowOnly?: boolean;
 }
 
 const TELEGRAM_SYNC_INTERVAL_MS = 5 * 60 * 1000;
@@ -43,6 +46,19 @@ const Layout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
   const [telegramMoreOpen, setTelegramMoreOpen] = useState(false);
+  const [canShadowSupport, setCanShadowSupport] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setCanShadowSupport(false);
+      return;
+    }
+
+    supportAPI
+      .getMe()
+      .then((flags) => setCanShadowSupport(Boolean(flags.canShadow)))
+      .catch(() => setCanShadowSupport(false));
+  }, [isAuthenticated, user?.id]);
 
   // Обработка кнопки "Назад" в Telegram
   useEffect(() => {
@@ -180,15 +196,31 @@ const Layout: React.FC = () => {
     { name: 'База знаний', href: '/courses', icon: BookOpen, telegram: 'primary' },
     { name: 'Наша жизнь', href: '/life', icon: Heart, telegram: 'primary' },
     { name: 'Календарь мероприятий', href: '/events', icon: Calendar, telegram: 'primary' },
-    { name: 'Боты', href: '/bots', icon: Bot, telegram: 'primary' },
+    { name: 'Поддержка', href: '/support', icon: Headphones, telegram: 'primary' },
+    { name: 'Боты', href: '/bots', icon: Bot, telegram: 'more' },
     { name: 'Структура', href: '/org', icon: Network, telegram: 'more', adminOnly: true },
     { name: 'Расписание', href: '/bookings', icon: DoorOpen, telegram: 'more', adminOnly: true },
+    {
+      name: 'Служебная',
+      href: '/support-shadow',
+      icon: Shield,
+      telegram: 'more',
+      shadowOnly: true,
+    },
   ];
 
-  const visibleNavigation = navigation.filter((item) => !item.adminOnly || isAdmin);
-  const telegramPrimaryNavigation = navigation.filter((item) => item.telegram === 'primary');
+  const visibleNavigation = navigation.filter((item) => {
+    if (item.shadowOnly) {
+      return canShadowSupport;
+    }
+    if (item.adminOnly) {
+      return isAdmin;
+    }
+    return true;
+  });
+  const telegramPrimaryNavigation = visibleNavigation.filter((item) => item.telegram === 'primary');
   const telegramMoreNavigation = visibleNavigation.filter((item) => item.telegram === 'more');
-  const showTelegramMore = isAdmin && telegramMoreNavigation.length > 0;
+  const showTelegramMore = telegramMoreNavigation.length > 0;
 
   const handleLogout = () => {
     logout();
@@ -383,6 +415,7 @@ const Layout: React.FC = () => {
                   'База знаний': 'Курсы',
                   'Наша жизнь': 'Жизнь',
                   'Календарь мероприятий': 'Календарь',
+                  Поддержка: 'Поддержка',
                   Боты: 'Боты',
                 };
 
