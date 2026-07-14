@@ -301,7 +301,7 @@ export interface Booking {
 
 export type SupportQueue = 'public' | 'shadow';
 export type SupportPriority = 'P1' | 'P2' | 'P3';
-export type SupportStatus = 'new' | 'acknowledged' | 'in_progress' | 'done';
+export type SupportStatus = 'new' | 'acknowledged' | 'in_progress' | 'waiting' | 'done';
 
 export interface SupportMeFlags {
   canAgentPublic: boolean;
@@ -318,6 +318,7 @@ export interface SupportTicket {
   subject: string;
   body: string;
   category: string;
+  department?: string | null;
   priority: SupportPriority;
   status: SupportStatus;
   assigneeUserId?: string | null;
@@ -365,6 +366,7 @@ export interface SupportKpi {
     new: number;
     acknowledged: number;
     inProgress: number;
+    waiting: number;
     done: number;
   };
   avgFirstResponseMs: number | null;

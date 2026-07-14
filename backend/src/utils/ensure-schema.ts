@@ -229,7 +229,7 @@ export const ensureSupportSchema = async (pool: Pool): Promise<void> => {
         category VARCHAR(100) DEFAULT 'other',
         priority VARCHAR(5) NOT NULL DEFAULT 'P3' CHECK (priority IN ('P1', 'P2', 'P3')),
         status VARCHAR(20) NOT NULL DEFAULT 'new'
-          CHECK (status IN ('new', 'acknowledged', 'in_progress', 'done')),
+          CHECK (status IN ('new', 'acknowledged', 'in_progress', 'waiting', 'done')),
         assignee_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         telegram_chat_id BIGINT,
         attachment_url VARCHAR(500),
@@ -282,6 +282,24 @@ export const ensureSupportSchema = async (pool: Pool): Promise<void> => {
     await pool.query(`
       ALTER TABLE support_tickets
         ADD COLUMN IF NOT EXISTS todoist_task_id VARCHAR(64);
+    `);
+
+    // Статус «waiting» (Ожидание / колонка Ждун в Todoist)
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'support_tickets_status_check'
+        ) THEN
+          ALTER TABLE support_tickets DROP CONSTRAINT support_tickets_status_check;
+        END IF;
+        ALTER TABLE support_tickets
+          ADD CONSTRAINT support_tickets_status_check
+          CHECK (status IN ('new', 'acknowledged', 'in_progress', 'waiting', 'done'));
+      EXCEPTION
+        WHEN duplicate_object THEN NULL;
+      END $$;
     `);
 
     await pool.query(`

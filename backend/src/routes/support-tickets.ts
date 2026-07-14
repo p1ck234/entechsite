@@ -33,6 +33,13 @@ import {
 } from '../utils/support-todoist';
 import { buildTicketFormatContext } from '../utils/support-ticket-context';
 import { formatTelegramNewTicketHtml } from '../utils/support-ticket-format';
+import {
+  SUPPORT_THEME_IDS,
+  buildTicketSubject,
+  getThemeLabel,
+  isSupportThemeId,
+  type SupportThemeId,
+} from '../utils/support-labels';
 
 const router = express.Router();
 
@@ -45,7 +52,7 @@ router.use(async (_req, _res, next) => {
   }
 });
 
-const mapTicket = (row: any) => ({
+const mapTicket = (row: any, extras?: { department?: string | null }) => ({
   id: String(row.id),
   queue: row.queue as SupportQueue,
   requesterUserId: String(row.requester_user_id),
@@ -60,6 +67,12 @@ const mapTicket = (row: any) => ({
   telegramChatId: row.telegram_chat_id ? String(row.telegram_chat_id) : null,
   attachmentUrl: row.attachment_url || null,
   resolutionNote: row.resolution_note || null,
+  department:
+    extras?.department !== undefined
+      ? extras.department
+      : row.queue === 'shadow'
+        ? 'Тень'
+        : null,
   createdAt: row.created_at,
   acknowledgedAt: row.acknowledged_at,
   acknowledgedBy: row.acknowledged_by ? String(row.acknowledged_by) : null,
@@ -75,6 +88,27 @@ const mapTicket = (row: any) => ({
   firstResponseMs: msBetween(row.created_at, row.acknowledged_at),
   resolveMs: msBetween(row.created_at, row.resolved_at),
 });
+
+/** Вытащить уточнение из subject при смене темы */
+const extractSubjectDetail = (subject: string, category?: string | null): string => {
+  const trimmed = (subject || '').trim();
+  if (!trimmed) {
+    return '';
+  }
+  const theme = getThemeLabel(category);
+  if (trimmed === theme) {
+    return '';
+  }
+  const prefix = `${theme}: `;
+  if (trimmed.startsWith(prefix)) {
+    return trimmed.slice(prefix.length);
+  }
+  // Пока тема не выбрана агентом — весь subject как уточнение
+  if (!category || category === 'other') {
+    return trimmed;
+  }
+  return trimmed;
+};
 
 const mapEvent = (row: any) => ({
   id: String(row.id),
@@ -199,6 +233,7 @@ router.get(
            COUNT(*) FILTER (WHERE status = 'new')::int AS new_count,
            COUNT(*) FILTER (WHERE status = 'acknowledged')::int AS acknowledged_count,
            COUNT(*) FILTER (WHERE status = 'in_progress')::int AS in_progress_count,
+           COUNT(*) FILTER (WHERE status = 'waiting')::int AS waiting_count,
            COUNT(*) FILTER (WHERE status = 'done')::int AS done_count,
            AVG(EXTRACT(EPOCH FROM (acknowledged_at - created_at)) * 1000)
              FILTER (WHERE acknowledged_at IS NOT NULL) AS avg_first_response_ms,
@@ -241,6 +276,7 @@ router.get(
           new: row.new_count,
           acknowledged: row.acknowledged_count,
           inProgress: row.in_progress_count,
+          waiting: row.waiting_count,
           done: row.done_count,
         },
         avgFirstResponseMs: row.avg_first_response_ms ? Number(row.avg_first_response_ms) : null,
@@ -361,7 +397,7 @@ router.get(
   authenticateToken,
   query('scope').optional().isIn(['mine', 'queue']),
   query('queue').optional().isIn(['public', 'shadow']),
-  query('status').optional().isIn(['new', 'acknowledged', 'in_progress', 'done']),
+  query('status').optional().isIn(['new', 'acknowledged', 'in_progress', 'waiting', 'done']),
   async (req: AuthRequest, res: Response) => {
     try {
       const errors = validationResult(req);
@@ -395,7 +431,7 @@ router.get(
         sql += ` ORDER BY created_at DESC LIMIT 200`;
 
         const result = await pool.query(sql, params);
-        return res.json({ tickets: result.rows.map(mapTicket) });
+        return res.json({ tickets: result.rows.map((row) => mapTicket(row)) });
       }
 
       // mine — публичные свои; shadow свои только если оператор (иначе 404 при явной shadow)
@@ -416,7 +452,7 @@ router.get(
       sql += ` ORDER BY created_at DESC LIMIT 200`;
 
       const result = await pool.query(sql, params);
-      return res.json({ tickets: result.rows.map(mapTicket) });
+      return res.json({ tickets: result.rows.map((row) => mapTicket(row)) });
     } catch (error) {
       console.error('Support tickets list error:', error);
       return res.status(500).json({ message: 'Не удалось загрузить заявки' });
@@ -457,14 +493,91 @@ router.get(
         ),
       ]);
 
+      const formatCtx = await buildTicketFormatContext(pool, ticket);
+
       return res.json({
-        ticket: mapTicket(ticket),
+        ticket: mapTicket(ticket, { department: formatCtx.department }),
         events: events.rows.map(mapEvent),
         replies: replies.rows.map(mapReply),
       });
     } catch (error) {
       console.error('Support ticket get error:', error);
       return res.status(500).json({ message: 'Не удалось загрузить заявку' });
+    }
+  }
+);
+
+router.patch(
+  '/:id/category',
+  authenticateToken,
+  param('id').isInt(),
+  body('category').trim().isIn([...SUPPORT_THEME_IDS]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const ticketId = Number(req.params.id);
+      const result = await pool.query(`SELECT * FROM support_tickets WHERE id = $1`, [ticketId]);
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: 'Заявка не найдена' });
+      }
+
+      const ticket = result.rows[0];
+      const access = await canTransitionTicket(pool, req.user, ticket.queue);
+      if (!access.allowed) {
+        return res.status(access.notFound ? 404 : 403).json({
+          message: access.notFound ? 'Заявка не найдена' : 'Недостаточно прав',
+        });
+      }
+
+      if (ticket.status === 'done') {
+        return res.status(400).json({ message: 'Нельзя менять тему закрытой заявки' });
+      }
+
+      const category = String(req.body.category).trim() as SupportThemeId;
+      if (!isSupportThemeId(category)) {
+        return res.status(400).json({ message: 'Неизвестная тема' });
+      }
+
+      const detail = extractSubjectDetail(ticket.subject, ticket.category);
+      const subject = buildTicketSubject(category, detail);
+      const now = new Date();
+
+      const updated = await pool.query(
+        `UPDATE support_tickets
+         SET category = $2, subject = $3, updated_at = $4
+         WHERE id = $1
+         RETURNING *`,
+        [ticketId, category, subject, now]
+      );
+
+      await insertEvent(
+        ticketId,
+        req.user!.id,
+        'category_changed',
+        ticket.status,
+        ticket.status,
+        `${getThemeLabel(ticket.category)} → ${getThemeLabel(category)}`
+      );
+
+      const nextTicket = updated.rows[0];
+      try {
+        await syncTicketToTodoist(pool, nextTicket);
+      } catch {
+        console.error('Todoist sync on category change failed');
+      }
+
+      const formatCtx = await buildTicketFormatContext(pool, nextTicket);
+      return res.json({
+        message: 'Тема обновлена',
+        ticket: mapTicket(nextTicket, { department: formatCtx.department }),
+      });
+    } catch (error) {
+      console.error('Support category update error:', error);
+      return res.status(500).json({ message: 'Не удалось обновить тему' });
     }
   }
 );
@@ -605,6 +718,16 @@ router.post(
           ? Number(req.body.telegramChatId)
           : profile.telegramId;
 
+      // Тему при создании выбирают только агенты/операторы; обычный сотрудник — «other»
+      const canPickTheme =
+        queue === 'shadow' || (await canAgentPublicQueue(pool, req.user));
+      const requestedCategory = String(req.body.category || 'other').trim();
+      const category =
+        canPickTheme && isSupportThemeId(requestedCategory) ? requestedCategory : 'other';
+      const subject = canPickTheme
+        ? req.body.subject.trim()
+        : req.body.subject.trim() || req.body.body.trim().slice(0, 180);
+
       const result = await pool.query(
         `INSERT INTO support_tickets (
            queue, requester_user_id, requester_name, requester_email,
@@ -622,9 +745,9 @@ router.post(
           req.user!.id,
           profile.name,
           profile.email,
-          req.body.subject.trim(),
+          subject,
           req.body.body.trim(),
-          (req.body.category || 'other').trim(),
+          category,
           priority,
           telegramChatId || null,
           req.body.attachmentUrl || null,
@@ -713,8 +836,21 @@ const transitionHandler =
         updated = await pool.query(
           `UPDATE support_tickets SET
              status = 'in_progress',
-             started_at = $2,
+             started_at = COALESCE(started_at, $2),
              assignee_user_id = $3,
+             updated_at = $2
+           WHERE id = $1
+           RETURNING *`,
+          [ticketId, now, req.user!.id]
+        );
+      } else if (toStatus === 'waiting') {
+        updated = await pool.query(
+          `UPDATE support_tickets SET
+             status = 'waiting',
+             acknowledged_at = COALESCE(acknowledged_at, $2),
+             acknowledged_by = COALESCE(acknowledged_by, $3),
+             started_at = COALESCE(started_at, $2),
+             assignee_user_id = COALESCE(assignee_user_id, $3),
              updated_at = $2
            WHERE id = $1
            RETURNING *`,
@@ -744,13 +880,16 @@ const transitionHandler =
         req.body?.note || null
       );
 
-      void notifyTelegramStatusChange({
-        queue: nextTicket.queue,
-        chatId: nextTicket.telegram_chat_id,
-        ticketId: nextTicket.id,
-        subject: nextTicket.subject,
-        status: toStatus,
-      });
+      // «Ожидание» пользователям не шлём
+      if (toStatus !== 'waiting') {
+        void notifyTelegramStatusChange({
+          queue: nextTicket.queue,
+          chatId: nextTicket.telegram_chat_id,
+          ticketId: nextTicket.id,
+          subject: nextTicket.subject,
+          status: toStatus,
+        });
+      }
 
       if (toStatus === 'done' && nextTicket.todoist_task_id) {
         void closeTodoistTask(String(nextTicket.todoist_task_id));
@@ -778,6 +917,13 @@ router.post(
   authenticateToken,
   param('id').isInt(),
   transitionHandler('in_progress')
+);
+
+router.post(
+  '/:id/wait',
+  authenticateToken,
+  param('id').isInt(),
+  transitionHandler('waiting')
 );
 
 router.post(

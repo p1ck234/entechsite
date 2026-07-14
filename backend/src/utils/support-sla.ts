@@ -1,5 +1,5 @@
 export type SupportPriority = 'P1' | 'P2' | 'P3';
-export type SupportStatus = 'new' | 'acknowledged' | 'in_progress' | 'done';
+export type SupportStatus = 'new' | 'acknowledged' | 'in_progress' | 'waiting' | 'done';
 export type SupportQueue = 'public' | 'shadow';
 
 /** SLA в миллисекундах (календарное время) */
@@ -13,7 +13,13 @@ export const SUPPORT_SLA_MS: Record<
 };
 
 export const SUPPORT_PRIORITIES: SupportPriority[] = ['P1', 'P2', 'P3'];
-export const SUPPORT_STATUSES: SupportStatus[] = ['new', 'acknowledged', 'in_progress', 'done'];
+export const SUPPORT_STATUSES: SupportStatus[] = [
+  'new',
+  'acknowledged',
+  'in_progress',
+  'waiting',
+  'done',
+];
 
 export const isSupportPriority = (value: unknown): value is SupportPriority =>
   typeof value === 'string' && SUPPORT_PRIORITIES.includes(value as SupportPriority);

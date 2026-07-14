@@ -2,8 +2,9 @@ import type { SupportStatus } from './support-sla';
 
 const ALLOWED_TRANSITIONS: Record<SupportStatus, SupportStatus[]> = {
   new: ['acknowledged'],
-  acknowledged: ['in_progress'],
-  in_progress: ['done'],
+  acknowledged: ['in_progress', 'waiting'],
+  in_progress: ['waiting', 'done'],
+  waiting: ['in_progress', 'done'],
   done: [],
 };
 
@@ -34,6 +35,8 @@ export const statusLabelRu = (status: SupportStatus): string => {
       return 'Подтверждена';
     case 'in_progress':
       return 'В работе';
+    case 'waiting':
+      return 'Ожидание';
     case 'done':
       return 'Готово';
     default:

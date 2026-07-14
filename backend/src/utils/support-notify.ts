@@ -13,6 +13,10 @@ export const notifyTelegramStatusChange = async (params: {
   status: SupportStatus;
 }): Promise<void> => {
   const { queue, chatId, ticketId, subject, status } = params;
+  // Ожидание (колонка Ждун) — не уведомляем заявителя
+  if (status === 'waiting') {
+    return;
+  }
   if (!chatId) {
     return;
   }

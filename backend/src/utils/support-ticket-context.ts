@@ -54,6 +54,11 @@ export const buildTicketFormatContext = async (
     }
   }
 
+  // Служебная очередь: отдел всегда «Тень», не HR-подразделение заявителя
+  if (ticket.queue === 'shadow') {
+    department = 'Тень';
+  }
+
   return {
     id: ticket.id,
     subject: ticket.subject,

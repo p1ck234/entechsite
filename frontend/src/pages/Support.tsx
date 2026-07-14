@@ -43,6 +43,7 @@ const STATUS_LABEL: Record<SupportStatus, string> = {
   new: 'Новая',
   acknowledged: 'Подтверждена',
   in_progress: 'В работе',
+  waiting: 'Ожидание',
   done: 'Готово',
 };
 
@@ -100,6 +101,8 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const canAgent = queue === 'shadow' ? Boolean(flags?.canShadow) : Boolean(flags?.canAgentPublic);
+  // Тему при создании выбирают агенты/операторы; у сотрудника — только текст
+  const canPickThemeOnCreate = canAgent || queue === 'shadow';
 
   const tabs = useMemo(() => {
     const items: Array<{ id: TabId; label: string; show: boolean }> = [
@@ -204,10 +207,13 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
     try {
       setActionError('');
       setCreating(true);
+      const subject = canPickThemeOnCreate
+        ? buildTicketSubject(form.themeId, form.detail)
+        : form.detail.trim() || form.body.trim().slice(0, 180);
       await supportAPI.createTicket({
-        subject: buildTicketSubject(form.themeId, form.detail),
+        subject,
         body: form.body,
-        category: form.themeId,
+        category: canPickThemeOnCreate ? form.themeId : 'other',
         priority: form.priority,
         queue,
       });
@@ -221,7 +227,24 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
     }
   };
 
-  const runTransition = async (id: string, action: 'ack' | 'start' | 'done') => {
+  const handleCategoryChange = async (category: SupportThemeId) => {
+    if (!detail) {
+      return;
+    }
+    try {
+      setBusyId(detail.ticket.id);
+      setActionError('');
+      const { ticket } = await supportAPI.updateCategory(detail.ticket.id, category);
+      setDetail((prev) => (prev ? { ...prev, ticket } : prev));
+      setTickets((prev) => prev.map((item) => (item.id === ticket.id ? { ...item, ...ticket } : item)));
+    } catch (err: any) {
+      setActionError(err.response?.data?.message || 'Не удалось обновить тему');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const runTransition = async (id: string, action: 'ack' | 'start' | 'wait' | 'done') => {
     try {
       setBusyId(id);
       setActionError('');
@@ -229,6 +252,8 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
         await supportAPI.acknowledge(id);
       } else if (action === 'start') {
         await supportAPI.start(id);
+      } else if (action === 'wait') {
+        await supportAPI.wait(id);
       } else {
         await supportAPI.resolve(id);
       }
@@ -292,25 +317,29 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
           Новая заявка
         </div>
         <div className="grid gap-3 md:grid-cols-2">
+          {canPickThemeOnCreate && (
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-xs text-pastel-500">Тема</label>
+              <select
+                className="input-field"
+                value={form.themeId}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, themeId: e.target.value as SupportThemeId }))
+                }
+                required
+              >
+                {SUPPORT_THEMES.map((theme) => (
+                  <option key={theme.id} value={theme.id}>
+                    {theme.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="md:col-span-2">
-            <label className="mb-1 block text-xs text-pastel-500">Тема</label>
-            <select
-              className="input-field"
-              value={form.themeId}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, themeId: e.target.value as SupportThemeId }))
-              }
-              required
-            >
-              {SUPPORT_THEMES.map((theme) => (
-                <option key={theme.id} value={theme.id}>
-                  {theme.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-xs text-pastel-500">Кратко (необязательно)</label>
+            <label className="mb-1 block text-xs text-pastel-500">
+              {canPickThemeOnCreate ? 'Кратко (необязательно)' : 'Кратко'}
+            </label>
             <input
               className="input-field"
               placeholder="Например: не печатает на 3 этаже"
@@ -318,6 +347,11 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
               onChange={(e) => setForm((prev) => ({ ...prev, detail: e.target.value }))}
               maxLength={180}
             />
+            {!canPickThemeOnCreate && (
+              <p className="mt-1 text-xs text-pastel-500">
+                Тему назначит поддержка. Отдел подставится из вашего профиля на портале.
+              </p>
+            )}
           </div>
           <div className="md:col-span-2">
             <label className="mb-1 block text-xs text-pastel-500">Описание</label>
@@ -395,6 +429,7 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
               <span>Новые: {kpi.byStatus.new}</span>
               <span>Подтверждены: {kpi.byStatus.acknowledged}</span>
               <span>В работе: {kpi.byStatus.inProgress}</span>
+              <span>Ожидание: {kpi.byStatus.waiting}</span>
               <span>Готово: {kpi.byStatus.done}</span>
               <span>SLA ответа: {formatPercent(kpi.responseSlaCompliance)}</span>
             </div>
@@ -467,8 +502,35 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
                     <dd className="font-medium">{detail.ticket.requesterName}</dd>
                   </div>
                   <div className="flex gap-2">
-                    <dt className="shrink-0 text-pastel-500">📁 Категория</dt>
-                    <dd>{getThemeLabel(detail.ticket.category)}</dd>
+                    <dt className="shrink-0 text-pastel-500">🏢 Отдел</dt>
+                    <dd>{detail.ticket.department || '—'}</dd>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <dt className="shrink-0 text-pastel-500">📁 Тема</dt>
+                    <dd className="min-w-0 flex-1">
+                      {canAgent && detail.ticket.status !== 'done' ? (
+                        <select
+                          className="input-field py-1 text-sm"
+                          value={
+                            SUPPORT_THEMES.some((t) => t.id === detail.ticket.category)
+                              ? detail.ticket.category
+                              : 'other'
+                          }
+                          disabled={busyId === detail.ticket.id}
+                          onChange={(e) =>
+                            void handleCategoryChange(e.target.value as SupportThemeId)
+                          }
+                        >
+                          {SUPPORT_THEMES.map((theme) => (
+                            <option key={theme.id} value={theme.id}>
+                              {theme.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        getThemeLabel(detail.ticket.category)
+                      )}
+                    </dd>
                   </div>
                   <div className="flex gap-2">
                     <dt className="shrink-0 text-pastel-500">⚠️ Срочность</dt>
@@ -536,26 +598,70 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
                       </button>
                     )}
                     {detail.ticket.status === 'acknowledged' && (
-                      <button
-                        type="button"
-                        className="btn-primary inline-flex items-center gap-1"
-                        disabled={busyId === detail.ticket.id}
-                        onClick={() => void runTransition(detail.ticket.id, 'start')}
-                      >
-                        <Play className="h-4 w-4" />
-                        В работу
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className="btn-primary inline-flex items-center gap-1"
+                          disabled={busyId === detail.ticket.id}
+                          onClick={() => void runTransition(detail.ticket.id, 'start')}
+                        >
+                          <Play className="h-4 w-4" />
+                          В работу
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary inline-flex items-center gap-1"
+                          disabled={busyId === detail.ticket.id}
+                          onClick={() => void runTransition(detail.ticket.id, 'wait')}
+                        >
+                          <Clock className="h-4 w-4" />
+                          Ожидание
+                        </button>
+                      </>
                     )}
                     {detail.ticket.status === 'in_progress' && (
-                      <button
-                        type="button"
-                        className="btn-primary inline-flex items-center gap-1"
-                        disabled={busyId === detail.ticket.id}
-                        onClick={() => void runTransition(detail.ticket.id, 'done')}
-                      >
-                        <CheckCircle2 className="h-4 w-4" />
-                        Готово
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className="btn-secondary inline-flex items-center gap-1"
+                          disabled={busyId === detail.ticket.id}
+                          onClick={() => void runTransition(detail.ticket.id, 'wait')}
+                        >
+                          <Clock className="h-4 w-4" />
+                          Ожидание
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-primary inline-flex items-center gap-1"
+                          disabled={busyId === detail.ticket.id}
+                          onClick={() => void runTransition(detail.ticket.id, 'done')}
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                          Готово
+                        </button>
+                      </>
+                    )}
+                    {detail.ticket.status === 'waiting' && (
+                      <>
+                        <button
+                          type="button"
+                          className="btn-primary inline-flex items-center gap-1"
+                          disabled={busyId === detail.ticket.id}
+                          onClick={() => void runTransition(detail.ticket.id, 'start')}
+                        >
+                          <Play className="h-4 w-4" />
+                          В работу
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-primary inline-flex items-center gap-1"
+                          disabled={busyId === detail.ticket.id}
+                          onClick={() => void runTransition(detail.ticket.id, 'done')}
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                          Готово
+                        </button>
+                      </>
                     )}
                   </div>
                 )}

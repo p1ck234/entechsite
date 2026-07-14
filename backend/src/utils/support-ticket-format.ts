@@ -63,11 +63,17 @@ const shortSubject = (subject: string, category?: string | null): string => {
 
 export const formatTodoistTaskContent = (ticket: TicketFormatInput): string => {
   const code = formatTicketCode(ticket.id);
-  const dept = ticket.department?.trim() || '—';
+  // Публичная: отдел из профиля; теневая: всегда «Тень»
+  const dept =
+    ticket.queue === 'shadow'
+      ? 'Тень'
+      : ticket.department?.trim() || '—';
+  const theme = getThemeLabel(ticket.category);
   const urgency = getPriorityLabel(ticket.priority);
   const title = shortSubject(ticket.subject, ticket.category);
   const prefix = ticket.queue === 'shadow' ? '🛡 ' : '';
-  return `${prefix}${code} | ${dept} | ${urgency} | ${title}`.slice(0, 300);
+  // Тема отдельным сегментом — её назначает агент/админ
+  return `${prefix}${code} | ${dept} | ${theme} | ${urgency} | ${title}`.slice(0, 500);
 };
 
 export const formatTodoistTaskDescription = (ticket: TicketFormatInput): string => {

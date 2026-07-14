@@ -1049,11 +1049,24 @@ export const supportAPI = {
     return response.data;
   },
 
+  wait: async (id: string): Promise<{ message: string; ticket: SupportTicket }> => {
+    const response = await api.post(`/support/${id}/wait`);
+    return response.data;
+  },
+
   resolve: async (
     id: string,
     note?: string
   ): Promise<{ message: string; ticket: SupportTicket }> => {
     const response = await api.post(`/support/${id}/resolve`, { note });
+    return response.data;
+  },
+
+  updateCategory: async (
+    id: string,
+    category: string
+  ): Promise<{ message: string; ticket: SupportTicket }> => {
+    const response = await api.patch(`/support/${id}/category`, { category });
     return response.data;
   },
 

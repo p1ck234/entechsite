@@ -118,7 +118,11 @@ const createTicketFromBot = async (params: {
 }) => {
   const createdAt = new Date();
   const deadlines = computeSlaDeadlines(params.priority, createdAt);
-  const subject = buildTicketSubject(params.themeId);
+  // В публичной очереди тему позже ставит агент — subject = краткое описание
+  const subject =
+    params.queue === 'public' && params.themeId === 'other'
+      ? params.body.trim().slice(0, 180) || 'Без темы'
+      : buildTicketSubject(params.themeId);
   const result = await pool.query(
     `INSERT INTO support_tickets (
        queue, requester_user_id, requester_name, requester_email,
@@ -176,7 +180,7 @@ const createTicketFromBot = async (params: {
 const applyTransition = async (
   ticketId: number,
   actorUserId: string,
-  toStatus: 'acknowledged' | 'in_progress' | 'done'
+  toStatus: 'acknowledged' | 'in_progress' | 'waiting' | 'done'
 ) => {
   const result = await pool.query(`SELECT * FROM support_tickets WHERE id = $1`, [ticketId]);
   if (result.rows.length === 0) {
@@ -202,7 +206,20 @@ const applyTransition = async (
   } else if (toStatus === 'in_progress') {
     updated = await pool.query(
       `UPDATE support_tickets SET
-         status = 'in_progress', started_at = $2, assignee_user_id = $3, updated_at = $2
+         status = 'in_progress', started_at = COALESCE(started_at, $2),
+         assignee_user_id = $3, updated_at = $2
+       WHERE id = $1 RETURNING *`,
+      [ticketId, now, actorUserId]
+    );
+  } else if (toStatus === 'waiting') {
+    updated = await pool.query(
+      `UPDATE support_tickets SET
+         status = 'waiting',
+         acknowledged_at = COALESCE(acknowledged_at, $2),
+         acknowledged_by = COALESCE(acknowledged_by, $3),
+         started_at = COALESCE(started_at, $2),
+         assignee_user_id = COALESCE(assignee_user_id, $3),
+         updated_at = $2
        WHERE id = $1 RETURNING *`,
       [ticketId, now, actorUserId]
     );
@@ -288,9 +305,13 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
         }
       }
 
-      // Выбор темы при создании заявки
+      // Выбор темы — только теневой бот (операторы)
       const themeMatch = data.match(/^theme:([a-z0-9]+)$/i);
       if (themeMatch && chatId != null) {
+        if (queue !== 'shadow') {
+          await answerTelegramCallback(queue, callback.id, 'Тему назначит поддержка');
+          return res.json({ ok: true });
+        }
         const themeId = themeMatch[1].toLowerCase();
         if (!isSupportThemeId(themeId)) {
           await answerTelegramCallback(queue, callback.id, 'Неизвестная тема');
@@ -345,7 +366,7 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
         return res.json({ ok: true });
       }
 
-      const match = data.match(/^(ack|start|done):(\d+)$/);
+      const match = data.match(/^(ack|start|wait|done):(\d+)$/);
       if (!match) {
         await answerTelegramCallback(queue, callback.id, 'Неизвестная команда');
         return res.json({ ok: true });
@@ -373,8 +394,14 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
       }
 
       const toStatus =
-        action === 'ack' ? 'acknowledged' : action === 'start' ? 'in_progress' : 'done';
-      const result = await applyTransition(ticketId, String(user.id), toStatus as any);
+        action === 'ack'
+          ? 'acknowledged'
+          : action === 'start'
+            ? 'in_progress'
+            : action === 'wait'
+              ? 'waiting'
+              : 'done';
+      const result = await applyTransition(ticketId, String(user.id), toStatus);
       await answerTelegramCallback(
         queue,
         callback.id,
@@ -480,8 +507,19 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
     }
 
     if (action === '/new') {
-      draftByChat.set(draftKey, { step: 'theme' });
-      await sendTelegramMessage(queue, chatId, themesHelpText(), themeKeyboard());
+      // Тему выбирает агент на портале; в публичном боте сразу описание.
+      // В теневом боте операторы выбирают тему сами.
+      if (queue === 'shadow') {
+        draftByChat.set(draftKey, { step: 'theme' });
+        await sendTelegramMessage(queue, chatId, themesHelpText(), themeKeyboard());
+      } else {
+        draftByChat.set(draftKey, { step: 'body', themeId: 'other' });
+        await sendTelegramMessage(
+          queue,
+          chatId,
+          'Опишите проблему: что случилось и что уже пробовали.\nТема будет назначена поддержкой.'
+        );
+      }
       return res.json({ ok: true });
     }
 
@@ -527,9 +565,20 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
         if (t.status === 'new') {
           buttons.push([{ text: 'Подтвердить', callback_data: `ack:${t.id}` }]);
         } else if (t.status === 'acknowledged') {
-          buttons.push([{ text: 'В работу', callback_data: `start:${t.id}` }]);
+          buttons.push([
+            { text: 'В работу', callback_data: `start:${t.id}` },
+            { text: 'Ожидание', callback_data: `wait:${t.id}` },
+          ]);
         } else if (t.status === 'in_progress') {
-          buttons.push([{ text: 'Готово', callback_data: `done:${t.id}` }]);
+          buttons.push([
+            { text: 'Ожидание', callback_data: `wait:${t.id}` },
+            { text: 'Готово', callback_data: `done:${t.id}` },
+          ]);
+        } else if (t.status === 'waiting') {
+          buttons.push([
+            { text: 'В работу', callback_data: `start:${t.id}` },
+            { text: 'Готово', callback_data: `done:${t.id}` },
+          ]);
         }
 
         await sendTelegramMessage(
@@ -545,6 +594,17 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
     const draft = draftByChat.get(draftKey);
     if (draft) {
       if (draft.step === 'theme') {
+        if (queue !== 'shadow') {
+          draft.themeId = 'other';
+          draft.step = 'body';
+          draftByChat.set(draftKey, draft);
+          await sendTelegramMessage(
+            queue,
+            chatId,
+            'Опишите проблему: что случилось и что уже пробовали.\nТема будет назначена поддержкой.'
+          );
+          return res.json({ ok: true });
+        }
         const themeId = resolveThemeFromText(text);
         if (!themeId) {
           await sendTelegramMessage(

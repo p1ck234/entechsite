@@ -17,7 +17,8 @@ const SECTION_STATUS_MAP: Record<string, SupportStatus> = {
   backlog: 'new',
   неделя: 'acknowledged',
   сегодня: 'in_progress',
-  ждун: 'acknowledged',
+  ждун: 'waiting',
+  ожидание: 'waiting',
 };
 
 let cachedProjectId: string | null | undefined;
@@ -308,6 +309,17 @@ const applyTicketStatusFromTodoist = async (
       updated_at = $2
      WHERE id = $1 AND status <> 'done'
      RETURNING *`;
+  } else if (toStatus === 'waiting') {
+    sql = `UPDATE support_tickets SET
+      status = 'waiting',
+      acknowledged_at = COALESCE(acknowledged_at, $2),
+      acknowledged_by = COALESCE(acknowledged_by, $3::int),
+      started_at = COALESCE(started_at, $2),
+      assignee_user_id = COALESCE($3::int, assignee_user_id),
+      resolved_at = NULL, resolved_by = NULL,
+      updated_at = $2
+     WHERE id = $1 AND status <> 'done'
+     RETURNING *`;
   } else {
     return false;
   }
@@ -331,13 +343,16 @@ const applyTicketStatusFromTodoist = async (
   );
 
   const next = updated.rows[0];
-  void notifyTelegramStatusChange({
-    queue: next.queue,
-    chatId: next.telegram_chat_id,
-    ticketId: next.id,
-    subject: next.subject,
-    status: toStatus,
-  });
+  // «Ожидание» (Ждун) — служебный статус, пользователю не шлём
+  if (toStatus !== 'waiting') {
+    void notifyTelegramStatusChange({
+      queue: next.queue,
+      chatId: next.telegram_chat_id,
+      ticketId: next.id,
+      subject: next.subject,
+      status: toStatus,
+    });
+  }
 
   return true;
 };
