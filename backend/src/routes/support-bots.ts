@@ -21,6 +21,11 @@ import {
   parsePriorityFromHumanText,
   type SupportThemeId,
 } from '../utils/support-labels';
+import { buildTicketFormatContext } from '../utils/support-ticket-context';
+import {
+  formatTelegramNewTicketHtml,
+  formatTicketCode,
+} from '../utils/support-ticket-format';
 
 const router = express.Router();
 
@@ -130,14 +135,8 @@ const createTicketFromBot = async (params: {
   const ticket = created.rows[0];
   if (ticket?.queue === 'public') {
     await syncTicketToTodoist(pool, ticket);
-    void notifySupportAgents(
-      pool,
-      'public',
-      `Новая заявка #${ticket.id}\n` +
-        `${getThemeLabel(ticket.category)} · ${getPriorityLabel(ticket.priority)}\n` +
-        `${ticket.subject}\n` +
-        `От: ${ticket.requester_name}\n` +
-        `${String(ticket.body).slice(0, 240)}`
+    void buildTicketFormatContext(pool, ticket).then((ctx) =>
+      notifySupportAgents(pool, 'public', formatTelegramNewTicketHtml(ctx), 'HTML')
     );
   }
 
@@ -383,7 +382,7 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
 
       const lines = tickets.rows.map(
         (t) =>
-          `#${t.id} · ${getPriorityLabel(t.priority)} · ${statusLabelRu(t.status)}\n${t.subject}`
+          `${formatTicketCode(t.id)} · ${getPriorityLabel(t.priority)} · ${statusLabelRu(t.status)}\n${t.subject}`
       );
       await sendTelegramMessage(queue, chatId, lines.join('\n\n'));
       return res.json({ ok: true });
@@ -445,7 +444,7 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
         await sendTelegramMessage(
           queue,
           chatId,
-          `#${t.id} · ${getPriorityLabel(t.priority)} · ${statusLabelRu(t.status)}\n${t.subject}`,
+          `${formatTicketCode(t.id)} · ${getPriorityLabel(t.priority)} · ${statusLabelRu(t.status)}\n${t.subject}`,
           buttons.length ? { inline_keyboard: buttons } : undefined
         );
       }
@@ -511,7 +510,7 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
         await sendTelegramMessage(
           queue,
           chatId,
-          `Заявка #${ticket.id} создана.\n` +
+          `✅ Заявка ${formatTicketCode(ticket.id)} создана\n` +
             `${ticket.subject}\n` +
             `Срочность: ${getPriorityLabel(priority)}\n` +
             `Статус: ${statusLabelRu('new')}`

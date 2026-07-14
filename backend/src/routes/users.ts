@@ -263,9 +263,9 @@ router.put('/:id/role', authenticateToken, requireAdmin, [
     const { id } = req.params;
     const { role } = req.body;
 
-    // Prevent admin from changing their own role
-    if (id === req.user?.id) {
-      return res.status(400).json({ message: 'Cannot change your own role' });
+    // Нельзя снять/сменить свою собственную роль
+    if (String(id) === String(req.user?.id)) {
+      return res.status(400).json({ message: 'Нельзя изменить свою роль' });
     }
 
     const user = await pool.query('SELECT id FROM users WHERE id = $1', [id]);

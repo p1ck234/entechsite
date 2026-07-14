@@ -62,6 +62,15 @@ export const getPriorityLabel = (priority: SupportPriority | string | null | und
   return found?.label || String(priority || '—');
 };
 
+/** Единый номер заявки: #IT-000001 */
+export const formatTicketCode = (id: number | string): string => {
+  const numeric = Number(id);
+  if (!Number.isFinite(numeric) || numeric < 1) {
+    return `#${id}`;
+  }
+  return `#IT-${String(Math.trunc(numeric)).padStart(6, '0')}`;
+};
+
 export const buildTicketSubject = (themeId: SupportThemeId, detail?: string): string => {
   const theme = getThemeLabel(themeId);
   const trimmed = (detail || '').trim();

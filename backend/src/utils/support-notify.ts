@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import type { SupportQueue, SupportStatus } from './support-sla';
-import { statusLabelRu } from './support-ticket-rules';
 import { getSupportBotToken } from './support-bot-token';
+import { formatTelegramStatusText, formatTicketCode } from './support-ticket-format';
 
 const getBotToken = (queue: SupportQueue): string | null => getSupportBotToken(queue);
 
@@ -22,10 +22,7 @@ export const notifyTelegramStatusChange = async (params: {
     return;
   }
 
-  const text =
-    `Заявка #${ticketId}\n` +
-    `${subject}\n` +
-    `Статус: ${statusLabelRu(status)}`;
+  const text = formatTelegramStatusText({ id: ticketId, subject, status });
 
   try {
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -34,6 +31,7 @@ export const notifyTelegramStatusChange = async (params: {
       body: JSON.stringify({
         chat_id: chatId,
         text,
+        disable_web_page_preview: true,
       }),
     });
   } catch (error) {
@@ -45,7 +43,8 @@ export const sendTelegramMessage = async (
   queue: SupportQueue,
   chatId: number | string,
   text: string,
-  replyMarkup?: object
+  replyMarkup?: object,
+  parseMode?: 'HTML' | 'Markdown'
 ): Promise<void> => {
   const token = getBotToken(queue);
   if (!token) {
@@ -60,6 +59,8 @@ export const sendTelegramMessage = async (
         chat_id: chatId,
         text,
         reply_markup: replyMarkup,
+        ...(parseMode ? { parse_mode: parseMode } : {}),
+        disable_web_page_preview: true,
       }),
     });
   } catch (error) {
@@ -110,14 +111,17 @@ export const getPublicAgentTelegramChatIds = async (pool: Pool): Promise<string[
 export const notifySupportAgents = async (
   pool: Pool,
   queue: SupportQueue,
-  text: string
+  text: string,
+  parseMode?: 'HTML' | 'Markdown'
 ): Promise<void> => {
   if (queue !== 'public') {
     return;
   }
 
   const chatIds = await getPublicAgentTelegramChatIds(pool);
-  await Promise.all(chatIds.map((chatId) => sendTelegramMessage(queue, chatId, text)));
+  await Promise.all(
+    chatIds.map((chatId) => sendTelegramMessage(queue, chatId, text, undefined, parseMode))
+  );
 };
 
 export const notifyTicketReplyParties = async (params: {
@@ -147,7 +151,7 @@ export const notifyTicketReplyParties = async (params: {
 
   const preview = replyPreview.slice(0, 280);
   const text =
-    `Заявка #${ticketId}: ${subject}\n` +
+    `💬 ${formatTicketCode(ticketId)}: ${subject}\n` +
     `Ответ от ${authorName}${isAgent ? ' (поддержка)' : ''}:\n` +
     preview;
 

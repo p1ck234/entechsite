@@ -591,6 +591,23 @@ export const usersAPI = {
     return response.data;
   },
 
+  updateUserRole: async (
+    userId: string,
+    role: 'ADMIN' | 'USER'
+  ): Promise<{ message: string; user: User }> => {
+    const response = await api.put(`/users/${userId}/role`, { role });
+    const u = response.data.user || response.data;
+    return {
+      message: response.data.message || 'Роль обновлена',
+      user: {
+        id: String(u.id),
+        email: u.email,
+        role: u.role,
+        createdAt: u.created_at || u.createdAt || '',
+      },
+    };
+  },
+
   getPendingRegistrations: async (): Promise<{ registrations: any[] }> => {
     const response = await api.get('/users/pending-registrations');
     return response.data;

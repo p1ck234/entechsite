@@ -5,32 +5,28 @@ import { useTelegram } from '../contexts/TelegramContext';
 import { SITE_CONFIG } from '../config/site';
 import { employeesAPI, supportAPI } from '../api/client';
 import type { Employee } from '../types';
-import { 
-  Users, 
-  BookOpen, 
-  Home, 
-  Menu, 
+import {
+  Users,
+  BookOpen,
+  Home,
+  Menu,
   LogOut,
   Heart,
   Calendar,
   Bot,
   DoorOpen,
   Network,
-  MoreHorizontal,
-  X,
   Headphones,
-  Shield
+  Shield,
+  Settings,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Logo from './Logo';
-
-type TelegramNavPlacement = 'primary' | 'more';
 
 interface NavigationItem {
   name: string;
   href: string;
   icon: LucideIcon;
-  telegram: TelegramNavPlacement;
   adminOnly?: boolean;
   shadowOnly?: boolean;
 }
@@ -45,7 +41,6 @@ const Layout: React.FC = () => {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
-  const [telegramMoreOpen, setTelegramMoreOpen] = useState(false);
   const [canShadowSupport, setCanShadowSupport] = useState(false);
 
   useEffect(() => {
@@ -60,21 +55,17 @@ const Layout: React.FC = () => {
       .catch(() => setCanShadowSupport(false));
   }, [isAuthenticated, user?.id]);
 
-  // Обработка кнопки "Назад" в Telegram
   useEffect(() => {
     if (!isTelegram || !webApp) return;
 
     const handleBackButton = () => {
       if (location.pathname === '/home') {
-        // Если на главной странице, закрываем приложение
         webApp.close();
       } else {
-        // Иначе возвращаемся назад
         navigate(-1);
       }
     };
 
-    // Показываем кнопку "Назад" если не на главной странице
     if (location.pathname !== '/home') {
       webApp.BackButton.show();
       webApp.BackButton.onClick(handleBackButton);
@@ -88,10 +79,9 @@ const Layout: React.FC = () => {
   }, [isTelegram, webApp, location.pathname, navigate]);
 
   useEffect(() => {
-    setTelegramMoreOpen(false);
+    setSidebarOpen(false);
   }, [location.pathname]);
 
-  // Загружаем данные текущего сотрудника для отображения ФИО
   useEffect(() => {
     let isMounted = true;
 
@@ -102,7 +92,6 @@ const Layout: React.FC = () => {
           setCurrentEmployee(employee);
         }
       } catch (error) {
-        // Если сотрудник не найден, просто показываем email
         console.error('Error fetching current employee in Layout:', error);
         if (isMounted) {
           setCurrentEmployee(null);
@@ -119,10 +108,6 @@ const Layout: React.FC = () => {
     };
   }, [isAuthenticated]);
 
-  // Фоновая пересинхронизация Telegram username/telegram_id:
-  // - сразу после входа в защищенную часть
-  // - каждые 5 минут
-  // - при возврате приложения в активное состояние
   useEffect(() => {
     if (!isAuthenticated) {
       return;
@@ -184,28 +169,32 @@ const Layout: React.FC = () => {
     ? `${(currentEmployee.firstName || currentEmployee.lastName || '?').charAt(0).toUpperCase()}`
     : `${user?.email.charAt(0).toUpperCase()}`;
 
-  // Redirect to login if not authenticated
   if (!isAuthenticated) {
     navigate('/login', { replace: true });
     return null;
   }
 
   const navigation: NavigationItem[] = [
-    { name: 'Главная', href: '/home', icon: Home, telegram: 'primary' },
-    { name: 'Адресная книга', href: '/employees', icon: Users, telegram: 'primary' },
-    { name: 'База знаний', href: '/courses', icon: BookOpen, telegram: 'primary' },
-    { name: 'Наша жизнь', href: '/life', icon: Heart, telegram: 'primary' },
-    { name: 'Календарь мероприятий', href: '/events', icon: Calendar, telegram: 'primary' },
-    { name: 'Поддержка', href: '/support', icon: Headphones, telegram: 'primary' },
-    { name: 'Боты', href: '/bots', icon: Bot, telegram: 'more' },
-    { name: 'Структура', href: '/org', icon: Network, telegram: 'more', adminOnly: true },
-    { name: 'Расписание', href: '/bookings', icon: DoorOpen, telegram: 'more', adminOnly: true },
+    { name: 'Главная', href: '/home', icon: Home },
+    { name: 'Адресная книга', href: '/employees', icon: Users },
+    { name: 'База знаний', href: '/courses', icon: BookOpen },
+    { name: 'Наша жизнь', href: '/life', icon: Heart },
+    { name: 'Календарь мероприятий', href: '/events', icon: Calendar },
+    { name: 'Поддержка', href: '/support', icon: Headphones },
+    { name: 'Боты', href: '/bots', icon: Bot },
+    { name: 'Структура', href: '/org', icon: Network, adminOnly: true },
+    { name: 'Расписание', href: '/bookings', icon: DoorOpen, adminOnly: true },
     {
       name: 'Служебная',
       href: '/support-shadow',
       icon: Shield,
-      telegram: 'more',
       shadowOnly: true,
+    },
+    {
+      name: 'Общие настройки',
+      href: '/settings',
+      icon: Settings,
+      adminOnly: true,
     },
   ];
 
@@ -218,9 +207,6 @@ const Layout: React.FC = () => {
     }
     return true;
   });
-  const telegramPrimaryNavigation = visibleNavigation.filter((item) => item.telegram === 'primary');
-  const telegramMoreNavigation = visibleNavigation.filter((item) => item.telegram === 'more');
-  const showTelegramMore = telegramMoreNavigation.length > 0;
 
   const handleLogout = () => {
     logout();
@@ -228,48 +214,46 @@ const Layout: React.FC = () => {
   };
 
   const isActive = (path: string) => location.pathname === path;
-  const isMoreSectionActive = telegramMoreNavigation.some((item) => isActive(item.href));
+  const pageTitle =
+    visibleNavigation.find((item) => isActive(item.href))?.name || SITE_CONFIG.name;
+  const isHomeFullscreen = isTelegram && location.pathname === '/home';
 
   return (
-    <div className={`min-h-screen flex ${isTelegram ? 'flex-col' : ''}`}>
-      {/* Mobile sidebar overlay */}
-      {!isTelegram && sidebarOpen && (
-        <div 
-          className="fixed inset-0 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        >
+    <div className="min-h-screen flex">
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setSidebarOpen(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
         </div>
       )}
 
-      {/* Sidebar - скрываем в Telegram, используем bottom navigation */}
-      {!isTelegram && (
-        <div className={`
+      <div
+        className={`
           fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-        `}>
+        `}
+      >
         <div className="flex h-full flex-col" style={{ backgroundColor: 'rgb(229, 229, 229)' }}>
-          {/* Logo */}
           <div className="flex h-16 items-center justify-center border-b border-white/20 px-4">
             <Logo size="md" />
           </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-2">
+          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
             {visibleNavigation.map((item) => {
               const Icon = item.icon;
               return (
                 <button
                   key={item.name}
+                  type="button"
                   onClick={() => {
                     navigate(item.href);
                     setSidebarOpen(false);
                   }}
                   className={`
                     w-full flex items-center px-4 py-3 rounded-lg transition-all duration-200 whitespace-nowrap
-                    ${isActive(item.href)
-                      ? 'bg-primary-500/20 text-primary-700 border border-primary-200'
-                      : 'text-pastel-600 hover:bg-white/20 hover:text-pastel-800'
+                    ${
+                      isActive(item.href)
+                        ? 'bg-primary-500/20 text-primary-700 border border-primary-200'
+                        : 'text-pastel-600 hover:bg-white/20 hover:text-pastel-800'
                     }
                   `}
                 >
@@ -280,180 +264,54 @@ const Layout: React.FC = () => {
             })}
           </nav>
 
-          {/* User info */}
           <div className="border-t border-white/20 p-4">
             <div className="flex items-center space-x-3 mb-4">
               <div className="w-10 h-10 bg-primary-500 rounded-full flex items-center justify-center">
-                <span className="text-white font-medium text-sm">
-                  {initials}
-                </span>
+                <span className="text-white font-medium text-sm">{initials}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-pastel-800 truncate">
-                  {displayName}
-                </p>
+                <p className="text-sm font-medium text-pastel-800 truncate">{displayName}</p>
                 <p className="text-xs text-pastel-500">
                   {isAdmin ? 'Администратор' : 'Пользователь'}
                 </p>
               </div>
             </div>
-            <div className="space-y-2">
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50/20 rounded-lg transition-colors"
-              >
-                <LogOut className="w-4 h-4 mr-3" />
-                Выйти
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50/20 rounded-lg transition-colors"
+            >
+              <LogOut className="w-4 h-4 mr-3" />
+              Выйти
+            </button>
           </div>
         </div>
-        </div>
-      )}
+      </div>
 
-      {/* Main content */}
-      <div className={`flex-1 flex flex-col ${isTelegram ? '' : 'lg:ml-0'} ${isTelegram && location.pathname === '/home' ? 'relative h-full' : ''}`}>
-        {/* Top bar - скрываем в Telegram */}
-        {!isTelegram && (
-          <header className="bg-white/30 backdrop-blur-sm border-b border-white/20 px-4 py-4 lg:px-6">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-lg hover:bg-white/20 transition-colors"
-              >
-                <Menu className="w-6 h-6 text-pastel-700" />
-              </button>
-              
-              <div className="flex items-center space-x-4">
-                <h1 className="text-2xl font-bold text-pastel-800">
-                  {navigation.find((item) => isActive(item.href))?.name || SITE_CONFIG.name}
-                </h1>
-              </div>
-            </div>
-          </header>
-        )}
+      <div className={`flex-1 flex flex-col lg:ml-0 ${isHomeFullscreen ? 'relative h-full' : ''}`}>
+        <header className="bg-white/30 backdrop-blur-sm border-b border-white/20 px-4 py-3 lg:px-6 lg:py-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-lg hover:bg-white/20 transition-colors"
+              aria-label="Открыть меню"
+            >
+              <Menu className="w-6 h-6 text-pastel-700" />
+            </button>
 
-        {/* Page content */}
-        <main className={`flex-1 ${isTelegram && location.pathname === '/home' ? 'p-0 pb-0 relative h-full overflow-hidden' : isTelegram ? 'p-4 pb-20' : 'p-4 lg:p-6'}`}>
+            <h1 className="text-xl lg:text-2xl font-bold text-pastel-800 truncate">{pageTitle}</h1>
+          </div>
+        </header>
+
+        <main
+          className={`flex-1 ${
+            isHomeFullscreen ? 'p-0 relative h-full overflow-hidden' : 'p-4 lg:p-6'
+          }`}
+        >
           <Outlet />
         </main>
       </div>
-
-      {/* Bottom Navigation для Telegram */}
-      {isTelegram && (
-        <>
-          {showTelegramMore && telegramMoreOpen && (
-            <div
-              className="fixed inset-0 z-[55] bg-black/35"
-              onClick={() => setTelegramMoreOpen(false)}
-              role="presentation"
-            />
-          )}
-
-          {showTelegramMore && telegramMoreOpen && (
-            <div className="fixed bottom-16 left-0 right-0 z-[60] mx-3 rounded-2xl border border-pastel-200 bg-white p-2 shadow-xl">
-              <div className="mb-1 flex items-center justify-between px-2 py-1">
-                <span className="text-sm font-semibold text-pastel-800">Разделы</span>
-                <button
-                  type="button"
-                  onClick={() => setTelegramMoreOpen(false)}
-                  className="rounded-lg p-1 text-pastel-500 hover:bg-pastel-100"
-                  aria-label="Закрыть"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="space-y-1">
-                {telegramMoreNavigation.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.name}
-                      type="button"
-                      onClick={() => {
-                        navigate(item.href);
-                        setTelegramMoreOpen(false);
-                      }}
-                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
-                        isActive(item.href)
-                          ? 'bg-primary-50 text-primary-700'
-                          : 'text-pastel-700 hover:bg-pastel-50'
-                      }`}
-                    >
-                      <Icon className="h-5 w-5 shrink-0" />
-                      <span className="text-sm font-medium">{item.name}</span>
-                      {item.adminOnly && (
-                        <span className="ml-auto rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
-                          Админ
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTelegramMoreOpen(false);
-                    handleLogout();
-                  }}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-red-600 hover:bg-red-50"
-                >
-                  <LogOut className="h-5 w-5 shrink-0" />
-                  <span className="text-sm font-medium">Выйти</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-pastel-200 bg-white/95 backdrop-blur-sm safe-area-inset-bottom">
-            <div className={`grid h-16 ${showTelegramMore ? 'grid-cols-7' : 'grid-cols-6'}`}>
-              {telegramPrimaryNavigation.map((item) => {
-                const Icon = item.icon;
-                const shortLabels: Record<string, string> = {
-                  Главная: 'Главная',
-                  'Адресная книга': 'Люди',
-                  'База знаний': 'Курсы',
-                  'Наша жизнь': 'Жизнь',
-                  'Календарь мероприятий': 'Календарь',
-                  Поддержка: 'Поддержка',
-                  Боты: 'Боты',
-                };
-
-                return (
-                  <button
-                    key={item.name}
-                    type="button"
-                    onClick={() => navigate(item.href)}
-                    className={`flex flex-col items-center justify-center gap-0.5 px-1 transition-colors ${
-                      isActive(item.href) ? 'text-primary-600' : 'text-pastel-600'
-                    }`}
-                    title={item.name}
-                  >
-                    <Icon className="h-5 w-5 shrink-0" />
-                    <span className="max-w-full truncate text-[10px] font-medium leading-tight">
-                      {shortLabels[item.name] || item.name}
-                    </span>
-                  </button>
-                );
-              })}
-
-              {showTelegramMore && (
-                <button
-                  type="button"
-                  onClick={() => setTelegramMoreOpen((prev) => !prev)}
-                  className={`flex flex-col items-center justify-center gap-0.5 px-1 transition-colors ${
-                    isMoreSectionActive || telegramMoreOpen ? 'text-primary-600' : 'text-pastel-600'
-                  }`}
-                  title="Ещё"
-                >
-                  <MoreHorizontal className="h-5 w-5 shrink-0" />
-                  <span className="text-[10px] font-medium leading-tight">Ещё</span>
-                </button>
-              )}
-            </div>
-          </nav>
-        </>
-      )}
     </div>
   );
 };

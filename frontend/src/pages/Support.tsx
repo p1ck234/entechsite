@@ -8,13 +8,9 @@ import {
   Play,
   Inbox,
   BarChart3,
-  UserPlus,
-  Settings,
 } from 'lucide-react';
-import { supportAPI, usersAPI } from '../api/client';
-import { useAuth } from '../contexts/AuthContext';
+import { supportAPI } from '../api/client';
 import type {
-  SupportAgent,
   SupportKpi,
   SupportMeFlags,
   SupportPriority,
@@ -29,12 +25,19 @@ import {
   SUPPORT_PRIORITY_OPTIONS,
   SUPPORT_THEMES,
   buildTicketSubject,
+  formatTicketCode,
   getPriorityLabel,
   getThemeLabel,
   type SupportThemeId,
 } from '../utils/supportLabels';
 
-type TabId = 'mine' | 'queue' | 'kpi' | 'settings';
+const PRIORITY_BADGE: Record<SupportPriority, string> = {
+  P1: 'bg-rose-100 text-rose-800',
+  P2: 'bg-amber-100 text-amber-800',
+  P3: 'bg-pastel-100 text-pastel-700',
+};
+
+type TabId = 'mine' | 'queue' | 'kpi';
 
 const STATUS_LABEL: Record<SupportStatus, string> = {
   new: 'Новая',
@@ -72,13 +75,10 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
   queue = 'public',
   title = 'Техподдержка',
 }) => {
-  const { isAdmin } = useAuth();
   const [flags, setFlags] = useState<SupportMeFlags | null>(null);
   const [tab, setTab] = useState<TabId>('mine');
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [kpi, setKpi] = useState<SupportKpi | null>(null);
-  const [agents, setAgents] = useState<SupportAgent[]>([]);
-  const [users, setUsers] = useState<Array<{ id: string; email: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
@@ -97,21 +97,18 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
     body: '',
     priority: 'P3' as SupportPriority,
   });
-  const [agentUserId, setAgentUserId] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const canAgent = queue === 'shadow' ? Boolean(flags?.canShadow) : Boolean(flags?.canAgentPublic);
-  const canSettings = queue === 'public' && (Boolean(flags?.canManageAgents) || isAdmin);
 
   const tabs = useMemo(() => {
     const items: Array<{ id: TabId; label: string; show: boolean }> = [
       { id: 'mine', label: 'Мои заявки', show: true },
       { id: 'queue', label: 'Очередь', show: canAgent },
       { id: 'kpi', label: 'KPI', show: canAgent },
-      { id: 'settings', label: 'Настройки', show: canSettings },
     ];
     return items.filter((item) => item.show);
-  }, [canAgent, canSettings]);
+  }, [canAgent]);
 
   const loadFlags = useCallback(async () => {
     const me = await supportAPI.getMe();
@@ -136,13 +133,8 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
       setError('');
       const me = await loadFlags();
       const canAgentNow = queue === 'shadow' ? me.canShadow : me.canAgentPublic;
-      const canSettingsNow = queue === 'public' && (me.canManageAgents || isAdmin);
       const effectiveTab =
-        (tab === 'queue' || tab === 'kpi') && !canAgentNow
-          ? 'mine'
-          : tab === 'settings' && !canSettingsNow
-            ? 'mine'
-            : tab;
+        (tab === 'queue' || tab === 'kpi') && !canAgentNow ? 'mine' : tab;
 
       if (effectiveTab !== tab) {
         setTab(effectiveTab);
@@ -150,18 +142,6 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
 
       if (effectiveTab === 'kpi') {
         setKpi(await supportAPI.getKpi(queue));
-      } else if (effectiveTab === 'settings') {
-        const [agentsRes, usersRes] = await Promise.all([
-          supportAPI.listAgents(),
-          usersAPI.getUsers().catch(() => ({ users: [] as any[] })),
-        ]);
-        setAgents(agentsRes.agents);
-        setUsers(
-          (usersRes.users || []).map((u: any) => ({
-            id: String(u.id),
-            email: u.email,
-          }))
-        );
       } else {
         await loadTickets(effectiveTab === 'queue' ? 'queue' : 'mine');
       }
@@ -170,7 +150,7 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
     } finally {
       setLoading(false);
     }
-  }, [loadFlags, loadTickets, queue, tab, isAdmin]);
+  }, [loadFlags, loadTickets, queue, tab]);
 
   useEffect(() => {
     void refresh();
@@ -263,21 +243,6 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
     }
   };
 
-  const handleAddAgent = async () => {
-    if (!agentUserId) {
-      return;
-    }
-    try {
-      setActionError('');
-      await supportAPI.addAgent(agentUserId);
-      setAgentUserId('');
-      const agentsRes = await supportAPI.listAgents();
-      setAgents(agentsRes.agents);
-    } catch (err: any) {
-      setActionError(err.response?.data?.message || 'Не удалось назначить агента');
-    }
-  };
-
   if (loading && !flags) {
     return <LoadingSpinner />;
   }
@@ -301,7 +266,7 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
             {title}
           </h1>
           <p className="mt-1 text-sm text-pastel-500">
-            {canAgent || canSettings
+            {canAgent
               ? 'Заявка → подтверждение → в работе → готово. Срочность: критично / важно / обычная.'
               : 'Выберите тему, опишите проблему и следите за статусом в «Мои заявки».'}
           </p>
@@ -437,106 +402,6 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
         </div>
       )}
 
-      {tab === 'settings' && (
-        <div className="space-y-4">
-          <div className="rounded-3xl border border-pastel-200 bg-white p-5 space-y-4">
-            <div className="flex items-center gap-2 text-base font-semibold text-pastel-900">
-              <Settings className="h-5 w-5 text-primary-600" />
-              Кто обрабатывает заявки
-            </div>
-            <p className="text-sm text-pastel-600">
-              Назначьте сотрудников — только они увидят вкладки «Очередь» и «KPI» и смогут
-              подтверждать / брать в работу / закрывать заявки. Обычные пользователи видят только
-              свои обращения. Админ без назначения в обработчики очередь не видит.
-            </p>
-            <div className="flex flex-wrap gap-2 items-end">
-              <div className="flex-1 min-w-[200px]">
-                <label className="mb-1 block text-xs text-pastel-500">Пользователь портала</label>
-                <select
-                  className="input-field"
-                  value={agentUserId}
-                  onChange={(e) => setAgentUserId(e.target.value)}
-                >
-                  <option value="">Выберите</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.email}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button
-                type="button"
-                className="btn-primary inline-flex items-center gap-2"
-                onClick={() => void handleAddAgent()}
-              >
-                <UserPlus className="h-4 w-4" />
-                Назначить обработчика
-              </button>
-            </div>
-            <ul className="divide-y divide-pastel-100">
-              {agents.map((agent) => (
-                <li key={agent.id} className="flex items-center justify-between py-3 text-sm">
-                  <div>
-                    <div className="font-medium text-pastel-900">{agent.name}</div>
-                    <div className="text-pastel-500">{agent.email}</div>
-                  </div>
-                  {agent.isActive ? (
-                    <button
-                      type="button"
-                      className="text-red-600 hover:underline"
-                      onClick={() =>
-                        void supportAPI.removeAgent(agent.userId).then(() =>
-                          supportAPI.listAgents().then((r) => setAgents(r.agents))
-                        )
-                      }
-                    >
-                      Отключить
-                    </button>
-                  ) : (
-                    <span className="text-pastel-400">отключён</span>
-                  )}
-                </li>
-              ))}
-              {agents.length === 0 && (
-                <li className="py-4 text-sm text-pastel-500">
-                  Обработчики ещё не назначены — назначьте хотя бы одного сотрудника (можно и себя).
-                </li>
-              )}
-            </ul>
-          </div>
-
-          <div className="rounded-3xl border border-pastel-200 bg-white p-5 space-y-3">
-            <div className="text-base font-semibold text-pastel-900">Todoist</div>
-            <p className="text-sm text-pastel-600">
-              Новые публичные заявки создаются в проекте Todoist «💰 HQ/ЭГ/C». Закрытие задачи в
-              Todoist закрывает заявку на портале (проверка раз в минуту). Обработчикам приходит
-              уведомление в Telegram.
-            </p>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() =>
-                void supportAPI
-                  .syncTodoist()
-                  .then((r) =>
-                    setActionError(
-                      r.closed > 0
-                        ? `Todoist: проверено ${r.checked}, закрыто на портале ${r.closed}`
-                        : `Todoist: проверено ${r.checked}, новых закрытий нет`
-                    )
-                  )
-                  .catch((err: any) =>
-                    setActionError(err.response?.data?.message || 'Ошибка синхронизации Todoist')
-                  )
-              }
-            >
-              Синхронизировать Todoist сейчас
-            </button>
-          </div>
-        </div>
-      )}
-
       {(tab === 'mine' || tab === 'queue') && (
         <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
           <div className="rounded-3xl border border-pastel-200 bg-white overflow-hidden">
@@ -559,9 +424,15 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-semibold text-pastel-900">
-                          #{ticket.id} · {ticket.subject}
+                          <span className="text-primary-600">{formatTicketCode(ticket.id)}</span>
+                          <span className="mx-1.5 text-pastel-300">·</span>
+                          {ticket.subject}
                         </span>
-                        <span className="text-xs rounded-full bg-pastel-100 px-2 py-0.5 text-pastel-700">
+                        <span
+                          className={`shrink-0 text-xs rounded-full px-2 py-0.5 ${
+                            PRIORITY_BADGE[ticket.priority] || PRIORITY_BADGE.P3
+                          }`}
+                        >
                           {getPriorityLabel(ticket.priority)}
                         </span>
                       </div>
@@ -584,15 +455,53 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
             ) : (
               <div className="space-y-4">
                 <div>
-                  <h2 className="text-lg font-bold text-pastel-900">
-                    #{detail.ticket.id} · {detail.ticket.subject}
-                  </h2>
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-pastel-700">{detail.ticket.body}</p>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-primary-600">
+                    {formatTicketCode(detail.ticket.id)}
+                  </div>
+                  <h2 className="mt-1 text-lg font-bold text-pastel-900">{detail.ticket.subject}</h2>
                 </div>
+
+                <dl className="rounded-2xl bg-pastel-50 px-3 py-3 space-y-2 text-sm text-pastel-800">
+                  <div className="flex gap-2">
+                    <dt className="shrink-0 text-pastel-500">👤 Заявитель</dt>
+                    <dd className="font-medium">{detail.ticket.requesterName}</dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="shrink-0 text-pastel-500">📁 Категория</dt>
+                    <dd>{getThemeLabel(detail.ticket.category)}</dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="shrink-0 text-pastel-500">⚠️ Срочность</dt>
+                    <dd>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs ${
+                          PRIORITY_BADGE[detail.ticket.priority] || PRIORITY_BADGE.P3
+                        }`}
+                      >
+                        {getPriorityLabel(detail.ticket.priority)}
+                      </span>
+                    </dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="shrink-0 text-pastel-500">📌 Статус</dt>
+                    <dd>{STATUS_LABEL[detail.ticket.status]}</dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="shrink-0 text-pastel-500">🕒 Создано</dt>
+                    <dd>{new Date(detail.ticket.createdAt).toLocaleString('ru-RU')}</dd>
+                  </div>
+                </dl>
+
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-pastel-400 mb-1">
+                    Описание
+                  </div>
+                  <p className="whitespace-pre-wrap text-sm text-pastel-700 rounded-2xl border border-pastel-100 px-3 py-2">
+                    {detail.ticket.body}
+                  </p>
+                </div>
+
                 <div className="grid grid-cols-2 gap-2 text-xs text-pastel-600">
-                  <div>Статус: {STATUS_LABEL[detail.ticket.status]}</div>
-                  <div>Срочность: {getPriorityLabel(detail.ticket.priority)}</div>
-                  <div className="col-span-2">Тема: {getThemeLabel(detail.ticket.category)}</div>
                   <div>Первый ответ: {formatDuration(detail.ticket.firstResponseMs)}</div>
                   <div>Закрытие: {formatDuration(detail.ticket.resolveMs)}</div>
                   <div>

@@ -31,6 +31,8 @@ import {
   syncCompletedTicketsFromTodoist,
   syncTicketToTodoist,
 } from '../utils/support-todoist';
+import { buildTicketFormatContext } from '../utils/support-ticket-context';
+import { formatTelegramNewTicketHtml } from '../utils/support-ticket-format';
 
 const router = express.Router();
 
@@ -638,13 +640,8 @@ router.post(
           console.error('Todoist sync on create failed');
         }
 
-        void notifySupportAgents(
-          pool,
-          'public',
-          `Новая заявка #${ticket.id}\n` +
-            `${ticket.subject}\n` +
-            `От: ${ticket.requester_name}\n` +
-            `${String(ticket.body).slice(0, 240)}`
+        void buildTicketFormatContext(pool, ticket).then((ctx) =>
+          notifySupportAgents(pool, 'public', formatTelegramNewTicketHtml(ctx), 'HTML')
         );
 
         const refreshed = await pool.query(`SELECT * FROM support_tickets WHERE id = $1`, [

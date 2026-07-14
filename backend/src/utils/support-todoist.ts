@@ -1,10 +1,15 @@
 import { Pool } from 'pg';
 import type { SupportPriority } from './support-sla';
 import { notifyTelegramStatusChange } from './support-notify';
+import {
+  formatTodoistTaskContent,
+  formatTodoistTaskDescription,
+  type TicketFormatInput,
+} from './support-ticket-format';
+import { buildTicketFormatContext } from './support-ticket-context';
 
 /** Todoist REST v2 отключён (410) — используем api/v1 */
 const TODOIST_API = 'https://api.todoist.com/api/v1';
-const TICKET_MARKER = (id: number | string) => `entech-ticket:${id}`;
 const DEFAULT_PROJECT_NAME = '💰 HQ/ЭГ/C';
 
 let cachedProjectId: string | null | undefined;
@@ -67,30 +72,17 @@ export const resolveTodoistProjectId = async (): Promise<string | undefined> => 
   }
 };
 
-export const createTodoistTaskForTicket = async (ticket: {
-  id: number | string;
-  subject: string;
-  body: string;
-  priority: SupportPriority;
-  requester_name?: string;
-  queue?: string;
-}): Promise<string | null> => {
+export const createTodoistTaskForTicket = async (
+  ticket: TicketFormatInput
+): Promise<string | null> => {
   const token = getTodoistToken();
   if (!token) {
     return null;
   }
 
   const projectId = await resolveTodoistProjectId();
-  const content = `[#${ticket.id}] ${ticket.subject}`;
-  const description = [
-    TICKET_MARKER(ticket.id),
-    ticket.requester_name ? `От: ${ticket.requester_name}` : null,
-    ticket.queue ? `Очередь: ${ticket.queue}` : null,
-    '',
-    ticket.body,
-  ]
-    .filter((line) => line !== null)
-    .join('\n');
+  const content = formatTodoistTaskContent(ticket);
+  const description = formatTodoistTaskDescription(ticket);
 
   try {
     const response = await fetch(`${TODOIST_API}/tasks`, {
@@ -99,7 +91,7 @@ export const createTodoistTaskForTicket = async (ticket: {
       body: JSON.stringify({
         content,
         description,
-        priority: todoistPriority(ticket.priority),
+        priority: todoistPriority(ticket.priority as SupportPriority),
         ...(projectId ? { project_id: projectId } : {}),
       }),
     });
@@ -178,8 +170,13 @@ export const syncTicketToTodoist = async (
     id: number | string;
     subject: string;
     body: string;
-    priority: SupportPriority;
-    requester_name?: string;
+    priority: SupportPriority | string;
+    category?: string | null;
+    status?: string;
+    requester_name?: string | null;
+    requester_email?: string | null;
+    requester_user_id?: number | string;
+    created_at?: Date | string | null;
     queue?: string;
     todoist_task_id?: string | null;
   }
@@ -187,7 +184,8 @@ export const syncTicketToTodoist = async (
   if (ticket.todoist_task_id) {
     return;
   }
-  const taskId = await createTodoistTaskForTicket(ticket);
+  const context = await buildTicketFormatContext(pool, ticket);
+  const taskId = await createTodoistTaskForTicket(context);
   if (taskId) {
     await attachTodoistTaskId(pool, ticket.id, taskId);
   }

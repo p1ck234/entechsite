@@ -14,6 +14,7 @@ import Bots from './pages/Bots';
 import OrgStructure from './pages/OrgStructure';
 import Support from './pages/Support';
 import SupportShadow from './pages/SupportShadow';
+import AdminSettings from './pages/AdminSettings';
 import LoadingSpinner from './components/LoadingSpinner';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -76,6 +77,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/bots" element={<Bots />} />
         <Route path="/support" element={<Support />} />
         <Route path="/support-shadow" element={<SupportShadow />} />
+        <Route path="/settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
         <Route path="/dashboard" element={<DefaultAppRedirect />} />
         <Route path="/profile" element={<DefaultAppRedirect />} />
       </Route>
