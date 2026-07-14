@@ -166,7 +166,8 @@ const wireSupportBot = (bot: TelegramBot, queue: SupportQueue, label: string) =>
 • «Мои заявки» — ваши обращения
 • «Отмена» — сбросить черновик
 
-Доступ только у назначенных операторов. Заявки *не* уходят в Todoist.`;
+Доступ только у назначенных операторов.
+Заявки уходят в Todoist с пометкой «🛡» в названии.`;
 
   bot.onText(/\/start(?:@\w+)?(?:\s|$)/, async (msg) => {
     const chatId = msg.chat.id;
