@@ -12,6 +12,11 @@ const API_PROXY_TARGET = process.env.API_PROXY_TARGET || 'https://entechsite-bac
 
 const distPath = join(__dirname, 'dist');
 
+// Railway / балансировщики — не отдавать SPA на healthcheck
+app.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'OK', service: 'frontend' });
+});
+
 // Проверяем наличие dist и логируем доступные файлы при старте
 console.log('🔍 Проверка dist при старте сервера...');
 console.log('📁 Путь к dist:', distPath);
@@ -220,21 +225,6 @@ app.get('*', (req, res) => {
   if (!existsSync(indexPath)) {
     console.error('❌ index.html не найден! Убедитесь, что выполнен npm run build');
     return res.status(500).send('Build files not found. Please rebuild the application.');
-  }
-  
-  // Читаем актуальный index.html при каждом запросе (для отладки)
-  try {
-    const indexContent = readFileSync(indexPath, 'utf-8');
-    const jsMatch = indexContent.match(/src="\/assets\/([^"]+)"/);
-    const cssMatch = indexContent.match(/href="\/assets\/([^"]+)"/);
-    
-    // Логируем только первые несколько запросов, чтобы не засорять логи
-    if (!req.headers['x-debug-logged']) {
-      console.log(`📄 Запрос ${req.path}: index.html ссылается на JS: ${jsMatch ? jsMatch[1] : 'не найден'}, CSS: ${cssMatch ? cssMatch[1] : 'не найден'}`);
-      res.setHeader('x-debug-logged', '1');
-    }
-  } catch (err) {
-    console.error('Ошибка при чтении index.html:', err);
   }
   
   // Запрещаем кэширование index.html, чтобы всегда отдавать актуальную версию

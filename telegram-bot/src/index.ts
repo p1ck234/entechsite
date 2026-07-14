@@ -14,14 +14,37 @@ if (!BOT_TOKEN) {
   process.exit(1);
 }
 
-const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+const bot = new TelegramBot(BOT_TOKEN, { polling: false });
 
-console.log('🤖 Telegram бот запущен и готов к работе');
+console.log('🤖 Telegram бот запускается...');
 if (BACKEND_URL) {
   console.log(`🛟 Публичная техподдержка: forward → ${BACKEND_URL}/api/support-bots/webhook/public`);
 } else {
   console.warn('⚠️ BACKEND_URL не задан — кнопки поддержки недоступны');
 }
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const startPollingSafely = async () => {
+  try {
+    // Убираем webhook, иначе конфликтует с getUpdates (polling)
+    await bot.deleteWebHook({ drop_pending_updates: false });
+  } catch (error) {
+    console.warn('⚠️ deleteWebHook:', error);
+  }
+
+  // После рестарта старый инстанс может ещё держать long-poll пару секунд
+  await sleep(2500);
+
+  try {
+    await bot.startPolling({ restart: true });
+    console.log('🤖 Telegram бот запущен (polling)');
+  } catch (error) {
+    console.error('❌ Не удалось стартовать polling:', error);
+  }
+};
+
+void startPollingSafely();
 
 const BTN_NEW = '🆘 Новая заявка';
 const BTN_MY = '📋 Мои заявки';
@@ -189,20 +212,55 @@ bot.on('message', async (msg) => {
   }
 });
 
-bot.on('polling_error', (error) => {
+let recoveringFrom409 = false;
+
+bot.on('polling_error', (error: any) => {
+  const message = String(error?.message || error);
+  if (message.includes('409 Conflict') || message.includes('terminated by other getUpdates')) {
+    if (recoveringFrom409) {
+      return;
+    }
+    recoveringFrom409 = true;
+    console.warn(
+      '⚠️ Telegram 409 Conflict: другой getUpdates ещё активен (обычно во время деплоя). Повторный старт через 5с…'
+    );
+    void (async () => {
+      try {
+        await bot.stopPolling();
+      } catch {
+        // ignore
+      }
+      await sleep(5000);
+      try {
+        await bot.startPolling({ restart: true });
+        console.log('✅ Polling перезапущен после 409');
+      } catch (restartError) {
+        console.error('❌ Повторный старт polling не удался:', restartError);
+      } finally {
+        recoveringFrom409 = false;
+      }
+    })();
+    return;
+  }
   console.error('❌ Ошибка polling:', error);
 });
 
-process.on('SIGINT', () => {
-  console.log('\n⚠️ Получен сигнал SIGINT, останавливаем бота...');
-  bot.stopPolling();
+const shutdown = async (signal: string) => {
+  console.log(`\n⚠️ ${signal}: останавливаем polling…`);
+  try {
+    await bot.stopPolling();
+  } catch {
+    // ignore
+  }
   process.exit(0);
+};
+
+process.on('SIGINT', () => {
+  void shutdown('SIGINT');
 });
 
 process.on('SIGTERM', () => {
-  console.log('\n⚠️ Получен сигнал SIGTERM, останавливаем бота...');
-  bot.stopPolling();
-  process.exit(0);
+  void shutdown('SIGTERM');
 });
 
-console.log('✅ Бот успешно инициализирован и ожидает команды');
+console.log('✅ Бот инициализирован, handlers готовы');
