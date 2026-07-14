@@ -28,7 +28,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const startPollingSafely = async () => {
   try {
     // Убираем webhook, иначе конфликтует с getUpdates (polling)
-    await bot.deleteWebHook({ drop_pending_updates: false });
+    await bot.deleteWebHook();
   } catch (error) {
     console.warn('⚠️ deleteWebHook:', error);
   }
@@ -37,7 +37,7 @@ const startPollingSafely = async () => {
   await sleep(2500);
 
   try {
-    await bot.startPolling({ restart: true });
+    await bot.startPolling();
     console.log('🤖 Telegram бот запущен (polling)');
   } catch (error) {
     console.error('❌ Не удалось стартовать polling:', error);
@@ -232,7 +232,7 @@ bot.on('polling_error', (error: any) => {
       }
       await sleep(5000);
       try {
-        await bot.startPolling({ restart: true });
+        await bot.startPolling();
         console.log('✅ Polling перезапущен после 409');
       } catch (restartError) {
         console.error('❌ Повторный старт polling не удался:', restartError);
