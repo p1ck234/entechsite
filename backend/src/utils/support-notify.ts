@@ -1,3 +1,4 @@
+import { Pool } from 'pg';
 import type { SupportQueue, SupportStatus } from './support-sla';
 import { statusLabelRu } from './support-ticket-rules';
 import { getSupportBotToken } from './support-bot-token';
@@ -87,5 +88,74 @@ export const answerTelegramCallback = async (
     });
   } catch {
     // ignore
+  }
+};
+
+/** Telegram chat_id обработчиков публичной очереди */
+export const getPublicAgentTelegramChatIds = async (pool: Pool): Promise<string[]> => {
+  const result = await pool.query(
+    `SELECT DISTINCT e.telegram_id
+     FROM support_agents a
+     JOIN users u ON u.id = a.user_id
+     JOIN employees e ON LOWER(e.email) = LOWER(u.email)
+     WHERE a.is_active = true
+       AND e.telegram_id IS NOT NULL
+       AND e.is_active = true
+       AND e.status = 'APPROVED'`
+  );
+
+  return result.rows.map((row) => String(row.telegram_id));
+};
+
+export const notifySupportAgents = async (
+  pool: Pool,
+  queue: SupportQueue,
+  text: string
+): Promise<void> => {
+  if (queue !== 'public') {
+    return;
+  }
+
+  const chatIds = await getPublicAgentTelegramChatIds(pool);
+  await Promise.all(chatIds.map((chatId) => sendTelegramMessage(queue, chatId, text)));
+};
+
+export const notifyTicketReplyParties = async (params: {
+  pool: Pool;
+  queue: SupportQueue;
+  ticketId: number;
+  subject: string;
+  replyPreview: string;
+  authorName: string;
+  isAgent: boolean;
+  requesterChatId?: number | string | null;
+  requesterUserId: string | number;
+  authorUserId: string | number;
+}): Promise<void> => {
+  const {
+    pool,
+    queue,
+    ticketId,
+    subject,
+    replyPreview,
+    authorName,
+    isAgent,
+    requesterChatId,
+    requesterUserId,
+    authorUserId,
+  } = params;
+
+  const preview = replyPreview.slice(0, 280);
+  const text =
+    `Заявка #${ticketId}: ${subject}\n` +
+    `Ответ от ${authorName}${isAgent ? ' (поддержка)' : ''}:\n` +
+    preview;
+
+  if (isAgent) {
+    if (requesterChatId && String(authorUserId) !== String(requesterUserId)) {
+      await sendTelegramMessage(queue, requesterChatId, text);
+    }
+  } else if (queue === 'public') {
+    await notifySupportAgents(pool, queue, text);
   }
 };

@@ -21,7 +21,11 @@ import {
   msBetween,
 } from '../utils/support-sla';
 import { canTransitionStatus } from '../utils/support-ticket-rules';
-import { notifyTelegramStatusChange } from '../utils/support-notify';
+import {
+  notifySupportAgents,
+  notifyTelegramStatusChange,
+  notifyTicketReplyParties,
+} from '../utils/support-notify';
 import {
   closeTodoistTask,
   syncCompletedTicketsFromTodoist,
@@ -78,6 +82,16 @@ const mapEvent = (row: any) => ({
   fromStatus: row.from_status,
   toStatus: row.to_status,
   note: row.note,
+  createdAt: row.created_at,
+});
+
+const mapReply = (row: any) => ({
+  id: String(row.id),
+  ticketId: String(row.ticket_id),
+  authorUserId: String(row.author_user_id),
+  authorName: row.author_name,
+  isAgent: Boolean(row.is_agent),
+  body: row.body,
   createdAt: row.created_at,
 });
 
@@ -425,18 +439,108 @@ router.get(
         });
       }
 
-      const events = await pool.query(
-        `SELECT * FROM support_ticket_events WHERE ticket_id = $1 ORDER BY created_at ASC`,
-        [ticket.id]
-      );
+      const [events, replies] = await Promise.all([
+        pool.query(
+          `SELECT * FROM support_ticket_events WHERE ticket_id = $1 ORDER BY created_at ASC`,
+          [ticket.id]
+        ),
+        pool.query(
+          `SELECT * FROM support_ticket_replies WHERE ticket_id = $1 ORDER BY created_at ASC`,
+          [ticket.id]
+        ),
+      ]);
 
       return res.json({
         ticket: mapTicket(ticket),
         events: events.rows.map(mapEvent),
+        replies: replies.rows.map(mapReply),
       });
     } catch (error) {
       console.error('Support ticket get error:', error);
       return res.status(500).json({ message: 'Не удалось загрузить заявку' });
+    }
+  }
+);
+
+router.post(
+  '/:id/replies',
+  authenticateToken,
+  param('id').isInt(),
+  body('body').trim().isLength({ min: 1, max: 5000 }),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const ticketId = Number(req.params.id);
+      const result = await pool.query(`SELECT * FROM support_tickets WHERE id = $1`, [ticketId]);
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: 'Заявка не найдена' });
+      }
+
+      const ticket = result.rows[0];
+      const access = await canViewTicket(pool, req.user, ticket);
+      if (!access.allowed) {
+        return res.status(access.notFound ? 404 : 403).json({
+          message: access.notFound ? 'Заявка не найдена' : 'Недостаточно прав',
+        });
+      }
+
+      if (ticket.status === 'done') {
+        return res.status(400).json({ message: 'Нельзя отвечать в закрытую заявку' });
+      }
+
+      const profile = await loadRequesterProfile(req.user!.id);
+      const isAgent =
+        ticket.queue === 'shadow'
+          ? await canAccessShadowQueue(pool, req.user)
+          : await canAgentPublicQueue(pool, req.user);
+
+      const inserted = await pool.query(
+        `INSERT INTO support_ticket_replies
+          (ticket_id, author_user_id, author_name, is_agent, body)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [
+          ticketId,
+          req.user!.id,
+          profile?.name || req.user!.email,
+          isAgent,
+          req.body.body.trim(),
+        ]
+      );
+
+      await insertEvent(
+        ticketId,
+        req.user!.id,
+        'reply',
+        ticket.status,
+        ticket.status,
+        req.body.body.trim().slice(0, 200)
+      );
+
+      void notifyTicketReplyParties({
+        pool,
+        queue: ticket.queue,
+        ticketId: ticket.id,
+        subject: ticket.subject,
+        replyPreview: req.body.body.trim(),
+        authorName: profile?.name || req.user!.email,
+        isAgent,
+        requesterChatId: ticket.telegram_chat_id,
+        requesterUserId: ticket.requester_user_id,
+        authorUserId: req.user!.id,
+      });
+
+      return res.status(201).json({
+        message: 'Ответ добавлен',
+        reply: mapReply(inserted.rows[0]),
+      });
+    } catch (error) {
+      console.error('Support reply error:', error);
+      return res.status(500).json({ message: 'Не удалось добавить ответ' });
     }
   }
 );
@@ -511,21 +615,31 @@ router.post(
       const ticket = result.rows[0];
       await insertEvent(ticket.id, req.user!.id, 'created', null, 'new', null);
 
-      // Публичные заявки уходят в Todoist; теневые — не синхронизируем
+      // Публичные заявки → Todoist + TG обработчикам
       if (ticket.queue === 'public') {
         try {
           await syncTicketToTodoist(pool, ticket);
-          const refreshed = await pool.query(`SELECT * FROM support_tickets WHERE id = $1`, [
-            ticket.id,
-          ]);
-          if (refreshed.rows[0]) {
-            return res.status(201).json({
-              message: 'Заявка создана',
-              ticket: mapTicket(refreshed.rows[0]),
-            });
-          }
         } catch {
           console.error('Todoist sync on create failed');
+        }
+
+        void notifySupportAgents(
+          pool,
+          'public',
+          `Новая заявка #${ticket.id} [${ticket.priority}]\n` +
+            `${ticket.subject}\n` +
+            `От: ${ticket.requester_name}\n` +
+            `${String(ticket.body).slice(0, 240)}`
+        );
+
+        const refreshed = await pool.query(`SELECT * FROM support_tickets WHERE id = $1`, [
+          ticket.id,
+        ]);
+        if (refreshed.rows[0]) {
+          return res.status(201).json({
+            message: 'Заявка создана',
+            ticket: mapTicket(refreshed.rows[0]),
+          });
         }
       }
 

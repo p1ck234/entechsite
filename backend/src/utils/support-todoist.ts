@@ -2,8 +2,12 @@ import { Pool } from 'pg';
 import type { SupportPriority } from './support-sla';
 import { notifyTelegramStatusChange } from './support-notify';
 
-const TODOIST_API = 'https://api.todoist.com/rest/v2';
+/** Todoist REST v2 отключён (410) — используем api/v1 */
+const TODOIST_API = 'https://api.todoist.com/api/v1';
 const TICKET_MARKER = (id: number | string) => `entech-ticket:${id}`;
+const DEFAULT_PROJECT_NAME = '💰 HQ/ЭГ/C';
+
+let cachedProjectId: string | null | undefined;
 
 export const getTodoistToken = (): string | null => {
   const token = (process.env.TODOIST_API_TOKEN || '').trim();
@@ -11,7 +15,6 @@ export const getTodoistToken = (): string | null => {
 };
 
 const todoistPriority = (priority: SupportPriority): number => {
-  // Todoist: 1 normal … 4 urgent
   if (priority === 'P1') return 4;
   if (priority === 'P2') return 3;
   return 2;
@@ -21,6 +24,48 @@ const authHeaders = (token: string) => ({
   Authorization: `Bearer ${token}`,
   'Content-Type': 'application/json',
 });
+
+export const resolveTodoistProjectId = async (): Promise<string | undefined> => {
+  const fromEnv = (process.env.TODOIST_PROJECT_ID || '').trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
+
+  if (cachedProjectId !== undefined) {
+    return cachedProjectId || undefined;
+  }
+
+  const token = getTodoistToken();
+  if (!token) {
+    cachedProjectId = null;
+    return undefined;
+  }
+
+  const wanted = (process.env.TODOIST_PROJECT_NAME || DEFAULT_PROJECT_NAME).trim();
+
+  try {
+    const response = await fetch(`${TODOIST_API}/projects`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      cachedProjectId = null;
+      return undefined;
+    }
+
+    const data = (await response.json()) as { results?: Array<{ id: string; name: string }> } | Array<{ id: string; name: string }>;
+    const list = Array.isArray(data) ? data : data.results || [];
+    const exact = list.find((p) => p.name === wanted);
+    const partial = list.find((p) => p.name.includes('HQ/ЭГ/C') && !p.name.includes('Операционная'));
+    cachedProjectId = (exact || partial)?.id || null;
+    if (cachedProjectId) {
+      console.log(`✅ Todoist project: ${wanted} → ${cachedProjectId}`);
+    }
+    return cachedProjectId || undefined;
+  } catch {
+    cachedProjectId = null;
+    return undefined;
+  }
+};
 
 export const createTodoistTaskForTicket = async (ticket: {
   id: number | string;
@@ -35,7 +80,7 @@ export const createTodoistTaskForTicket = async (ticket: {
     return null;
   }
 
-  const projectId = (process.env.TODOIST_PROJECT_ID || '').trim() || undefined;
+  const projectId = await resolveTodoistProjectId();
   const content = `[#${ticket.id}] ${ticket.subject}`;
   const description = [
     TICKET_MARKER(ticket.id),
@@ -60,7 +105,8 @@ export const createTodoistTaskForTicket = async (ticket: {
     });
 
     if (!response.ok) {
-      console.error('Todoist create task failed', response.status);
+      const errText = await response.text().catch(() => '');
+      console.error('Todoist create task failed', response.status, errText.slice(0, 200));
       return null;
     }
 
@@ -83,7 +129,6 @@ export const closeTodoistTask = async (taskId: string | null | undefined): Promi
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     });
-    // 204 success; 404 already gone — ок
     return response.ok || response.status === 404;
   } catch {
     console.error('Todoist close task error');
@@ -91,9 +136,7 @@ export const closeTodoistTask = async (taskId: string | null | undefined): Promi
   }
 };
 
-export const isTodoistTaskCompleted = async (
-  taskId: string
-): Promise<boolean | null> => {
+export const isTodoistTaskCompleted = async (taskId: string): Promise<boolean | null> => {
   const token = getTodoistToken();
   if (!token) {
     return null;
@@ -104,7 +147,6 @@ export const isTodoistTaskCompleted = async (
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    // Completed tasks often return 404 from active tasks endpoint
     if (response.status === 404) {
       return true;
     }
@@ -124,10 +166,10 @@ export const attachTodoistTaskId = async (
   ticketId: number | string,
   taskId: string
 ): Promise<void> => {
-  await pool.query(`UPDATE support_tickets SET todoist_task_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [
-    ticketId,
-    taskId,
-  ]);
+  await pool.query(
+    `UPDATE support_tickets SET todoist_task_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+    [ticketId, taskId]
+  );
 };
 
 export const syncTicketToTodoist = async (
@@ -151,7 +193,6 @@ export const syncTicketToTodoist = async (
   }
 };
 
-/** Закрыть заявку портала по закрытию в Todoist (сразу в done). */
 export const resolveTicketFromTodoist = async (
   pool: Pool,
   ticketId: number
@@ -212,7 +253,6 @@ export const parseTicketIdFromTodoist = (payload: {
   return match ? Number(match[1]) : null;
 };
 
-/** Опрос активных заявок: если задача в Todoist закрыта — закрываем на портале. */
 export const syncCompletedTicketsFromTodoist = async (
   pool: Pool
 ): Promise<{ checked: number; closed: number }> => {
@@ -257,7 +297,7 @@ export const startTodoistPolling = (pool: Pool): void => {
       if (result.closed > 0) {
         console.log(`Todoist sync: закрыто заявок ${result.closed}`);
       }
-    } catch (error) {
+    } catch {
       console.error('Todoist sync poll failed');
     }
   };

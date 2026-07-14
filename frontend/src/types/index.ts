@@ -348,6 +348,16 @@ export interface SupportTicketEvent {
   createdAt: string;
 }
 
+export interface SupportTicketReply {
+  id: string;
+  ticketId: string;
+  authorUserId: string;
+  authorName: string;
+  isAgent: boolean;
+  body: string;
+  createdAt: string;
+}
+
 export interface SupportKpi {
   queue: SupportQueue;
   total: number;

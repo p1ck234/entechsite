@@ -260,6 +260,22 @@ export const ensureSupportSchema = async (pool: Pool): Promise<void> => {
     `);
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS support_ticket_replies (
+        id SERIAL PRIMARY KEY,
+        ticket_id INTEGER NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+        author_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        author_name VARCHAR(255) NOT NULL,
+        is_agent BOOLEAN DEFAULT false,
+        body TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_support_ticket_replies_ticket
+        ON support_ticket_replies(ticket_id, created_at);
+    `);
+
+    await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_support_tickets_queue_status
         ON support_tickets(queue, status, created_at DESC);
     `);

@@ -22,6 +22,7 @@ import type {
   SupportStatus,
   SupportTicket,
   SupportTicketEvent,
+  SupportTicketReply,
 } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
 
@@ -77,7 +78,10 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
   const [detail, setDetail] = useState<{
     ticket: SupportTicket;
     events: SupportTicketEvent[];
+    replies: SupportTicketReply[];
   } | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [replySending, setReplySending] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
     subject: '',
@@ -167,6 +171,7 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
   useEffect(() => {
     if (!selectedId) {
       setDetail(null);
+      setReplyText('');
       return;
     }
 
@@ -188,6 +193,23 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
       cancelled = true;
     };
   }, [selectedId]);
+
+  const handleReply = async () => {
+    if (!selectedId || !replyText.trim()) {
+      return;
+    }
+    try {
+      setReplySending(true);
+      setActionError('');
+      await supportAPI.reply(selectedId, replyText.trim());
+      setReplyText('');
+      setDetail(await supportAPI.getTicket(selectedId));
+    } catch (err: any) {
+      setActionError(err.response?.data?.message || 'Не удалось отправить ответ');
+    } finally {
+      setReplySending(false);
+    }
+  };
 
   const handleCreate = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -460,8 +482,9 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
           <div className="rounded-3xl border border-pastel-200 bg-white p-5 space-y-3">
             <div className="text-base font-semibold text-pastel-900">Todoist</div>
             <p className="text-sm text-pastel-600">
-              Новые публичные заявки создаются задачами в Todoist. Закрытие задачи в Todoist закрывает
-              заявку на портале (проверка раз в минуту).
+              Новые публичные заявки создаются в проекте Todoist «💰 HQ/ЭГ/C». Закрытие задачи в
+              Todoist закрывает заявку на портале (проверка раз в минуту). Обработчикам приходит
+              уведомление в Telegram.
             </p>
             <button
               type="button"
@@ -598,6 +621,52 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
                     )}
                   </div>
                 )}
+
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-pastel-400 mb-2">
+                    Переписка
+                  </div>
+                  <ul className="space-y-2 mb-3">
+                    {(detail.replies || []).length === 0 && (
+                      <li className="text-xs text-pastel-500">Ответов пока нет</li>
+                    )}
+                    {(detail.replies || []).map((reply) => (
+                      <li
+                        key={reply.id}
+                        className={`rounded-xl px-3 py-2 text-sm ${
+                          reply.isAgent
+                            ? 'bg-primary-50 text-pastel-800'
+                            : 'bg-pastel-50 text-pastel-800'
+                        }`}
+                      >
+                        <div className="text-[11px] text-pastel-500 mb-1">
+                          {reply.authorName}
+                          {reply.isAgent ? ' · поддержка' : ''} ·{' '}
+                          {new Date(reply.createdAt).toLocaleString('ru-RU')}
+                        </div>
+                        <div className="whitespace-pre-wrap">{reply.body}</div>
+                      </li>
+                    ))}
+                  </ul>
+                  {detail.ticket.status !== 'done' && (
+                    <div className="space-y-2">
+                      <textarea
+                        className="input-field min-h-[80px] text-sm"
+                        placeholder="Написать ответ…"
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="btn-primary text-sm"
+                        disabled={replySending || !replyText.trim()}
+                        onClick={() => void handleReply()}
+                      >
+                        {replySending ? 'Отправка…' : 'Ответить'}
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-wide text-pastel-400 mb-2">

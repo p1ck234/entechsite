@@ -6,6 +6,7 @@ import { SupportQueue, SupportPriority, computeSlaDeadlines, isSupportPriority }
 import { canTransitionStatus } from '../utils/support-ticket-rules';
 import {
   answerTelegramCallback,
+  notifySupportAgents,
   notifyTelegramStatusChange,
   sendTelegramMessage,
 } from '../utils/support-notify';
@@ -107,6 +108,14 @@ const createTicketFromBot = async (params: {
   const ticket = created.rows[0];
   if (ticket?.queue === 'public') {
     await syncTicketToTodoist(pool, ticket);
+    void notifySupportAgents(
+      pool,
+      'public',
+      `Новая заявка #${ticket.id} [${ticket.priority}]\n` +
+        `${ticket.subject}\n` +
+        `От: ${ticket.requester_name}\n` +
+        `${String(ticket.body).slice(0, 240)}`
+    );
   }
 
   return ticket || result.rows[0];

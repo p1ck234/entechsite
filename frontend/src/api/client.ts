@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AuthResponse, User, Employee, Course, Lesson, LessonMaterialsResponse, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, BookingResource, Booking, BookingRecurrenceInput, BookingTag, PaginationInfo, OrgStructureResponse, OrgEmployee, SupportMeFlags, SupportTicket, SupportTicketEvent, SupportKpi, SupportAgent, SupportQueue, SupportPriority, SupportStatus } from '../types';
+import { AuthResponse, User, Employee, Course, Lesson, LessonMaterialsResponse, CourseProgress, EmployeesResponse, CoursesResponse, Event, EventsResponse, EventPhotosResponse, CalendarEvent, TelegramBot, BookingResource, Booking, BookingRecurrenceInput, BookingTag, PaginationInfo, OrgStructureResponse, OrgEmployee, SupportMeFlags, SupportTicket, SupportTicketEvent, SupportTicketReply, SupportKpi, SupportAgent, SupportQueue, SupportPriority, SupportStatus } from '../types';
 
 import { API_BASE_URL } from '../config/api';
 import { clearEventPhotosCache, getCachedEventPhotos, rememberEventPhotos } from '../utils/eventPhotosCache';
@@ -994,8 +994,19 @@ export const supportAPI = {
 
   getTicket: async (
     id: string
-  ): Promise<{ ticket: SupportTicket; events: SupportTicketEvent[] }> => {
+  ): Promise<{ ticket: SupportTicket; events: SupportTicketEvent[]; replies: SupportTicketReply[] }> => {
     const response = await api.get(`/support/${id}`);
+    return {
+      ...response.data,
+      replies: response.data.replies || [],
+    };
+  },
+
+  reply: async (
+    id: string,
+    body: string
+  ): Promise<{ message: string; reply: SupportTicketReply }> => {
+    const response = await api.post(`/support/${id}/replies`, { body });
     return response.data;
   },
 
