@@ -526,7 +526,6 @@ process.on('uncaughtException', (error) => {
 // Подключение к базе данных будет выполнено асинхронно
 // В Railway сервер ДОЛЖЕН слушать на 0.0.0.0 и порту из переменной PORT
 const server = app.listen(PORT, '0.0.0.0', () => {
-  httpServerListening = true;
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`📊 Railway PORT: ${process.env.PORT || 'NOT SET'}`);
@@ -543,7 +542,12 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   
   // Health check endpoint для Railway
   console.log(`✅ Health check available at: http://0.0.0.0:${PORT}/health`);
-}).on('error', (err: any) => {
+});
+
+// Сразу после listen — иначе uncaughtException до callback убивает процесс (Deploy Crashed)
+httpServerListening = true;
+
+server.on('error', (err: any) => {
   console.error('❌ Server error:', err);
   console.error('❌ Error code:', err.code);
   console.error('❌ Error message:', err.message);

@@ -624,10 +624,11 @@ export const startTodoistPolling = (pool: Pool): void => {
     }
   };
 
-  // Не гоняем Todoist сразу при старте — иначе первые запросы портала тормозятся
-  const warmMs = Number(process.env.TODOIST_SYNC_WARMUP_MS || 45_000);
+  // Не гоняем Todoist сразу при старте — иначе healthcheck/первые запросы проседают
+  const warmRaw = Number(process.env.TODOIST_SYNC_WARMUP_MS);
+  const warmMs = Number.isFinite(warmRaw) && warmRaw >= 0 ? warmRaw : 45_000;
   setTimeout(() => {
     void tick();
-    pollTimer = setInterval(() => void tick(), intervalMs);
-  }, Math.max(5_000, warmMs)).unref?.();
+    pollTimer = setInterval(() => void tick(), Math.max(15_000, intervalMs));
+  }, Math.max(5_000, warmMs));
 };

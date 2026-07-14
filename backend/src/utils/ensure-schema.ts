@@ -152,11 +152,9 @@ export const ensureManagerIdColumn = async (pool: Pool): Promise<void> => {
   await ensureEmployeesOrgSchema(pool);
 };
 
-export const ensureSupportSchema = async (pool: Pool): Promise<void> => {
-  if (supportModuleSchemaEnsured) {
-    return;
-  }
+let supportModuleSchemaPromise: Promise<void> | null = null;
 
+const ensureSupportSchemaOnce = async (pool: Pool): Promise<void> => {
   try {
     await pool.query(`
       ALTER TABLE employees
@@ -284,36 +282,44 @@ export const ensureSupportSchema = async (pool: Pool): Promise<void> => {
         ADD COLUMN IF NOT EXISTS todoist_task_id VARCHAR(64);
     `);
 
-    // Обновить CHECK только если в нём ещё нет waiting (без DROP на каждом старте)
-    await pool.query(`
-      DO $$
-      DECLARE
-        def text;
-      BEGIN
-        SELECT pg_get_constraintdef(c.oid) INTO def
-        FROM pg_constraint c
-        JOIN pg_class t ON c.conrelid = t.oid
-        JOIN pg_namespace n ON t.relnamespace = n.oid
-        WHERE t.relname = 'support_tickets'
-          AND n.nspname = 'public'
-          AND c.contype = 'c'
-          AND c.conname = 'support_tickets_status_check';
+    // CHECK со waiting — мягко, сбой миграции не роняет весь ensure/старт
+    try {
+      await pool.query(`
+        DO $$
+        DECLARE
+          def text;
+        BEGIN
+          SELECT pg_get_constraintdef(c.oid) INTO def
+          FROM pg_constraint c
+          JOIN pg_class t ON c.conrelid = t.oid
+          JOIN pg_namespace n ON t.relnamespace = n.oid
+          WHERE t.relname = 'support_tickets'
+            AND n.nspname = 'public'
+            AND c.contype = 'c'
+            AND c.conname = 'support_tickets_status_check';
 
-        IF def IS NULL THEN
-          ALTER TABLE support_tickets
-            ADD CONSTRAINT support_tickets_status_check
-            CHECK (status IN ('new', 'acknowledged', 'in_progress', 'waiting', 'done'));
-        ELSIF position('waiting' in def) = 0 THEN
-          ALTER TABLE support_tickets DROP CONSTRAINT support_tickets_status_check;
-          ALTER TABLE support_tickets
-            ADD CONSTRAINT support_tickets_status_check
-            CHECK (status IN ('new', 'acknowledged', 'in_progress', 'waiting', 'done'));
-        END IF;
-      EXCEPTION
-        WHEN duplicate_object THEN NULL;
-        WHEN undefined_table THEN NULL;
-      END $$;
-    `);
+          IF def IS NULL THEN
+            ALTER TABLE support_tickets
+              ADD CONSTRAINT support_tickets_status_check
+              CHECK (status IN ('new', 'acknowledged', 'in_progress', 'waiting', 'done'));
+          ELSIF position('waiting' in def) = 0 THEN
+            ALTER TABLE support_tickets DROP CONSTRAINT support_tickets_status_check;
+            ALTER TABLE support_tickets
+              ADD CONSTRAINT support_tickets_status_check
+              CHECK (status IN ('new', 'acknowledged', 'in_progress', 'waiting', 'done'));
+          END IF;
+        EXCEPTION
+          WHEN duplicate_object THEN NULL;
+          WHEN undefined_table THEN NULL;
+          WHEN undefined_object THEN NULL;
+        END $$;
+      `);
+    } catch (migrationError: any) {
+      console.warn(
+        'support_tickets status CHECK migration skipped:',
+        migrationError?.message || migrationError
+      );
+    }
 
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_support_tickets_requester
@@ -339,4 +345,18 @@ export const ensureSupportSchema = async (pool: Pool): Promise<void> => {
     supportModuleSchemaEnsured = false;
     throw error;
   }
+};
+
+/** Без гонок: одновременные вызовы ждут одну и ту же инициализацию */
+export const ensureSupportSchema = async (pool: Pool): Promise<void> => {
+  if (supportModuleSchemaEnsured) {
+    return;
+  }
+  if (!supportModuleSchemaPromise) {
+    supportModuleSchemaPromise = ensureSupportSchemaOnce(pool).catch((error) => {
+      supportModuleSchemaPromise = null;
+      throw error;
+    });
+  }
+  return supportModuleSchemaPromise;
 };
