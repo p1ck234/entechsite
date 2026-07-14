@@ -9,8 +9,10 @@ import {
   Inbox,
   BarChart3,
   UserPlus,
+  Settings,
 } from 'lucide-react';
 import { supportAPI, usersAPI } from '../api/client';
+import { useAuth } from '../contexts/AuthContext';
 import type {
   SupportAgent,
   SupportKpi,
@@ -23,7 +25,7 @@ import type {
 } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
 
-type TabId = 'mine' | 'queue' | 'kpi' | 'agents';
+type TabId = 'mine' | 'queue' | 'kpi' | 'settings';
 
 const STATUS_LABEL: Record<SupportStatus, string> = {
   new: 'Новая',
@@ -61,6 +63,7 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
   queue = 'public',
   title = 'Техподдержка',
 }) => {
+  const { isAdmin } = useAuth();
   const [flags, setFlags] = useState<SupportMeFlags | null>(null);
   const [tab, setTab] = useState<TabId>('mine');
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -86,17 +89,17 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const canAgent = queue === 'shadow' ? Boolean(flags?.canShadow) : Boolean(flags?.canAgentPublic);
-  const canManageAgents = queue === 'public' && Boolean(flags?.canManageAgents);
+  const canSettings = queue === 'public' && (Boolean(flags?.canManageAgents) || isAdmin);
 
   const tabs = useMemo(() => {
     const items: Array<{ id: TabId; label: string; show: boolean }> = [
       { id: 'mine', label: 'Мои заявки', show: true },
       { id: 'queue', label: 'Очередь', show: canAgent },
       { id: 'kpi', label: 'KPI', show: canAgent },
-      { id: 'agents', label: 'Кто обрабатывает', show: canManageAgents },
+      { id: 'settings', label: 'Настройки', show: canSettings },
     ];
     return items.filter((item) => item.show);
-  }, [canAgent, canManageAgents]);
+  }, [canAgent, canSettings]);
 
   const loadFlags = useCallback(async () => {
     const me = await supportAPI.getMe();
@@ -120,14 +123,14 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
       setLoading(true);
       setError('');
       const me = await loadFlags();
+      const canAgentNow = queue === 'shadow' ? me.canShadow : me.canAgentPublic;
+      const canSettingsNow = queue === 'public' && (me.canManageAgents || isAdmin);
       const effectiveTab =
-        tab === 'queue' && !(queue === 'shadow' ? me.canShadow : me.canAgentPublic)
+        (tab === 'queue' || tab === 'kpi') && !canAgentNow
           ? 'mine'
-          : tab === 'agents' && !me.canManageAgents
+          : tab === 'settings' && !canSettingsNow
             ? 'mine'
-            : tab === 'kpi' && !(queue === 'shadow' ? me.canShadow : me.canAgentPublic)
-              ? 'mine'
-              : tab;
+            : tab;
 
       if (effectiveTab !== tab) {
         setTab(effectiveTab);
@@ -135,7 +138,7 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
 
       if (effectiveTab === 'kpi') {
         setKpi(await supportAPI.getKpi(queue));
-      } else if (effectiveTab === 'agents') {
+      } else if (effectiveTab === 'settings') {
         const [agentsRes, usersRes] = await Promise.all([
           supportAPI.listAgents(),
           usersAPI.getUsers().catch(() => ({ users: [] as any[] })),
@@ -155,7 +158,7 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
     } finally {
       setLoading(false);
     }
-  }, [loadFlags, loadTickets, queue, tab]);
+  }, [loadFlags, loadTickets, queue, tab, isAdmin]);
 
   useEffect(() => {
     void refresh();
@@ -265,7 +268,9 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
             {title}
           </h1>
           <p className="mt-1 text-sm text-pastel-500">
-            Заявка → подтверждение → в работе → готово. SLA по приоритету P1–P3.
+            {canAgent || canSettings
+              ? 'Заявка → подтверждение → в работе → готово. SLA по приоритету P1–P3.'
+              : 'Создайте обращение и следите за статусом в «Мои заявки».'}
           </p>
         </div>
         <button type="button" onClick={() => void refresh()} className="btn-secondary inline-flex items-center gap-2">
@@ -383,32 +388,81 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
         </div>
       )}
 
-      {tab === 'agents' && (
-        <div className="rounded-3xl border border-pastel-200 bg-white p-5 space-y-4">
-          <p className="text-sm text-pastel-600">
-            Эти сотрудники видят вкладку «Очередь» и могут подтверждать / брать в работу / закрывать
-            заявки. Роль ADMIN тоже может обрабатывать без назначения. Новые заявки уходят в Todoist.
-          </p>
-          <div className="flex flex-wrap gap-2 items-end">
-            <div className="flex-1 min-w-[200px]">
-              <label className="mb-1 block text-xs text-pastel-500">Пользователь портала</label>
-              <select
-                className="input-field"
-                value={agentUserId}
-                onChange={(e) => setAgentUserId(e.target.value)}
-              >
-                <option value="">Выберите</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.email}
-                  </option>
-                ))}
-              </select>
+      {tab === 'settings' && (
+        <div className="space-y-4">
+          <div className="rounded-3xl border border-pastel-200 bg-white p-5 space-y-4">
+            <div className="flex items-center gap-2 text-base font-semibold text-pastel-900">
+              <Settings className="h-5 w-5 text-primary-600" />
+              Кто обрабатывает заявки
             </div>
-            <button type="button" className="btn-primary inline-flex items-center gap-2" onClick={() => void handleAddAgent()}>
-              <UserPlus className="h-4 w-4" />
-              Назначить обработчика
-            </button>
+            <p className="text-sm text-pastel-600">
+              Назначьте сотрудников — только они увидят вкладки «Очередь» и «KPI» и смогут
+              подтверждать / брать в работу / закрывать заявки. Обычные пользователи видят только
+              свои обращения. Админ без назначения в обработчики очередь не видит.
+            </p>
+            <div className="flex flex-wrap gap-2 items-end">
+              <div className="flex-1 min-w-[200px]">
+                <label className="mb-1 block text-xs text-pastel-500">Пользователь портала</label>
+                <select
+                  className="input-field"
+                  value={agentUserId}
+                  onChange={(e) => setAgentUserId(e.target.value)}
+                >
+                  <option value="">Выберите</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                className="btn-primary inline-flex items-center gap-2"
+                onClick={() => void handleAddAgent()}
+              >
+                <UserPlus className="h-4 w-4" />
+                Назначить обработчика
+              </button>
+            </div>
+            <ul className="divide-y divide-pastel-100">
+              {agents.map((agent) => (
+                <li key={agent.id} className="flex items-center justify-between py-3 text-sm">
+                  <div>
+                    <div className="font-medium text-pastel-900">{agent.name}</div>
+                    <div className="text-pastel-500">{agent.email}</div>
+                  </div>
+                  {agent.isActive ? (
+                    <button
+                      type="button"
+                      className="text-red-600 hover:underline"
+                      onClick={() =>
+                        void supportAPI.removeAgent(agent.userId).then(() =>
+                          supportAPI.listAgents().then((r) => setAgents(r.agents))
+                        )
+                      }
+                    >
+                      Отключить
+                    </button>
+                  ) : (
+                    <span className="text-pastel-400">отключён</span>
+                  )}
+                </li>
+              ))}
+              {agents.length === 0 && (
+                <li className="py-4 text-sm text-pastel-500">
+                  Обработчики ещё не назначены — назначьте хотя бы одного сотрудника (можно и себя).
+                </li>
+              )}
+            </ul>
+          </div>
+
+          <div className="rounded-3xl border border-pastel-200 bg-white p-5 space-y-3">
+            <div className="text-base font-semibold text-pastel-900">Todoist</div>
+            <p className="text-sm text-pastel-600">
+              Новые публичные заявки создаются задачами в Todoist. Закрытие задачи в Todoist закрывает
+              заявку на портале (проверка раз в минуту).
+            </p>
             <button
               type="button"
               className="btn-secondary"
@@ -427,37 +481,9 @@ const Support: React.FC<{ queue?: SupportQueue; title?: string }> = ({
                   )
               }
             >
-              Синхронизировать Todoist
+              Синхронизировать Todoist сейчас
             </button>
           </div>
-          <ul className="divide-y divide-pastel-100">
-            {agents.map((agent) => (
-              <li key={agent.id} className="flex items-center justify-between py-3 text-sm">
-                <div>
-                  <div className="font-medium text-pastel-900">{agent.name}</div>
-                  <div className="text-pastel-500">{agent.email}</div>
-                </div>
-                {agent.isActive ? (
-                  <button
-                    type="button"
-                    className="text-red-600 hover:underline"
-                    onClick={() =>
-                      void supportAPI.removeAgent(agent.userId).then(() =>
-                        supportAPI.listAgents().then((r) => setAgents(r.agents))
-                      )
-                    }
-                  >
-                    Отключить
-                  </button>
-                ) : (
-                  <span className="text-pastel-400">отключён</span>
-                )}
-              </li>
-            ))}
-            {agents.length === 0 && (
-              <li className="py-4 text-sm text-pastel-500">Агенты ещё не назначены (ADMIN тоже может работать с очередью)</li>
-            )}
-          </ul>
         </div>
       )}
 

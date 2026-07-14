@@ -243,10 +243,7 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
 
       if (queue === 'public') {
         const agent = await pool.query(
-          `SELECT 1 FROM support_agents WHERE user_id = $1 AND is_active = true
-           UNION
-           SELECT 1 FROM users WHERE id = $1 AND role = 'ADMIN'
-           LIMIT 1`,
+          `SELECT 1 FROM support_agents WHERE user_id = $1 AND is_active = true LIMIT 1`,
           [user.id]
         );
         if (agent.rows.length === 0) {
@@ -375,10 +372,7 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
         });
       } else {
         const agent = await pool.query(
-          `SELECT 1 FROM support_agents WHERE user_id = $1 AND is_active = true
-           UNION
-           SELECT 1 FROM users WHERE id = $1 AND role = 'ADMIN'
-           LIMIT 1`,
+          `SELECT 1 FROM support_agents WHERE user_id = $1 AND is_active = true LIMIT 1`,
           [user.id]
         );
         allowed = agent.rows.length > 0;

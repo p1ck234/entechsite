@@ -46,10 +46,8 @@ export const canAgentPublicQueue = async (
     return false;
   }
 
-  if (user.role === 'ADMIN') {
-    return true;
-  }
-
+  // Только назначенные обработчики. ADMIN без записи в support_agents
+  // очередь не видит — настраивает через вкладку «Настройки».
   const result = await pool.query(
     `SELECT 1 FROM support_agents
      WHERE user_id = $1 AND is_active = true
