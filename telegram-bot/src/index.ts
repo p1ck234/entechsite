@@ -175,9 +175,12 @@ bot.on('message', async (msg) => {
   const ok = await forwardSupportUpdate({ message: messageToForward });
   if (!ok && (isSupportAction || isButton)) {
     try {
+      const hint = BACKEND_URL
+        ? 'Backend не принял запрос. Проверьте деплой API и логи telegram-bot.'
+        : 'На сервисе telegram-bot в Railway нет переменной BACKEND_URL (URL backend).';
       await bot.sendMessage(
         msg.chat.id,
-        'Техподдержка временно недоступна. Попробуйте позже или откройте раздел «Поддержка» на портале.',
+        `Техподдержка временно недоступна.\n${hint}\n\nЛибо откройте раздел «Поддержка» на портале.`,
         { reply_markup: supportKeyboard }
       );
     } catch {
