@@ -20,12 +20,10 @@ function getApiUrl(): string {
     return normalizeApiUrl((window as any).__API_URL__);
   }
 
-  if (import.meta.env.VITE_API_URL) {
-    return normalizeApiUrl(import.meta.env.VITE_API_URL);
-  }
-
   if (import.meta.env.MODE === 'development' || import.meta.env.DEV) {
-    return 'http://localhost:3001/api';
+    return import.meta.env.VITE_API_URL
+      ? normalizeApiUrl(import.meta.env.VITE_API_URL)
+      : 'http://localhost:3001/api';
   }
 
   return PRODUCTION_API_URL;

@@ -22,7 +22,12 @@ VITE_TELEGRAM_BOT_NAME=entechsite_bot
 ```
 
 `VITE_*` переменные являются build-time переменными. Значение `VITE_API_URL`
-можно указывать как с `/api`, так и без него.
+можно указывать как с `/api`, так и без него. Не указывайте в `VITE_API_URL`
+frontend-домен `https://entech.p1ck23.ru`: API расположен на
+`https://api.entech.p1ck23.ru`.
+
+Production bundle дополнительно закреплён на `api.entech.p1ck23.ru`, поэтому
+ошибочная build variable не должна отправлять API-запросы в static frontend.
 
 ## Backend
 

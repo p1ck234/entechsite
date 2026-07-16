@@ -365,6 +365,14 @@
 
 ## Problems and Resolutions
 
+### 2026-07-16 - Telegram OAuth получал 405 после переезда
+
+- Symptom: `POST https://entech.p1ck23.ru/api/auth/telegram-oauth` возвращает `405 Method Not Allowed`, вход на web и в Mini App не работает.
+- Root cause: в production bundle попал frontend-домен как `VITE_API_URL`; static OpenResty frontend разрешает только GET/HEAD и не проксирует POST в API.
+- Resolution: production API URL закреплён на `https://api.entech.p1ck23.ru/api`; `VITE_API_URL` применяется только в development, runtime override `window.__API_URL__` сохранён.
+- Validation: frontend endpoint возвращает `405 Allow: GET, HEAD`; новый API endpoint возвращает ожидаемую валидацию `400`; CORS preflight нового API возвращает `204` и разрешает origin `https://entech.p1ck23.ru`; bundle с намеренно ошибочным `VITE_API_URL` содержит новый API-домен.
+- Related files: `frontend/src/config/api.ts`, `COOLIFY.md`
+
 ### 2026-07-16 - Белый экран после миграции frontend в Coolify
 
 - Symptom: браузер блокирует `index-*.js`: expected module script, но сервер отвечает `text/html`.
