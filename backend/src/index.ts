@@ -49,10 +49,10 @@ const healthPayload = () => ({
   port: PORT,
   environment: process.env.NODE_ENV || 'development',
   features: API_FEATURES,
-  gitCommit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT || null,
+  gitCommit: process.env.SOURCE_COMMIT || process.env.GIT_COMMIT || null,
 });
 
-// Railway health check — без middleware, чтобы отвечать сразу после listen()
+// Healthcheck без middleware, чтобы отвечать сразу после listen().
 app.get('/', (_req, res) => {
   res.json(healthPayload());
 });
@@ -65,10 +65,8 @@ app.get('/api/health', (_req, res) => {
   res.json(healthPayload());
 });
 
-// Railway автоматически устанавливает PORT, но если его нет, используем 3001
-// В Railway PORT всегда должен быть установлен
 console.log(`🔧 PORT from environment: ${process.env.PORT || 'NOT SET'}, using: ${PORT}`);
-console.log(`🔧 All environment variables:`, Object.keys(process.env).filter(k => k.includes('PORT') || k.includes('NODE') || k.includes('RAILWAY')));
+console.log(`🔧 Runtime environment:`, Object.keys(process.env).filter(k => k.includes('PORT') || k.includes('NODE') || k.includes('COOLIFY')));
 
 // CORS должен быть ПЕРЕД helmet, иначе helmet может блокировать заголовки
 // Сначала настраиваем CORS
@@ -83,9 +81,6 @@ console.log('🔧 Normalized frontendUrl:', frontendUrl);
 const baseOrigins = [
   'https://entech.p1ck23.ru', 
   'http://entech.p1ck23.ru',
-  'https://entechsite-production.up.railway.app',
-  'https://entechsite-frontend-production.up.railway.app',
-  'https://entechsite-backend-production.up.railway.app',
   'https://oauth.telegram.org', // Для Telegram OAuth Widget
   'https://web.telegram.org',
   'https://webk.telegram.org',
@@ -516,7 +511,7 @@ process.on('unhandledRejection', (reason) => {
 process.on('uncaughtException', (error) => {
   console.error('uncaughtException:', error);
   // До listen — падаем (деплой сломан). После listen — не убиваем процесс:
-  // иначе Railway шлёт «Deploy Crashed» на разовые ошибки (Drive/sharp/сеть).
+  // иначе оркестратор перезапускает приложение из-за разовой ошибки Drive/sharp/сети.
   if (!httpServerListening) {
     process.exit(1);
   }
@@ -524,11 +519,11 @@ process.on('uncaughtException', (error) => {
 
 // Запускаем сервер СРАЗУ, чтобы он мог обрабатывать запросы (включая OPTIONS)
 // Подключение к базе данных будет выполнено асинхронно
-// В Railway сервер ДОЛЖЕН слушать на 0.0.0.0 и порту из переменной PORT
+// В контейнере сервер должен слушать на 0.0.0.0 и порту из переменной PORT.
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📊 Railway PORT: ${process.env.PORT || 'NOT SET'}`);
+  console.log(`📊 PORT: ${process.env.PORT || 'NOT SET'}`);
   console.log(`📊 Server listening on: 0.0.0.0:${PORT}`);
   console.log('✅ Server is ready to accept requests (database connection will be established in background)');
   
@@ -540,7 +535,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server is listening and ready to accept connections`);
   }
   
-  // Health check endpoint для Railway
+  // Healthcheck endpoint для Coolify.
   console.log(`✅ Health check available at: http://0.0.0.0:${PORT}/health`);
 });
 

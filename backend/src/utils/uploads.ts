@@ -1,18 +1,15 @@
 import fs from 'fs';
 import path from 'path';
 
-/** Подпапка на Railway Volume — все аватарки и upload-фото хранятся здесь */
+/** Legacy-подпапка Railway Volume для ранее загруженных файлов. */
 const UPLOADS_SUBDIR = 'avatars';
-
-const isRailwayRuntime = (): boolean =>
-  Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
 
 export const getUploadsDir = (): string => {
   if (process.env.UPLOADS_DIR) {
     return path.resolve(process.env.UPLOADS_DIR);
   }
 
-  // Railway автоматически задаёт путь при подключении Volume
+  // Оставлено для чтения данных со старого Railway Volume.
   if (process.env.RAILWAY_VOLUME_MOUNT_PATH) {
     return path.resolve(process.env.RAILWAY_VOLUME_MOUNT_PATH, UPLOADS_SUBDIR);
   }
@@ -71,16 +68,16 @@ export const logUploadsStorageStatus = (): void => {
 
   if (process.env.RAILWAY_VOLUME_MOUNT_PATH) {
     console.log(
-      `💾 Railway Volume подключён: ${process.env.RAILWAY_VOLUME_MOUNT_PATH} → ${uploadsDir}`
+      `💾 Legacy Railway Volume подключён: ${process.env.RAILWAY_VOLUME_MOUNT_PATH} → ${uploadsDir}`
     );
     return;
   }
 
-  if (isRailwayRuntime()) {
-    console.warn('⚠️ Railway Volume не подключён — фото пропадут при redeploy');
-    console.warn('   Backend → Volumes → Add Volume → mount path: /data/uploads');
+  if (process.env.NODE_ENV === 'production' && !process.env.UPLOADS_DIR) {
+    console.log(`💾 Production uploads path: ${uploadsDir}`);
+    console.log(`   В Coolify подключите Persistent Storage к ${uploadsDir}`);
     return;
   }
 
-  console.log('💻 Локальное хранилище uploads (для production нужен Railway Volume)');
+  console.log('💻 Локальное хранилище uploads');
 };
