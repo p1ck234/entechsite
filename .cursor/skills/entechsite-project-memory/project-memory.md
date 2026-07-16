@@ -16,7 +16,9 @@
 - Запуск локально:
   - корневой `npm run dev` поднимает `frontend` и `backend`.
 - Деплой:
-  - Railway конфиги в `railway.json`, `frontend/railway.json`, `backend/railway.json`, `telegram-bot/railway.json`.
+  - production перенесён с Railway на Coolify;
+  - frontend и backend собираются отдельными Dockerfile из `frontend/` и `backend/`;
+  - актуальные настройки описаны в `COOLIFY.md`.
 
 ## Stack and Dependencies
 
@@ -81,6 +83,32 @@
   - production proxy `/api/*` на backend, чтобы относительные `/api/uploads/...` не попадали в SPA fallback.
 
 ## Task Journal
+
+### 2026-07-16 - Миграция production на Coolify
+
+- Goal: устранить белый экран frontend после переезда с Railway и переключить приложение на новые домены.
+- Changes:
+  - production API переключён на `https://api.entech.p1ck23.ru/api`;
+  - frontend proxy использует `https://api.entech.p1ck23.ru`;
+  - добавлены multi-stage Dockerfile и `.dockerignore` для frontend/backend;
+  - frontend `index.html` и hashed assets теперь собираются в одном Docker image;
+  - удалён лишний post-build `fix-index.js` из build script;
+  - для Coolify добавлена инструкция `COOLIFY.md`;
+  - uploads в Coolify должны храниться в persistent volume `/app/uploads`.
+- Files:
+  - `frontend/Dockerfile`
+  - `frontend/.dockerignore`
+  - `frontend/server.js`
+  - `frontend/vite.config.ts`
+  - `frontend/src/config/api.ts`
+  - `frontend/package.json`
+  - `backend/Dockerfile`
+  - `backend/.dockerignore`
+  - `backend/src/index.ts`
+  - `backend/src/utils/uploads.ts`
+  - `backend/.env.example`
+  - `COOLIFY.md`
+- Result: npm и Docker сборки frontend/backend проходят; Docker image содержит JS asset, указанный в `index.html`, и новый API-домен.
 
 ### 2026-06-25 - Upload image candidates для Mini App
 
@@ -336,6 +364,14 @@
 - Result: есть единая точка для фиксации контекста, прогресса и решений.
 
 ## Problems and Resolutions
+
+### 2026-07-16 - Белый экран после миграции frontend в Coolify
+
+- Symptom: браузер блокирует `index-*.js`: expected module script, но сервер отвечает `text/html`.
+- Root cause: запрошенный hashed JS отсутствует в deployment, а static SPA fallback возвращает для `/assets/...` файл `index.html`; дополнительно frontend был жёстко привязан к Railway API.
+- Resolution: отдельный frontend Dockerfile собирает и переносит `dist` целиком, приложение запускается через `frontend/server.js`, отсутствующие assets получают 404; API переключён на `api.entech.p1ck23.ru`.
+- Validation: production URL отсутствующего asset действительно возвращал HTML до фикса; npm и Docker сборки проходят; внутри Docker image asset из `index.html` существует и bundle содержит новый API-домен без Railway URL.
+- Related files: `frontend/Dockerfile`, `frontend/server.js`, `frontend/src/config/api.ts`, `frontend/vite.config.ts`, `COOLIFY.md`
 
 ### 2026-06-25 - `/api/uploads` на frontend-домене возвращал HTML и блокировался ORB
 
