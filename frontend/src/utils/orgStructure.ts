@@ -337,6 +337,42 @@ export const sortCompanyRoots = (roots: OrgTreeNode[]): OrgTreeNode[] =>
     return getEmployeeFullName(left.employee).localeCompare(getEmployeeFullName(right.employee), 'ru');
   });
 
+/** Гендиректор (и аналоги) — корень компании, не бокс отдела */
+export const isCompanyExecutiveRoot = (node: OrgTreeNode): boolean =>
+  leadershipScore(node.employee.position) === 0;
+
+/**
+ * Единый корень схемы «Компания»: гендиректор сверху.
+ * Остальные сироты (manager_id = null) не кладём в бокс отдела рядом с ним —
+ * показываем их как ветви под гендиректором (по их department).
+ */
+export const composeCompanyChartRoot = (roots: OrgTreeNode[]): OrgTreeNode | null => {
+  if (roots.length === 0) {
+    return null;
+  }
+  if (roots.length === 1) {
+    return roots[0];
+  }
+
+  const sorted = sortCompanyRoots(roots);
+  const ceo = sorted.find(isCompanyExecutiveRoot);
+  if (!ceo) {
+    return null;
+  }
+
+  const others = roots.filter((root) => root.employee.id !== ceo.employee.id);
+  if (others.length === 0) {
+    return ceo;
+  }
+
+  return {
+    employee: ceo.employee,
+    children: [...ceo.children, ...others].sort((left, right) =>
+      compareOrgEmployees(left.employee, right.employee)
+    ),
+  };
+};
+
 export const guessDepartmentHead = (employees: OrgEmployee[]): OrgEmployee | null => {
   if (employees.length === 0) {
     return null;

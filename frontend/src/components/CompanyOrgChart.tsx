@@ -5,7 +5,7 @@ import { OrgChartNode } from './OrgChart';
 import OrgDepartmentBranch from './OrgDepartmentBranch';
 import { OrgConnectorBranchSlot, OrgConnectorChildren, OrgConnectorStem, orgChartCanvasClassName } from './OrgChartConnectors';
 import { useChartPan } from '../hooks/useChartPan';
-import { groupOrgNodesByDepartment } from '../utils/orgStructure';
+import { composeCompanyChartRoot, groupOrgNodesByDepartment } from '../utils/orgStructure';
 
 interface CompanyOrgChartProps {
   companyName: string;
@@ -85,8 +85,9 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
     onDrop,
   };
 
-  const singleRoot = roots.length === 1;
-  const groupedRoots = groupOrgNodesByDepartment(roots);
+  // Гендиректор — всегда под «Компанией», даже если есть другие корни без manager_id
+  const companyRoot = composeCompanyChartRoot(roots);
+  const groupedRoots = companyRoot ? [] : groupOrgNodesByDepartment(roots);
 
   React.useEffect(() => {
     initialScrollDone.current = false;
@@ -195,9 +196,9 @@ const CompanyOrgChart: React.FC<CompanyOrgChartProps> = ({
 
               {roots.length > 0 && <OrgConnectorStem height={20} />}
 
-              {singleRoot ? (
+              {companyRoot ? (
                 <OrgChartNode
-                  node={roots[0]}
+                  node={companyRoot}
                   isExecutiveRoot
                   branchChildrenByDepartment
                   {...chartProps}
