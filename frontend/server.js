@@ -8,11 +8,11 @@ const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const API_PROXY_TARGET = process.env.API_PROXY_TARGET || 'https://entechsite-backend-production.up.railway.app';
+const API_PROXY_TARGET = (process.env.API_PROXY_TARGET || 'https://api.entech.p1ck23.ru').replace(/\/+$/, '');
 
 const distPath = join(__dirname, 'dist');
 
-// Railway / балансировщики — не отдавать SPA на healthcheck
+// Healthcheck для Coolify и балансировщиков.
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'OK', service: 'frontend' });
 });
@@ -216,7 +216,7 @@ app.get('*', (req, res) => {
       } catch (err) {
         // Игнорируем ошибки при чтении
       }
-      return res.status(404).send('Not found');
+      return res.type('text/plain').status(404).send('Static asset not found');
     }
   }
 
