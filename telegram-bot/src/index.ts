@@ -19,32 +19,24 @@ if (!BOT_TOKEN) {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const BTN_NEW = '🆘 Новая заявка';
-const BTN_MY = '📋 Мои заявки';
-const BTN_CANCEL = '❌ Отмена';
+/** Скрыть старую reply-клавиатуру у тех, у кого она уже была */
+const removeKeyboard: TelegramBot.ReplyKeyboardRemove = {
+  remove_keyboard: true,
+};
 
-const BUTTON_TO_COMMAND: Record<string, string> = {
-  [BTN_NEW]: '/new',
-  [BTN_MY]: '/my',
-  [BTN_CANCEL]: '/cancel',
+const LEGACY_BUTTON_TO_COMMAND: Record<string, string> = {
+  '🆘 Новая заявка': '/new',
+  '📋 Мои заявки': '/my',
+  '❌ Отмена': '/cancel',
   'Новая заявка': '/new',
   'Мои заявки': '/my',
   Отмена: '/cancel',
 };
 
-const supportKeyboard: TelegramBot.ReplyKeyboardMarkup = {
-  keyboard: [
-    [{ text: BTN_NEW }, { text: BTN_MY }],
-    [{ text: BTN_CANCEL }],
-  ],
-  resize_keyboard: true,
-  is_persistent: true,
-};
-
 const normalizeSupportText = (text: string): string => {
   const trimmed = text.trim();
-  if (BUTTON_TO_COMMAND[trimmed]) {
-    return BUTTON_TO_COMMAND[trimmed];
+  if (LEGACY_BUTTON_TO_COMMAND[trimmed]) {
+    return LEGACY_BUTTON_TO_COMMAND[trimmed];
   }
   return trimmed.split(/\s+/)[0]?.split('@')[0] || trimmed;
 };
@@ -147,12 +139,7 @@ const wireSupportBot = (bot: TelegramBot, queue: SupportQueue, label: string) =>
 💻 *С рабочего компьютера:*
 Перейдите по ссылке: [entech.p1ck23.ru/auth](https://entech.p1ck23.ru/auth)
 
-🛟 *Техподдержка* — кнопки под полем ввода:
-• «Новая заявка» — описать проблему
-• «Мои заявки» — статус ваших обращений
-• «Отмена» — сбросить черновик
-
-Очередь заявок для сотрудников техподдержки — в разделе «Поддержка» на портале.
+🛟 *Техподдержка* — раздел «Поддержка» на портале.
 
 С уважением,
 Команда ENTECH GROUP`;
@@ -161,11 +148,7 @@ const wireSupportBot = (bot: TelegramBot, queue: SupportQueue, label: string) =>
 
 Это бот *теневой* очереди (раздел «Служебная» на портале).
 
-Кнопки:
-• «Новая заявка» — создать обращение
-• «Мои заявки» — ваши обращения
-• «Отмена» — сбросить черновик
-
+Заявки создавайте в разделе «Служебная» на портале.
 Доступ только у назначенных операторов.
 Заявки уходят в Todoist с пометкой «🛡» в названии.`;
 
@@ -181,7 +164,7 @@ const wireSupportBot = (bot: TelegramBot, queue: SupportQueue, label: string) =>
         {
           parse_mode: 'Markdown',
           disable_web_page_preview: false,
-          reply_markup: supportKeyboard,
+          reply_markup: removeKeyboard,
         }
       );
     } catch (error) {
@@ -212,16 +195,16 @@ const wireSupportBot = (bot: TelegramBot, queue: SupportQueue, label: string) =>
     }
 
     const isSupportAction = ['/new', '/my', '/cancel', '/help', '/queue'].includes(command);
-    const isButton = Boolean(BUTTON_TO_COMMAND[text]);
-    const isPlainText = !text.startsWith('/') && !isButton;
+    const isLegacyButton = Boolean(LEGACY_BUTTON_TO_COMMAND[text]);
+    const isPlainText = !text.startsWith('/') && !isLegacyButton;
 
-    if (!isSupportAction && !isPlainText && !isButton) {
+    if (!isSupportAction && !isPlainText && !isLegacyButton) {
       if (text.startsWith('/')) {
         try {
           await bot.sendMessage(
             msg.chat.id,
-            'Используйте кнопки: «Новая заявка», «Мои заявки», «Отмена».',
-            { reply_markup: supportKeyboard }
+            'Техподдержка — в разделе «Поддержка» на портале.',
+            { reply_markup: removeKeyboard }
           );
         } catch (error) {
           console.error(`❌ [${label}] ошибка подсказки:`, error);
@@ -231,7 +214,7 @@ const wireSupportBot = (bot: TelegramBot, queue: SupportQueue, label: string) =>
     }
 
     const messageToForward =
-      isSupportAction || isButton
+      isSupportAction || isLegacyButton
         ? {
             ...msg,
             text: command.startsWith('/') ? command : text,
@@ -239,7 +222,7 @@ const wireSupportBot = (bot: TelegramBot, queue: SupportQueue, label: string) =>
         : msg;
 
     const ok = await forwardSupportUpdate(queue, { message: messageToForward });
-    if (!ok && (isSupportAction || isButton)) {
+    if (!ok && (isSupportAction || isLegacyButton)) {
       try {
         const hint = BACKEND_URL
           ? 'Backend не принял запрос. Проверьте деплой API и переменные бота.'
@@ -247,7 +230,7 @@ const wireSupportBot = (bot: TelegramBot, queue: SupportQueue, label: string) =>
         await bot.sendMessage(
           msg.chat.id,
           `Поддержка временно недоступна.\n${hint}`,
-          { reply_markup: supportKeyboard }
+          { reply_markup: removeKeyboard }
         );
       } catch {
         // ignore
@@ -265,7 +248,7 @@ if (BACKEND_URL) {
     console.log(`🛡 Shadow → ${BACKEND_URL}/api/support-bots/webhook/shadow`);
   }
 } else {
-  console.warn('⚠️ BACKEND_URL не задан — кнопки поддержки недоступны');
+  console.warn('⚠️ BACKEND_URL не задан — webhook поддержки недоступен');
 }
 
 const publicBot = new TelegramBot(BOT_TOKEN, { polling: false });
