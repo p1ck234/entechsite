@@ -472,7 +472,7 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
       await sendTelegramMessage(
         queue,
         chatId,
-        'Техподдержка:\n«Новая заявка» — создать обращение\n«Мои заявки» — ваши обращения\n«Отмена» — сбросить черновик\n\nОчередь для агентов — на портале в разделе «Поддержка».'
+        'Техподдержка — раздел «Поддержка» на портале.\nОчередь для агентов — там же.'
       );
       return res.json({ ok: true });
     }
@@ -671,7 +671,7 @@ router.post('/webhook/:queue', async (req: Request, res: Response) => {
     await sendTelegramMessage(
       queue,
       chatId,
-      'Используйте кнопки: «Новая заявка» или «Мои заявки». Либо раздел «Поддержка» на портале.'
+      'Техподдержка — в разделе «Поддержка» на портале.'
     );
     return res.json({ ok: true });
   } catch (error) {
